@@ -9,9 +9,20 @@ Run Claude Code inside a sandboxed Lima VM for secure, isolated AI-assisted deve
 - **Security**: Each Claude session runs in an isolated VM that's deleted after use
 - **Clean environment**: No risk of polluting your host system
 - **Sandboxing**: Claude can safely execute commands without affecting your main machine
+- **Per-project templates**: Each project gets its own template with project-specific dependencies
 - **Reproducibility**: Each session starts from a known template state
 
 Based on [agent-vm](https://github.com/sylvinus/agent-vm) by Sylvain Zimmer.
+
+## How it works
+
+`claude-vm` creates a **persistent template VM per project**, then clones it for each Claude session:
+
+1. **Project detection**: Identifies your project by git root (or current directory if not in git)
+2. **Template per project**: Each project gets its own template VM with project-specific setup
+3. **Ephemeral sessions**: Each `claude-vm` run clones the template, runs Claude, then deletes the clone
+4. **Fast startup**: Cloning is much faster than creating a new VM from scratch
+5. **Isolated changes**: Template stays clean; install dependencies there, not in sessions
 
 ## Requirements
 
@@ -39,17 +50,19 @@ Based on [agent-vm](https://github.com/sylvinus/agent-vm) by Sylvain Zimmer.
 
 ## Usage
 
-### First-time setup
+### Project setup
 
-Create the VM template with Claude Code pre-installed:
+Navigate to your project directory and create its VM template:
 
 ```bash
+cd /path/to/your/project
 claude-vm setup
 ```
 
 This will:
 - Install Lima (if needed)
-- Create a Debian 13 VM template
+- Detect your project (via git root or current directory)
+- Create a Debian 13 VM template for this project
 - Install development tools (git, curl, Docker, Node.js, Python, etc.)
 - Install Claude Code
 - Authenticate Claude (you'll need your API key)
@@ -62,22 +75,29 @@ This will:
 
 Example:
 ```bash
+cd ~/my-project
 claude-vm setup --minimal --disk 10 --memory 4
 ```
 
+You need to run `setup` **once per project**. Different projects get different templates.
+
 ### Running Claude
 
-Navigate to any project directory and run:
+Navigate to your project directory and run:
 
 ```bash
+cd /path/to/your/project
 claude-vm "help me with my code"
 ```
 
 This will:
-1. Clone the template VM
-2. Mount your current directory into the VM
-3. Run Claude Code with your prompt
-4. Clean up and delete the VM when done
+1. Detect your project and find its template
+2. Clone the project template VM
+3. Mount your current directory into the VM
+4. Run Claude Code with your prompt
+5. Clean up and delete the VM when done
+
+The template VM is reused across sessions, but each session gets a fresh clone.
 
 ### Debug shell
 
@@ -89,44 +109,84 @@ claude-vm shell
 
 This opens a bash shell in a fresh VM with your current directory mounted.
 
+### Managing templates
+
+List all project templates:
+```bash
+claude-vm list
+```
+
+Delete the current project's template:
+```bash
+cd /path/to/your/project
+claude-vm clean
+```
+
+Delete all claude-vm templates:
+```bash
+claude-vm clean-all
+```
+
 ### Custom setup scripts
 
-#### Template-level customization
+#### Global template customization
 
-Create `~/.claude-vm.setup.sh` to add custom setup steps that run once during template creation:
+Create `~/.claude-vm.setup.sh` to add custom setup steps that run during **every** template creation:
 
 ```bash
-# Example: Install additional tools
+# Example: Install additional tools for all projects
 sudo apt-get install -y vim neovim
 npm install -g pnpm
 ```
 
-#### Project-level customization
+#### Project template customization
 
-Create `.claude-vm.runtime.sh` in your project directory to run setup steps for each VM session:
+Create `.claude-vm.setup.sh` in your project directory to run setup steps during **this project's** template creation:
 
 ```bash
-# Example: Install project dependencies
-npm install
-pip install -r requirements.txt
+# Example: Install project-specific tools in the template
+sudo apt-get install -y postgresql-client
+npm install -g typescript
 ```
 
-## How it works
+This runs once during `claude-vm setup` and installs into the project's template.
 
-1. **Template creation** (`claude-vm setup`): Creates a reusable VM template with Claude Code and tools pre-installed
-2. **VM cloning**: Each session clones the template for a fresh, isolated environment
-3. **Directory mounting**: Your current directory is mounted into the VM
-4. **Session execution**: Claude Code runs with full access to the mounted directory
-5. **Cleanup**: The VM is automatically deleted when Claude exits
+#### Runtime customization
+
+Create `.claude-vm.runtime.sh` in your project directory to run setup steps for **each VM session**:
+
+```bash
+# Example: Install project dependencies (runs every session)
+npm install
+pip install -r requirements.txt
+docker compose up -d
+```
+
+This runs every time you call `claude-vm` or `claude-vm shell`.
 
 ## Commands
 
 ```bash
-claude-vm setup [options]   # Create VM template (run once)
-claude-vm shell             # Open debug shell in a fresh VM
+claude-vm setup [options]   # Create VM template for current project (run once per project)
 claude-vm [args...]         # Run Claude in a fresh VM
+claude-vm shell             # Open debug shell in a fresh VM
+claude-vm list              # List all project templates
+claude-vm clean             # Delete current project's template
+claude-vm clean-all         # Delete all claude-vm templates
 claude-vm --help            # Show help
 ```
+
+## Project detection
+
+Templates are tied to projects using this logic (first match wins):
+
+1. **Git repository root**: If you're in a git repo, uses `git rev-parse --show-toplevel`
+2. **Current directory**: If not in a git repo, uses `pwd`
+
+This means:
+- All subdirectories of a git repo share the same template
+- Non-git projects get a template per directory
+- Moving a project changes its identity (you'd need to run setup again)
 
 ## Security considerations
 
@@ -138,13 +198,23 @@ claude-vm --help            # Show help
 ## Troubleshooting
 
 **"Template VM not found" error:**
-Run `claude-vm setup` first to create the template.
+Run `claude-vm setup` in your project directory to create a template for that project.
+
+**Wrong template being used:**
+Check your project detection with:
+```bash
+git rev-parse --show-toplevel  # Shows git root if in a repo
+pwd                            # Shows current directory otherwise
+```
 
 **Lima not installed:**
 On macOS with Homebrew, Lima will be installed automatically. Otherwise, install from [https://lima-vm.io/docs/installation/](https://lima-vm.io/docs/installation/)
 
 **VM creation is slow:**
-The first `setup` takes several minutes to download and configure the VM. Subsequent sessions are much faster as they clone the template.
+The first `setup` per project takes several minutes to download and configure the VM. Subsequent Claude sessions are much faster as they clone the template.
+
+**Templates taking up disk space:**
+Each template uses ~20GB by default. Use `claude-vm list` to see all templates, and `claude-vm clean` or `claude-vm clean-all` to remove them.
 
 ## License
 

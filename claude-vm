@@ -4,11 +4,29 @@
 # Based on https://github.com/sylvinus/agent-vm
 #
 # Usage:
-#   claude-vm setup [options] - Create the VM template (run once)
+#   claude-vm setup [options] - Create the VM template (run once per project)
 #   claude-vm shell            - Open a debug shell in a fresh VM
 #   claude-vm [args]           - Run Claude in a fresh VM with cwd mounted (args forwarded to claude)
 
-CLAUDE_VM_TEMPLATE="claude-template"
+# Get project identifier based on git root or current directory
+get-project-id() {
+  local project_root
+  # Try to get git root first
+  if project_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+    echo "$project_root"
+  else
+    # Fall back to current directory
+    pwd
+  fi
+}
+
+# Get template name for current project
+get-template-name() {
+  local project_id=$(get-project-id)
+  # Create a short hash of the project path for the template name
+  local project_hash=$(echo -n "$project_id" | md5 | cut -c1-12)
+  echo "claude-tpl-${project_hash}"
+}
 
 claude-vm-setup() {
   local minimal=false
@@ -20,7 +38,7 @@ claude-vm-setup() {
       --help|-h)
         echo "Usage: claude-vm setup [--minimal] [--disk GB] [--memory GB]"
         echo ""
-        echo "Create a VM template with Claude Code pre-installed."
+        echo "Create a VM template for the current project with Claude Code pre-installed."
         echo ""
         echo "Options:"
         echo "  --minimal      Only install git, curl, jq, and Claude Code"
@@ -67,27 +85,36 @@ claude-vm-setup() {
     fi
   fi
 
-  limactl stop "$CLAUDE_VM_TEMPLATE" &>/dev/null
-  limactl delete "$CLAUDE_VM_TEMPLATE" --force &>/dev/null
+  local project_id=$(get-project-id)
+  local template_name=$(get-template-name)
+
+  echo "Creating VM template for project: $project_id"
+  echo "Template name: $template_name"
+
+  limactl stop "$template_name" &>/dev/null
+  limactl delete "$template_name" --force &>/dev/null
 
   echo "Creating VM template..."
-  limactl create --name="$CLAUDE_VM_TEMPLATE" template:debian-13 \
+  limactl create --name="$template_name" template:debian-13 \
     --set '.mounts=[]' \
     --disk="$disk" \
     --memory="$memory" \
     --tty=false
-  limactl start "$CLAUDE_VM_TEMPLATE"
+  limactl start "$template_name"
+
+  # Store project metadata in the VM
+  limactl shell "$template_name" bash -c "mkdir -p ~/.claude-vm && echo '$project_id' > ~/.claude-vm/project-root"
 
   # Disable needrestart's interactive prompts
-  limactl shell "$CLAUDE_VM_TEMPLATE" sudo bash -c 'mkdir -p /etc/needrestart/conf.d && echo "\$nrconf{restart} = '"'"'a'"'"';" > /etc/needrestart/conf.d/no-prompt.conf'
+  limactl shell "$template_name" sudo bash -c 'mkdir -p /etc/needrestart/conf.d && echo "\$nrconf{restart} = '"'"'a'"'"';" > /etc/needrestart/conf.d/no-prompt.conf'
 
   echo "Installing base packages..."
-  limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get update
-  limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+  limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get update
+  limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     git curl jq
 
   if ! $minimal; then
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
       wget build-essential \
       python3 python3-pip python3-venv \
       ripgrep fd-find htop \
@@ -96,49 +123,49 @@ claude-vm-setup() {
 
     # Install Docker from official repo (includes docker compose)
     echo "Installing Docker..."
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash -c '
+    limactl shell "$template_name" bash -c '
       sudo install -m 0755 -d /etc/apt/keyrings
       sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
       sudo chmod a+r /etc/apt/keyrings/docker.asc
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     '
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get update
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get update
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
       docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
     # Add user to docker group
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash -c 'sudo usermod -aG docker $(whoami)'
+    limactl shell "$template_name" bash -c 'sudo usermod -aG docker $(whoami)'
 
     # Install Node.js 22 (needed for MCP servers)
     echo "Installing Node.js 22..."
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash -c "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+    limactl shell "$template_name" bash -c "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 
     # Install Chromium and dependencies for headless browsing
     echo "Installing Chromium..."
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
       chromium \
       fonts-liberation \
       xvfb
     # Symlink so tools looking for google-chrome find Chromium
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome
-    limactl shell "$CLAUDE_VM_TEMPLATE" sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome-stable
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash -c 'sudo mkdir -p /opt/google/chrome && sudo ln -sf /usr/bin/chromium /opt/google/chrome/chrome'
+    limactl shell "$template_name" sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome
+    limactl shell "$template_name" sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome-stable
+    limactl shell "$template_name" bash -c 'sudo mkdir -p /opt/google/chrome && sudo ln -sf /usr/bin/chromium /opt/google/chrome/chrome'
   fi
 
   # Install Claude Code
   echo "Installing Claude Code..."
-  limactl shell "$CLAUDE_VM_TEMPLATE" bash -c "curl -fsSL https://claude.ai/install.sh | bash"
-  limactl shell "$CLAUDE_VM_TEMPLATE" bash -c 'echo "export PATH=\$HOME/.local/bin:\$HOME/.claude/local/bin:\$PATH" >> ~/.bashrc'
+  limactl shell "$template_name" bash -c "curl -fsSL https://claude.ai/install.sh | bash"
+  limactl shell "$template_name" bash -c 'echo "export PATH=\$HOME/.local/bin:\$HOME/.claude/local/bin:\$PATH" >> ~/.bashrc'
 
   # Authenticate Claude (saves token in template, inherited by clones)
   echo "Setting up Claude authentication..."
-  limactl shell "$CLAUDE_VM_TEMPLATE" bash -lc "claude 'Ok I am logged in, I can exit now.'"
+  limactl shell "$template_name" bash -lc "claude 'Ok I am logged in, I can exit now.'"
 
   if ! $minimal; then
     # Configure Chrome DevTools MCP server for Claude
     echo "Configuring Chrome MCP server..."
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash << 'VMEOF'
+    limactl shell "$template_name" bash << 'VMEOF'
 CONFIG="$HOME/.claude.json"
 if [ -f "$CONFIG" ]; then
   jq '.mcpServers["chrome-devtools"] = {
@@ -164,21 +191,32 @@ VMEOF
   local user_setup="$HOME/.claude-vm.setup.sh"
   if [ -f "$user_setup" ]; then
     echo "Running custom setup from $user_setup..."
-    limactl shell "$CLAUDE_VM_TEMPLATE" bash < "$user_setup"
+    limactl shell "$template_name" bash < "$user_setup"
   fi
 
-  limactl stop "$CLAUDE_VM_TEMPLATE"
+  # Run project-specific setup script if it exists
+  local project_setup="$project_id/.claude-vm.setup.sh"
+  if [ -f "$project_setup" ]; then
+    echo "Running project setup from $project_setup..."
+    limactl shell "$template_name" bash < "$project_setup"
+  fi
 
-  echo "Template ready. Run 'claude-vm' in any project directory."
+  limactl stop "$template_name"
+
+  echo "Template ready for project: $project_id"
+  echo "Run 'claude-vm' in this project directory to use it."
 }
 
 claude-vm-run() {
   local args=("$@")
-  local vm_name="claude-$(basename "$(pwd)" | tr -cs 'a-zA-Z0-9' '-' | sed 's/^-//;s/-$//')-$$"
+  local project_id=$(get-project-id)
+  local template_name=$(get-template-name)
+  local vm_name="${template_name}-$$"
   local host_dir="$(pwd)"
 
-  if ! limactl list -q 2>/dev/null | grep -q "^${CLAUDE_VM_TEMPLATE}$"; then
-    echo "Error: Template VM not found. Run 'claude-vm setup' first." >&2
+  if ! limactl list -q 2>/dev/null | grep -q "^${template_name}$"; then
+    echo "Error: Template VM not found for project: $project_id" >&2
+    echo "Run 'claude-vm setup' first in this project." >&2
     return 1
   fi
 
@@ -189,8 +227,8 @@ claude-vm-run() {
   }
   trap _claude_vm_cleanup EXIT INT TERM
 
-  echo "Starting VM '$vm_name'..."
-  limactl clone "$CLAUDE_VM_TEMPLATE" "$vm_name" \
+  echo "Starting VM '$vm_name' from template '$template_name'..."
+  limactl clone "$template_name" "$vm_name" \
     --set ".mounts=[{\"location\":\"${host_dir}\",\"writable\":true}]" \
     --tty=false &>/dev/null
 
@@ -209,11 +247,14 @@ claude-vm-run() {
 }
 
 claude-vm-shell() {
-  local vm_name="claude-debug-$$"
+  local project_id=$(get-project-id)
+  local template_name=$(get-template-name)
+  local vm_name="${template_name}-debug-$$"
   local host_dir="$(pwd)"
 
-  if ! limactl list -q 2>/dev/null | grep -q "^${CLAUDE_VM_TEMPLATE}$"; then
-    echo "Error: Template VM not found. Run 'claude-vm setup' first." >&2
+  if ! limactl list -q 2>/dev/null | grep -q "^${template_name}$"; then
+    echo "Error: Template VM not found for project: $project_id" >&2
+    echo "Run 'claude-vm setup' first in this project." >&2
     return 1
   fi
 
@@ -224,7 +265,7 @@ claude-vm-shell() {
   }
   trap _claude_vm_shell_cleanup EXIT INT TERM
 
-  limactl clone "$CLAUDE_VM_TEMPLATE" "$vm_name" \
+  limactl clone "$template_name" "$vm_name" \
     --set ".mounts=[{\"location\":\"${host_dir}\",\"writable\":true}]" \
     --tty=false &>/dev/null
 
@@ -235,12 +276,52 @@ claude-vm-shell() {
     limactl shell --workdir "$host_dir" "$vm_name" bash -l < "${host_dir}/.claude-vm.runtime.sh"
   fi
 
-  echo "VM: $vm_name | Dir: $host_dir"
+  echo "VM: $vm_name | Dir: $host_dir | Project: $project_id"
   echo "Type 'exit' to stop and delete the VM"
   limactl shell --workdir "$host_dir" "$vm_name" bash -l
 
   _claude_vm_shell_cleanup
   trap - EXIT INT TERM
+}
+
+claude-vm-list() {
+  echo "Project VM templates:"
+  echo ""
+  limactl list 2>/dev/null | grep "^claude-tpl-" | while read -r line; do
+    local vm_name=$(echo "$line" | awk '{print $1}')
+    local status=$(echo "$line" | awk '{print $2}')
+    # Try to read project root from VM
+    local project_root=""
+    if [ "$status" = "Running" ] || [ "$status" = "Stopped" ]; then
+      project_root=$(limactl shell "$vm_name" cat ~/.claude-vm/project-root 2>/dev/null || echo "(unknown)")
+    fi
+    printf "  %-20s %-10s %s\n" "$vm_name" "$status" "$project_root"
+  done
+}
+
+claude-vm-clean() {
+  local project_id=$(get-project-id)
+  local template_name=$(get-template-name)
+
+  if ! limactl list -q 2>/dev/null | grep -q "^${template_name}$"; then
+    echo "No template found for project: $project_id"
+    return 0
+  fi
+
+  echo "Deleting template '$template_name' for project: $project_id"
+  limactl stop "$template_name" &>/dev/null
+  limactl delete "$template_name" --force
+  echo "Template deleted."
+}
+
+claude-vm-clean-all() {
+  echo "Deleting all claude-vm templates..."
+  limactl list -q 2>/dev/null | grep "^claude-tpl-" | while read -r vm_name; do
+    echo "  Deleting: $vm_name"
+    limactl stop "$vm_name" &>/dev/null
+    limactl delete "$vm_name" --force &>/dev/null
+  done
+  echo "All templates deleted."
 }
 
 # Main command dispatcher
@@ -254,13 +335,25 @@ main() {
       shift
       claude-vm-shell "$@"
       ;;
+    list)
+      claude-vm-list
+      ;;
+    clean)
+      claude-vm-clean
+      ;;
+    clean-all)
+      claude-vm-clean-all
+      ;;
     --help|-h|help)
       cat << 'EOF'
 Usage: claude-vm [COMMAND] [OPTIONS]
 
 Commands:
-  setup [options]  Create VM template with Claude Code pre-installed (run once)
+  setup [options]  Create VM template for current project (run once per project)
   shell            Open a debug shell in a fresh VM
+  list             List all project VM templates
+  clean            Delete the template for the current project
+  clean-all        Delete all claude-vm templates
   [args...]        Run Claude in a fresh VM (default)
 
 Setup Options:
@@ -268,11 +361,18 @@ Setup Options:
   --disk GB        VM disk size (default: 20)
   --memory GB      VM memory (default: 8)
 
+Project Detection:
+  Templates are created per-project based on:
+  1. Git repository root (git rev-parse --show-toplevel)
+  2. Current directory (if not in a git repo)
+
 Examples:
-  claude-vm setup              Create VM template with full installation
-  claude-vm setup --minimal    Create VM template with minimal installation
+  claude-vm setup              Create VM template for current project
+  claude-vm setup --minimal    Create minimal VM template
   claude-vm "help me with X"   Run Claude in a sandboxed VM
   claude-vm shell              Open debug shell in a fresh VM
+  claude-vm list               List all project templates
+  claude-vm clean              Delete current project's template
 
 Based on: https://github.com/sylvinus/agent-vm
 EOF
