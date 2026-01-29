@@ -164,6 +164,23 @@ npm install -g typescript
 
 This runs once during `claude-vm setup` and installs into the project's template.
 
+#### Ad-hoc setup scripts
+
+Pass custom setup scripts via the `--setup-script` flag during setup:
+
+```bash
+# Run one or more custom setup scripts
+claude-vm setup --setup-script ./custom-tools.sh
+claude-vm setup --setup-script ~/shared-setup.sh --setup-script ./project-deps.sh
+```
+
+These scripts run during template creation, after the global and project-specific scripts.
+
+**Execution order:**
+1. `~/.claude-vm.setup.sh` (global, if exists)
+2. `.claude-vm.setup.sh` (project-specific, if exists)
+3. Scripts passed via `--setup-script` flags (in order specified)
+
 #### Runtime customization
 
 Create `.claude-vm.runtime.sh` in your project directory to run setup steps for **each VM session**:
