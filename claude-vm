@@ -33,26 +33,58 @@ get-template-name() {
 }
 
 claude-vm-setup() {
-  local minimal=false
+  local install_docker=false
+  local install_node=false
+  local install_python=false
+  local install_chromium=false
   local disk=20
   local memory=8
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --help|-h)
-        echo "Usage: claude-vm setup [--minimal] [--disk GB] [--memory GB]"
+        echo "Usage: claude-vm setup [OPTIONS]"
         echo ""
         echo "Create a VM template for the current project with Claude Code pre-installed."
+        echo "By default, installs only: git, curl, jq, and Claude Code"
         echo ""
-        echo "Options:"
-        echo "  --minimal      Only install git, curl, jq, and Claude Code"
+        echo "Optional Tools:"
+        echo "  --docker       Install Docker CE with compose plugin"
+        echo "  --node         Install Node.js 22"
+        echo "  --python       Install Python 3 with pip and venv"
+        echo "  --chromium     Install Chromium browser (headless capable)"
+        echo "                 Note: Chrome MCP server requires Node.js (--node)"
+        echo "  --all          Install all optional tools (docker, node, python, chromium)"
+        echo ""
+        echo "VM Options:"
         echo "  --disk GB      VM disk size (default: 20)"
         echo "  --memory GB    VM memory (default: 8)"
+        echo ""
+        echo "Other:"
         echo "  --help         Show this help"
         return 0
         ;;
-      --minimal)
-        minimal=true
+      --docker)
+        install_docker=true
+        shift
+        ;;
+      --node)
+        install_node=true
+        shift
+        ;;
+      --python)
+        install_python=true
+        shift
+        ;;
+      --chromium)
+        install_chromium=true
+        shift
+        ;;
+      --all)
+        install_docker=true
+        install_node=true
+        install_python=true
+        install_chromium=true
         shift
         ;;
       --disk)
@@ -73,7 +105,7 @@ claude-vm-setup() {
         ;;
       *)
         echo "Unknown option: $1" >&2
-        echo "Usage: claude-vm setup [--minimal] [--disk GB] [--memory GB]" >&2
+        echo "Run 'claude-vm setup --help' for usage information" >&2
         return 1
         ;;
     esac
@@ -115,17 +147,10 @@ claude-vm-setup() {
   echo "Installing base packages..."
   limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get update
   limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    git curl jq
+    git curl jq wget build-essential ripgrep fd-find htop unzip zip ca-certificates
 
-  if ! $minimal; then
-    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      wget build-essential \
-      python3 python3-pip python3-venv \
-      ripgrep fd-find htop \
-      unzip zip \
-      ca-certificates
-
-    # Install Docker from official repo (includes docker compose)
+  # Install optional tools based on flags
+  if $install_docker; then
     echo "Installing Docker..."
     limactl shell "$template_name" bash -c '
       sudo install -m 0755 -d /etc/apt/keyrings
@@ -139,13 +164,21 @@ claude-vm-setup() {
 
     # Add user to docker group
     limactl shell "$template_name" bash -c 'sudo usermod -aG docker $(whoami)'
+  fi
 
-    # Install Node.js 22 (needed for MCP servers)
+  if $install_python; then
+    echo "Installing Python 3..."
+    limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      python3 python3-pip python3-venv
+  fi
+
+  if $install_node; then
     echo "Installing Node.js 22..."
     limactl shell "$template_name" bash -c "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"
     limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
+  fi
 
-    # Install Chromium and dependencies for headless browsing
+  if $install_chromium; then
     echo "Installing Chromium..."
     limactl shell "$template_name" sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
       chromium \
@@ -166,9 +199,12 @@ claude-vm-setup() {
   echo "Setting up Claude authentication..."
   limactl shell "$template_name" bash -lc "claude 'Ok I am logged in, I can exit now.'"
 
-  if ! $minimal; then
-    # Configure Chrome DevTools MCP server for Claude
+  # Configure Chrome DevTools MCP server if Chromium is installed
+  if $install_chromium; then
     echo "Configuring Chrome MCP server..."
+    if ! $install_node; then
+      echo "  Note: Chrome MCP requires Node.js to run. Use --node flag or install Node.js later."
+    fi
     limactl shell "$template_name" bash << 'VMEOF'
 CONFIG="$HOME/.claude.json"
 if [ -f "$CONFIG" ]; then
@@ -361,9 +397,19 @@ Commands:
   [args...]        Run Claude in a fresh VM (default)
 
 Setup Options:
-  --minimal        Only install git, curl, jq, and Claude Code
-  --disk GB        VM disk size (default: 20)
-  --memory GB      VM memory (default: 8)
+  By default, installs: git, curl, jq, and Claude Code
+
+  Optional Tools:
+    --docker       Install Docker CE with compose plugin
+    --node         Install Node.js 22
+    --python       Install Python 3 with pip and venv
+    --chromium     Install Chromium browser (headless capable)
+                   Note: Chrome MCP server requires Node.js (--node)
+    --all          Install all optional tools
+
+  VM Options:
+    --disk GB      VM disk size (default: 20)
+    --memory GB    VM memory (default: 8)
 
 Project Detection:
   Templates are created per-project based on:
@@ -371,12 +417,13 @@ Project Detection:
   2. Current directory (if not in a git repo)
 
 Examples:
-  claude-vm setup              Create VM template for current project
-  claude-vm setup --minimal    Create minimal VM template
-  claude-vm "help me with X"   Run Claude in a sandboxed VM
-  claude-vm shell              Open debug shell in a fresh VM
-  claude-vm list               List all project templates
-  claude-vm clean              Delete current project's template
+  claude-vm setup                    Create minimal VM template
+  claude-vm setup --all              Create VM template with all tools
+  claude-vm setup --docker --node    Create VM template with Docker and Node.js
+  claude-vm "help me with X"         Run Claude in a sandboxed VM
+  claude-vm shell                    Open debug shell in a fresh VM
+  claude-vm list                     List all project templates
+  claude-vm clean                    Delete current project's template
 
 Based on: https://github.com/sylvinus/agent-vm
 EOF

@@ -63,20 +63,33 @@ This will:
 - Install Lima (if needed)
 - Detect your project (via git root or current directory)
 - Create a Debian 13 VM template for this project
-- Install development tools (git, curl, Docker, Node.js, Python, etc.)
+- Install base tools (git, curl, jq, wget, build-essential, ripgrep, etc.)
 - Install Claude Code
 - Authenticate Claude (you'll need your API key)
-- Configure optional MCP servers (like Chrome DevTools)
+- Optionally install additional tools based on flags
 
 **Setup options:**
-- `--minimal`: Install only git, curl, jq, and Claude Code (no Docker, Node.js, etc.)
+
+By default, only base tools and Claude Code are installed. Add optional tools with:
+
+- `--docker`: Install Docker CE with compose plugin
+- `--node`: Install Node.js 22
+- `--python`: Install Python 3 with pip and venv
+- `--chromium`: Install Chromium browser (headless capable)
+  - **Note**: Chrome MCP server requires Node.js. Use `--node` flag or install Node.js later via runtime scripts.
+- `--all`: Install all optional tools (docker, node, python, chromium)
+
+VM configuration:
 - `--disk GB`: Set VM disk size (default: 20GB)
 - `--memory GB`: Set VM memory (default: 8GB)
 
-Example:
+Examples:
 ```bash
 cd ~/my-project
-claude-vm setup --minimal --disk 10 --memory 4
+claude-vm setup                    # Minimal install (base tools + Claude)
+claude-vm setup --all              # Install everything
+claude-vm setup --docker --node    # Install Docker and Node.js only
+claude-vm setup --python --disk 15 # Python with 15GB disk
 ```
 
 You need to run `setup` **once per project**. Different projects get different templates.
