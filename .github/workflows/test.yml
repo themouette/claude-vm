@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  shellcheck:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run shellcheck
+        run: shellcheck claude-vm
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats
+
+      - name: Run unit tests
+        run: bats test/unit/
+
+  # Integration tests are optional and only run on main branch
+  # They require Lima and actually create VMs
+  integration-tests:
+    name: Integration Tests
+    runs-on: macos-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lima and bats
+        run: |
+          brew install lima bats-core
+
+      - name: Run integration tests
+        run: INTEGRATION=1 bats test/integration/
+        timeout-minutes: 30

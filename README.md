@@ -227,6 +227,42 @@ This means:
 - Moving a project changes its identity (you'd need to run setup again)
 - Template names are human-readable while remaining unique
 
+## Development
+
+### Testing
+
+The project includes a test suite using [bats-core](https://github.com/bats-core/bats-core).
+
+**Install bats:**
+```bash
+# macOS
+brew install bats-core
+
+# Ubuntu/Debian
+sudo apt-get install bats
+```
+
+**Run tests:**
+```bash
+# Run all unit tests (fast, no VMs created)
+bats test/unit/
+
+# Run specific test file
+bats test/unit/test_project_functions.bats
+
+# Run integration tests (slow, creates real VMs)
+INTEGRATION=1 bats test/integration/
+```
+
+See [test/README.md](test/README.md) for detailed testing documentation.
+
+### Contributing
+
+1. Write tests for new features
+2. Run `bats test/unit/` before committing
+3. Run `shellcheck claude-vm` to lint the script
+4. Update documentation as needed
+
 ## Security considerations
 
 - Each VM session is completely isolated from your host system
