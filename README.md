@@ -183,10 +183,19 @@ Templates are tied to projects using this logic (first match wins):
 1. **Git repository root**: If you're in a git repo, uses `git rev-parse --show-toplevel`
 2. **Current directory**: If not in a git repo, uses `pwd`
 
+Template names use the format: `claude-tpl--<project-name>--<hash>`
+- `<project-name>`: Sanitized basename of the project path (lowercase, alphanumeric + dashes)
+- `<hash>`: 8-character hash for uniqueness
+
+Examples:
+- `/Users/you/Projects/my-app` → `claude-tpl--my-app--a1b2c3d4`
+- `/home/user/web_site` → `claude-tpl--web-site--e5f6a7b8`
+
 This means:
 - All subdirectories of a git repo share the same template
 - Non-git projects get a template per directory
 - Moving a project changes its identity (you'd need to run setup again)
+- Template names are human-readable while remaining unique
 
 ## Security considerations
 

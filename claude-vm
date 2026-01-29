@@ -23,9 +23,13 @@ get-project-id() {
 # Get template name for current project
 get-template-name() {
   local project_id=$(get-project-id)
-  # Create a short hash of the project path for the template name
-  local project_hash=$(echo -n "$project_id" | md5 | cut -c1-12)
-  echo "claude-tpl-${project_hash}"
+  # Get the project basename
+  local project_name=$(basename "$project_id")
+  # Sanitize: lowercase, replace invalid chars with dash, remove leading/trailing dashes
+  local sanitized=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^-//;s/-$//')
+  # Create a short hash of the project path for uniqueness
+  local project_hash=$(echo -n "$project_id" | md5 | cut -c1-8)
+  echo "claude-tpl--${sanitized}--${project_hash}"
 }
 
 claude-vm-setup() {
