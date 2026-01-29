@@ -44,6 +44,39 @@ teardown() {
   [ "$result" = "$TEST_DIR" ]
 }
 
+@test "get-project-id returns same path for worktrees as main repo" {
+  # Create a main repo
+  cd "$TEST_DIR"
+  mkdir main-repo
+  cd main-repo
+  git init -q
+  echo "test" > file.txt
+  git add .
+  git config user.email "test@example.com"
+  git config user.name "Test User"
+  git commit -q -m "initial commit"
+
+  # Get project ID from main repo
+  main_project_id=$(get-project-id)
+
+  # Create a worktree
+  git worktree add -q ../worktree-branch
+
+  # Get project ID from worktree
+  cd ../worktree-branch
+  worktree_project_id=$(get-project-id)
+
+  # Both should return the same project ID (main repo location)
+  # Use pwd -P to resolve any symlinks for comparison
+  local main_resolved=$(cd "$main_project_id" && pwd -P)
+  local worktree_resolved=$(cd "$worktree_project_id" && pwd -P)
+  [ "$main_resolved" = "$worktree_resolved" ]
+
+  # Clean up worktree
+  cd ../main-repo
+  git worktree remove ../worktree-branch 2>/dev/null || true
+}
+
 @test "get-template-name generates correct format" {
   # Override get-project-id to return a known path
   get-project-id() { echo "/path/to/my-project"; }

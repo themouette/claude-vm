@@ -9,13 +9,20 @@
 #   claude-vm [args]           - Run Claude in a fresh VM with cwd mounted (args forwarded to claude)
 
 # Get project identifier based on git root or current directory
+# For git worktrees, uses the main repo location so all worktrees share the same template
 get-project-id() {
   local project_root
-  # Try to get git root first
-  if project_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+  local git_common_dir
+
+  # Try to get git common dir first (handles worktrees)
+  if git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null); then
+    # For worktrees, git-common-dir points to the main repo's .git directory (absolute path)
+    # For regular repos, it returns .git (relative path)
+    # Convert to absolute path and get the parent directory
+    project_root=$(cd "$git_common_dir" && cd .. && pwd)
     echo "$project_root"
   else
-    # Fall back to current directory
+    # Not in a git repo, use current directory
     pwd
   fi
 }
