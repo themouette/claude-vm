@@ -32,11 +32,11 @@ get-template-name() {
   local project_id=$(get-project-id)
   # Get the project basename
   local project_name=$(basename "$project_id")
-  # Sanitize: lowercase, replace invalid chars with dash, remove leading/trailing dashes
-  local sanitized=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed 's/^-//;s/-$//')
+  # Sanitize: lowercase, replace invalid chars with dash, collapse consecutive dashes, remove leading/trailing dashes
+  local sanitized=$(echo "$project_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | sed -E 's/-+/-/g' | sed 's/^-//;s/-$//')
   # Create a short hash of the project path for uniqueness
   local project_hash=$(echo -n "$project_id" | md5 | cut -c1-8)
-  echo "claude-tpl--${sanitized}--${project_hash}"
+  echo "claude-tpl_${sanitized}_${project_hash}"
 }
 
 claude-vm-setup() {
@@ -365,7 +365,7 @@ claude-vm-shell() {
 claude-vm-list() {
   echo "Project VM templates:"
   echo ""
-  limactl list 2>/dev/null | grep "^claude-tpl-" | while read -r line; do
+  limactl list 2>/dev/null | grep "^claude-tpl_" | while read -r line; do
     local vm_name=$(echo "$line" | awk '{print $1}')
     local status=$(echo "$line" | awk '{print $2}')
     # Try to read project root from VM
@@ -394,7 +394,7 @@ claude-vm-clean() {
 
 claude-vm-clean-all() {
   echo "Deleting all claude-vm templates..."
-  limactl list -q 2>/dev/null | grep "^claude-tpl-" | while read -r vm_name; do
+  limactl list -q 2>/dev/null | grep "^claude-tpl_" | while read -r vm_name; do
     echo "  Deleting: $vm_name"
     limactl stop "$vm_name" &>/dev/null
     limactl delete "$vm_name" --force &>/dev/null

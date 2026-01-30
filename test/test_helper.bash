@@ -26,12 +26,12 @@ limactl() {
       list)
         if [ "$2" = "-q" ]; then
           # Return mock template names
-          echo "claude-tpl--test-project--abc12345"
-          echo "claude-tpl--another-proj--def67890"
+          echo "claude-tpl_test-project_abc12345"
+          echo "claude-tpl_another-proj_def67890"
         else
           # Return full list format
           echo "NAME                              STATUS   SSH"
-          echo "claude-tpl--test-project--abc12345 Running  127.0.0.1:60022"
+          echo "claude-tpl_test-project_abc12345 Running  127.0.0.1:60022"
         fi
         ;;
       create|start|stop|delete|shell|clone)

@@ -54,6 +54,7 @@ teardown() {
   git add .
   git config user.email "test@example.com"
   git config user.name "Test User"
+  git config commit.gpgsign false
   git commit -q -m "initial commit"
 
   # Get project ID from main repo
@@ -83,8 +84,8 @@ teardown() {
 
   result=$(get-template-name)
 
-  # Should match: claude-tpl--my-project--<8char-hash>
-  [[ "$result" =~ ^claude-tpl--my-project--[a-f0-9]{8}$ ]]
+  # Should match: claude-tpl_my-project_<8char-hash>
+  [[ "$result" =~ ^claude-tpl_my-project_[a-f0-9]{8}$ ]]
 }
 
 @test "get-template-name sanitizes uppercase to lowercase" {
@@ -93,7 +94,7 @@ teardown() {
   result=$(get-template-name)
 
   # Should be lowercase
-  [[ "$result" =~ ^claude-tpl--myproject--[a-f0-9]{8}$ ]]
+  [[ "$result" =~ ^claude-tpl_myproject_[a-f0-9]{8}$ ]]
 }
 
 @test "get-template-name sanitizes special characters" {
@@ -101,9 +102,8 @@ teardown() {
 
   result=$(get-template-name)
 
-  # Should replace special chars with dashes (consecutive special chars become multiple dashes)
-  # The regex should allow for one or more dashes between valid characters
-  [[ "$result" =~ ^claude-tpl--my-project[a-f0-9-]+--[a-f0-9]{8}$ ]]
+  # Should replace special chars with single dashes (consecutive special chars collapsed to one dash)
+  [[ "$result" =~ ^claude-tpl_my-project_[a-f0-9]{8}$ ]]
 }
 
 @test "get-template-name removes leading dashes" {
@@ -111,8 +111,8 @@ teardown() {
 
   result=$(get-template-name)
 
-  # Should not start with dash after tpl--
-  [[ "$result" =~ ^claude-tpl--project--[a-f0-9]{8}$ ]]
+  # Should not start with dash after tpl_
+  [[ "$result" =~ ^claude-tpl_project_[a-f0-9]{8}$ ]]
 }
 
 @test "get-template-name removes trailing dashes" {
@@ -121,7 +121,7 @@ teardown() {
   result=$(get-template-name)
 
   # Should not have dash before hash
-  [[ "$result" =~ ^claude-tpl--project--[a-f0-9]{8}$ ]]
+  [[ "$result" =~ ^claude-tpl_project_[a-f0-9]{8}$ ]]
 }
 
 @test "get-template-name generates same hash for same path" {
