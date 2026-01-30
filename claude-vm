@@ -305,9 +305,26 @@ claude-vm-run() {
   }
   trap _claude_vm_cleanup EXIT INT TERM
 
+  # Build mounts array - include git common dir for worktrees
+  local mounts="{\"location\":\"${host_dir}\",\"writable\":true}"
+
+  # Check if we're in a worktree and need to mount the main repo too
+  if [ -f .git ] && grep -q "^gitdir:" .git 2>/dev/null; then
+    # This is a worktree - mount the main repo's .git directory too
+    local git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    if [ -n "$git_common_dir" ] && [ "$git_common_dir" != ".git" ]; then
+      # Get the parent of the .git directory (the main repo root)
+      local main_repo_root="${git_common_dir%/.git}"
+      # Only add if it's different from current directory
+      if [ "$main_repo_root" != "$host_dir" ]; then
+        mounts="${mounts},{\"location\":\"${main_repo_root}\",\"writable\":true}"
+      fi
+    fi
+  fi
+
   echo "Starting VM '$vm_name' from template '$template_name'..."
   limactl clone "$template_name" "$vm_name" \
-    --set ".mounts=[{\"location\":\"${host_dir}\",\"writable\":true}]" \
+    --set ".mounts=[${mounts}]" \
     --tty=false &>/dev/null
 
   limactl start "$vm_name" &>/dev/null
@@ -343,8 +360,25 @@ claude-vm-shell() {
   }
   trap _claude_vm_shell_cleanup EXIT INT TERM
 
+  # Build mounts array - include git common dir for worktrees
+  local mounts="{\"location\":\"${host_dir}\",\"writable\":true}"
+
+  # Check if we're in a worktree and need to mount the main repo too
+  if [ -f .git ] && grep -q "^gitdir:" .git 2>/dev/null; then
+    # This is a worktree - mount the main repo's .git directory too
+    local git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    if [ -n "$git_common_dir" ] && [ "$git_common_dir" != ".git" ]; then
+      # Get the parent of the .git directory (the main repo root)
+      local main_repo_root="${git_common_dir%/.git}"
+      # Only add if it's different from current directory
+      if [ "$main_repo_root" != "$host_dir" ]; then
+        mounts="${mounts},{\"location\":\"${main_repo_root}\",\"writable\":true}"
+      fi
+    fi
+  fi
+
   limactl clone "$template_name" "$vm_name" \
-    --set ".mounts=[{\"location\":\"${host_dir}\",\"writable\":true}]" \
+    --set ".mounts=[${mounts}]" \
     --tty=false &>/dev/null
 
   limactl start "$vm_name" &>/dev/null

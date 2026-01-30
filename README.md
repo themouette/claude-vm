@@ -223,6 +223,8 @@ Examples:
 
 This means:
 - All subdirectories of a git repo share the same template
+- **Git worktrees** share the same template as the main repo
+  - The main repo directory is automatically mounted in the VM so git commands work
 - Non-git projects get a template per directory
 - Moving a project changes its identity (you'd need to run setup again)
 - Template names are human-readable while remaining unique
