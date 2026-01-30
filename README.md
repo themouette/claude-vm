@@ -76,6 +76,8 @@ By default, only base tools and Claude Code are installed. Add optional tools wi
 - `--node`: Install Node.js 22
 - `--python`: Install Python 3 with pip and venv
 - `--chromium`: Install Chromium browser (headless capable)
+  - Automatically configures Chrome MCP server
+  - Creates a systemd service for running Chromium in debug mode (not started by default)
   - **Note**: Chrome MCP server requires Node.js. Use `--node` flag or install Node.js later via runtime scripts.
 - `--all`: Install all optional tools (docker, node, python, chromium)
 
@@ -313,6 +315,24 @@ PORT=${PORT:-3000}
 echo "Starting server on port $PORT..."
 # Use systemd or docker compose with the user's input
 ```
+
+**Starting Chromium in debug mode (for Chrome MCP):**
+
+If you installed Chromium with `--chromium` flag, a systemd service is available:
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Start Chromium in debug mode (required for Chrome MCP server)
+systemctl --user start chromium-debug
+
+echo "Chromium debug mode started on port 9222"
+echo "  Check: systemctl --user status chromium-debug"
+echo "  Logs:  tail -f /tmp/chromium-debug.log"
+```
+
+This starts Chromium with remote debugging enabled, allowing the Chrome MCP server to connect and control the browser.
 
 ## Commands
 
