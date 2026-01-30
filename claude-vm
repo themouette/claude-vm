@@ -263,20 +263,25 @@ VMEOF
   local user_setup="$HOME/.claude-vm.setup.sh"
   if [ -f "$user_setup" ]; then
     echo "Running custom setup from $user_setup..."
-    limactl shell "$template_name" bash < "$user_setup"
+    limactl copy "$user_setup" "$template_name:/tmp/user-setup.sh"
+    limactl shell "$template_name" bash -l /tmp/user-setup.sh
   fi
 
   # Run project-specific setup script if it exists
   local project_setup="$project_id/.claude-vm.setup.sh"
   if [ -f "$project_setup" ]; then
     echo "Running project setup from $project_setup..."
-    limactl shell "$template_name" bash < "$project_setup"
+    limactl copy "$project_setup" "$template_name:/tmp/project-setup.sh"
+    limactl shell "$template_name" bash -l /tmp/project-setup.sh
   fi
 
   # Run custom setup scripts provided via --setup-script flags
+  local script_index=0
   for script in "${custom_setup_scripts[@]}"; do
     echo "Running custom setup script: $script..."
-    limactl shell "$template_name" bash < "$script"
+    limactl copy "$script" "$template_name:/tmp/custom-setup-$script_index.sh"
+    limactl shell "$template_name" bash -l /tmp/custom-setup-$script_index.sh
+    ((script_index++))
   done
 
   limactl stop "$template_name"
@@ -366,13 +371,16 @@ claude-vm-run() {
   # Run project-specific runtime script if it exists
   if [ -f "${host_dir}/.claude-vm.runtime.sh" ]; then
     echo "Running project runtime setup..."
-    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "${host_dir}/.claude-vm.runtime.sh"
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l "${host_dir}/.claude-vm.runtime.sh"
   fi
 
   # Run custom runtime scripts provided via --runtime-script flags
+  local script_index=0
   for script in "${runtime_scripts[@]}"; do
     echo "Running runtime script: $script..."
-    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "$script"
+    limactl copy "$script" "$vm_name:/tmp/runtime-script-$script_index.sh"
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l /tmp/runtime-script-$script_index.sh
+    ((script_index++))
   done
 
   limactl shell --workdir "$host_dir" "$vm_name" claude --dangerously-skip-permissions "${claude_args[@]}"
@@ -459,13 +467,17 @@ claude-vm-shell() {
 
   # Run project-specific runtime script if it exists
   if [ -f "${host_dir}/.claude-vm.runtime.sh" ]; then
-    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "${host_dir}/.claude-vm.runtime.sh"
+    echo "Running project runtime setup..."
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l "${host_dir}/.claude-vm.runtime.sh"
   fi
 
   # Run custom runtime scripts provided via --runtime-script flags
+  local script_index=0
   for script in "${runtime_scripts[@]}"; do
     echo "Running runtime script: $script..."
-    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "$script"
+    limactl copy "$script" "$vm_name:/tmp/runtime-script-$script_index.sh"
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l /tmp/runtime-script-$script_index.sh
+    ((script_index++))
   done
 
   echo "VM: $vm_name | Dir: $host_dir | Project: $project_id"

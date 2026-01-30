@@ -167,6 +167,8 @@ sudo apt-get install -y vim neovim
 npm install -g pnpm
 ```
 
+**Note:** Setup scripts run interactively, so they can prompt for user input if needed.
+
 #### Project template customization
 
 Create `.claude-vm.setup.sh` in your project directory to run setup steps during **this project's** template creation:
@@ -235,6 +237,82 @@ These scripts run during VM session startup, after the project directory is moun
 - Run npm/pip install to update dependencies
 - Start Docker containers for services
 - Set up environment variables or configuration files
+
+**Interactive and background processes:**
+
+Runtime scripts run interactively, allowing you to:
+- **Prompt for user input** when needed (e.g., passwords, configuration choices)
+- **Start background processes** that survive after the script exits
+
+**Using systemd user services (recommended for long-running processes):**
+
+For development servers and long-running processes, use systemd user services to ensure they survive:
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh - Start development server as systemd service
+
+echo "Setting up development server..."
+
+mkdir -p ~/.config/systemd/user
+
+cat > ~/.config/systemd/user/dev-server.service <<EOF
+[Unit]
+Description=Development Server
+
+[Service]
+Type=simple
+WorkingDirectory=$(pwd)
+ExecStart=/usr/bin/npm run dev
+Restart=on-failure
+StandardOutput=append:/tmp/dev-server.log
+StandardError=append:/tmp/dev-server.log
+
+[Install]
+WantedBy=default.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user stop dev-server 2>/dev/null || true
+systemctl --user start dev-server
+
+echo "Dev server started!"
+echo "  Check: systemctl --user status dev-server"
+echo "  Logs:  tail -f /tmp/dev-server.log"
+```
+
+**Key benefits of systemd services:**
+- Process survives after script exits
+- Automatic restart on failure
+- Easy log management
+- Full control over working directory
+
+**Using Docker Compose (already daemonized):**
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Docker Compose services run as daemons by default
+docker compose up -d
+
+echo "Services started. Check with: docker compose ps"
+```
+
+**Interactive prompts:**
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Prompt for configuration
+echo "Enter API port (default: 3000):"
+read PORT
+PORT=${PORT:-3000}
+
+echo "Starting server on port $PORT..."
+# Use systemd or docker compose with the user's input
+```
 
 ## Commands
 
