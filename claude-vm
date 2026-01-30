@@ -257,34 +257,6 @@ else
 JSON
 fi
 VMEOF
-
-    # Create systemd service for Chromium debug mode
-    echo "  Creating Chromium debug service..."
-    limactl shell "$template_name" bash << 'VMEOF'
-mkdir -p ~/.config/systemd/user
-
-cat > ~/.config/systemd/user/chromium-debug.service <<'SERVICE'
-[Unit]
-Description=Chromium Browser in Debug Mode (Headless)
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/chromium --headless --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug --no-first-run --disable-gpu --no-sandbox
-Restart=on-failure
-RestartSec=3
-StandardOutput=append:/tmp/chromium-debug.log
-StandardError=append:/tmp/chromium-debug.log
-
-[Install]
-WantedBy=default.target
-SERVICE
-
-systemctl --user daemon-reload
-VMEOF
-    echo "  Chromium debug service configured (not started)"
-    echo "  Start manually with: systemctl --user start chromium-debug"
-    echo "  Or add to .claude-vm.runtime.sh for automatic startup"
   fi
 
   # Run user's custom setup script if it exists
