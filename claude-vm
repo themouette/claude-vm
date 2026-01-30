@@ -286,7 +286,41 @@ VMEOF
 }
 
 claude-vm-run() {
-  local args=("$@")
+  local -a runtime_scripts=()
+  local -a claude_args=()
+
+  # Parse arguments to separate runtime scripts from Claude args
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --runtime-script)
+        if [ -z "$2" ]; then
+          echo "Error: --runtime-script requires a path argument" >&2
+          return 1
+        fi
+        if [ ! -f "$2" ]; then
+          echo "Error: Runtime script not found: $2" >&2
+          return 1
+        fi
+        runtime_scripts+=("$2")
+        shift 2
+        ;;
+      --runtime-script=*)
+        local script_path="${1#*=}"
+        if [ ! -f "$script_path" ]; then
+          echo "Error: Runtime script not found: $script_path" >&2
+          return 1
+        fi
+        runtime_scripts+=("$script_path")
+        shift
+        ;;
+      *)
+        # Everything else goes to Claude
+        claude_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
   local project_id=$(get-project-id)
   local template_name=$(get-template-name)
   local vm_name="${template_name}-$$"
@@ -335,13 +369,53 @@ claude-vm-run() {
     limactl shell --workdir "$host_dir" "$vm_name" bash -l < "${host_dir}/.claude-vm.runtime.sh"
   fi
 
-  limactl shell --workdir "$host_dir" "$vm_name" claude --dangerously-skip-permissions "${args[@]}"
+  # Run custom runtime scripts provided via --runtime-script flags
+  for script in "${runtime_scripts[@]}"; do
+    echo "Running runtime script: $script..."
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "$script"
+  done
+
+  limactl shell --workdir "$host_dir" "$vm_name" claude --dangerously-skip-permissions "${claude_args[@]}"
 
   _claude_vm_cleanup
   trap - EXIT INT TERM
 }
 
 claude-vm-shell() {
+  local -a runtime_scripts=()
+
+  # Parse arguments for runtime scripts
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --runtime-script)
+        if [ -z "$2" ]; then
+          echo "Error: --runtime-script requires a path argument" >&2
+          return 1
+        fi
+        if [ ! -f "$2" ]; then
+          echo "Error: Runtime script not found: $2" >&2
+          return 1
+        fi
+        runtime_scripts+=("$2")
+        shift 2
+        ;;
+      --runtime-script=*)
+        local script_path="${1#*=}"
+        if [ ! -f "$script_path" ]; then
+          echo "Error: Runtime script not found: $script_path" >&2
+          return 1
+        fi
+        runtime_scripts+=("$script_path")
+        shift
+        ;;
+      *)
+        echo "Unknown option: $1" >&2
+        echo "Usage: claude-vm shell [--runtime-script <path>]" >&2
+        return 1
+        ;;
+    esac
+  done
+
   local project_id=$(get-project-id)
   local template_name=$(get-template-name)
   local vm_name="${template_name}-debug-$$"
@@ -387,6 +461,12 @@ claude-vm-shell() {
   if [ -f "${host_dir}/.claude-vm.runtime.sh" ]; then
     limactl shell --workdir "$host_dir" "$vm_name" bash -l < "${host_dir}/.claude-vm.runtime.sh"
   fi
+
+  # Run custom runtime scripts provided via --runtime-script flags
+  for script in "${runtime_scripts[@]}"; do
+    echo "Running runtime script: $script..."
+    limactl shell --workdir "$host_dir" "$vm_name" bash -l < "$script"
+  done
 
   echo "VM: $vm_name | Dir: $host_dir | Project: $project_id"
   echo "Type 'exit' to stop and delete the VM"
@@ -486,6 +566,10 @@ Setup Options:
   Custom Setup:
     --setup-script <path>  Run additional setup script (can be used multiple times)
 
+Runtime Options:
+  --runtime-script <path>  Run script when VM starts (can be used multiple times)
+                           Runs after mounts are active, before Claude starts
+
 Project Detection:
   Templates are created per-project based on:
   1. Git repository root (git rev-parse --show-toplevel)
@@ -497,7 +581,9 @@ Examples:
   claude-vm setup --docker --node              Create VM template with Docker and Node.js
   claude-vm setup --setup-script ./install.sh  Run custom setup script
   claude-vm "help me with X"                   Run Claude in a sandboxed VM
+  claude-vm --runtime-script ./start-dev.sh "help with feature"  Run with custom runtime script
   claude-vm shell                              Open debug shell in a fresh VM
+  claude-vm shell --runtime-script ./setup.sh  Open shell with runtime script
   claude-vm list                               List all project templates
   claude-vm clean                              Delete current project's template
 

@@ -107,10 +107,21 @@ This will:
 1. Detect your project and find its template
 2. Clone the project template VM
 3. Mount your current directory into the VM
-4. Run Claude Code with your prompt
-5. Clean up and delete the VM when done
+4. Run any runtime scripts (see [Runtime customization](#runtime-customization))
+5. Run Claude Code with your prompt
+6. Clean up and delete the VM when done
 
 The template VM is reused across sessions, but each session gets a fresh clone.
+
+**Runtime options:**
+
+You can pass custom runtime scripts to execute before Claude starts:
+
+```bash
+claude-vm --runtime-script ./start-services.sh "help me debug the API"
+```
+
+See [Runtime customization](#runtime-customization) for more details.
 
 ### Debug shell
 
@@ -120,7 +131,11 @@ To explore the VM environment or debug issues:
 claude-vm shell
 ```
 
-This opens a bash shell in a fresh VM with your current directory mounted.
+This opens a bash shell in a fresh VM with your current directory mounted. You can also pass runtime scripts:
+
+```bash
+claude-vm shell --runtime-script ./setup-test-env.sh
+```
 
 ### Managing templates
 
@@ -183,6 +198,8 @@ These scripts run during template creation, after the global and project-specifi
 
 #### Runtime customization
 
+**Project runtime script**
+
 Create `.claude-vm.runtime.sh` in your project directory to run setup steps for **each VM session**:
 
 ```bash
@@ -192,18 +209,43 @@ pip install -r requirements.txt
 docker compose up -d
 ```
 
-This runs every time you call `claude-vm` or `claude-vm shell`.
+This runs automatically every time you call `claude-vm` or `claude-vm shell`.
+
+**Ad-hoc runtime scripts**
+
+Pass custom runtime scripts via the `--runtime-script` flag when running Claude or opening a shell:
+
+```bash
+# Run one or more custom runtime scripts
+claude-vm --runtime-script ./start-dev-server.sh "help me with my code"
+claude-vm shell --runtime-script ~/init-database.sh --runtime-script ./seed-data.sh
+```
+
+These scripts run during VM session startup, after the project directory is mounted and accessible.
+
+**Execution order:**
+1. VM starts and directories are mounted
+2. `.claude-vm.runtime.sh` (project-specific, if exists)
+3. Scripts passed via `--runtime-script` flags (in order specified)
+4. Claude Code starts (or shell opens)
+
+**Use cases for runtime scripts:**
+- Start development servers that Claude needs to interact with
+- Initialize databases or populate test data
+- Run npm/pip install to update dependencies
+- Start Docker containers for services
+- Set up environment variables or configuration files
 
 ## Commands
 
 ```bash
-claude-vm setup [options]   # Create VM template for current project (run once per project)
-claude-vm [args...]         # Run Claude in a fresh VM
-claude-vm shell             # Open debug shell in a fresh VM
-claude-vm list              # List all project templates
-claude-vm clean             # Delete current project's template
-claude-vm clean-all         # Delete all claude-vm templates
-claude-vm --help            # Show help
+claude-vm setup [options]                    # Create VM template for current project (run once per project)
+claude-vm [--runtime-script <path>] [args...]  # Run Claude in a fresh VM
+claude-vm shell [--runtime-script <path>]    # Open debug shell in a fresh VM
+claude-vm list                               # List all project templates
+claude-vm clean                              # Delete current project's template
+claude-vm clean-all                          # Delete all claude-vm templates
+claude-vm --help                             # Show help
 ```
 
 ## Project detection
