@@ -1,304 +1,505 @@
-# claude-vm
+# Claude VM
 
-Run Claude Code inside a sandboxed Lima VM for secure, isolated AI-assisted development.
+**Run Claude Code in isolated, reproducible Linux environments on macOS and Linux.**
 
-## What is this?
+Claude VM gives you:
+- **Safety**: Each Claude session runs in a fresh, sandboxed VM that's destroyed after use
+- **Reproducibility**: Template VMs ensure consistent environments across runs
+- **Flexibility**: Pre-configure tools (Docker, Node.js, Python, Chromium) once, use everywhere
+- **Simplicity**: One command to set up, one command to run
 
-`claude-vm` is a command-line tool that runs [Claude Code](https://claude.ai/code) inside a fresh virtual machine for each session. This provides:
+## Quick Start
 
-- **Security**: Each Claude session runs in an isolated VM that's deleted after use
-- **Clean environment**: No risk of polluting your host system
-- **Sandboxing**: Claude can safely execute commands without affecting your main machine
-- **Per-project templates**: Each project gets its own template with project-specific dependencies
-- **Reproducibility**: Each session starts from a known template state
+```bash
+# One-time setup: create a template VM for your project
+claude-vm setup --node --chromium
 
-Based on [agent-vm](https://github.com/sylvinus/agent-vm) by Sylvain Zimmer.
+# Run Claude in a clean, isolated VM
+claude-vm "help me refactor this code"
 
-## How it works
+# Open a shell in the VM
+claude-vm shell
+```
 
-`claude-vm` creates a **persistent template VM per project**, then clones it for each Claude session:
+Each run starts from the same clean template and automatically cleans up when done.
 
-1. **Project detection**: Identifies your project by git root (or current directory if not in git)
-2. **Template per project**: Each project gets its own template VM with project-specific setup
-3. **Ephemeral sessions**: Each `claude-vm` run clones the template, runs Claude, then deletes the clone
-4. **Fast startup**: Cloning is much faster than creating a new VM from scratch
-5. **Isolated changes**: Template stays clean; install dependencies there, not in sessions
+## Why Claude VM?
 
-## Requirements
+**Problem**: Running AI coding assistants directly on your host machine can be risky. They have access to your entire filesystem, credentials, and running services. Using `--dangerously-skip-permissions` on your host machine is particularly dangerous.
 
-- macOS or Linux
-- [Lima](https://lima-vm.io/) - Will be automatically installed via Homebrew if not present (macOS only)
-- [Claude Code](https://claude.ai/code) - Will be installed in the VM template during setup
+**Solution**: Claude VM runs each session in an isolated Linux VM that:
+- Only mounts the current project directory
+- Has its own filesystem, network stack, and process space
+- Is automatically destroyed after each session
+- Starts from a known-good template state every time
+
+**VM isolation is the only safe way to run Claude with `--dangerously-skip-permissions`.** The VM provides a security boundary - even if Claude executes unintended commands, the blast radius is limited to the disposable VM.
+
+Think of it as Docker for AI coding assistants - isolated, reproducible, and safe.
+
+## Key Features
+
+**Template VMs per Repository**
+- Create a template VM once per project with all required tools
+- Each session clones from this template for fast startup
+- Customize with global (`~/.claude-vm.setup.sh`) or project-specific (`./.claude-vm.setup.sh`) scripts
+
+**Runtime Scripts**
+- Automatically run setup scripts before each session
+- Start services, set environment variables, seed databases
+- Just create `.claude-vm.runtime.sh` in your project root
+
+**Configuration File Support**
+- Define VM resources, tools, and settings in `.claude-vm.toml`
+- Precedence system: CLI > Env > Project > Global > Defaults
+- No need to remember complex command-line flags
+
+**Git Worktree Support**
+- Automatically detects and mounts both worktree and main repository
+- Full git functionality in isolated VMs
 
 ## Installation
 
-1. Clone or download this repository:
-   ```bash
-   git clone <your-repo-url>
-   cd claude-vm
-   ```
+### Requirements
 
-2. Make the script executable (if not already):
-   ```bash
-   chmod +x claude-vm
-   ```
+- [Lima](https://lima-vm.io/docs/installation/)
 
-3. Optionally, symlink it to your PATH for system-wide access:
-   ```bash
-   ln -s "$(pwd)/claude-vm" /usr/local/bin/claude-vm
-   ```
+### One Liner
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
+```
+
+### Download from GitHub
+
+- Download the latest version for your platfrom from
+  [GitHub](https://github.com/themouette/claude-vm/releases/latest)
+- Copy executable in your `~/.local/bin` directory.
+
+### From Source
+
+See DEVELOPMENT.md
 
 ## Usage
 
-### Project setup
+### Setup a Template
 
-Navigate to your project directory and create its VM template:
-
-```bash
-cd /path/to/your/project
-claude-vm setup
-```
-
-This will:
-- Install Lima (if needed)
-- Detect your project (via git root or current directory)
-- Create a Debian 13 VM template for this project
-- Install base tools (git, curl, jq, wget, build-essential, ripgrep, etc.)
-- Install Claude Code
-- Authenticate Claude (you'll need your API key)
-- Optionally install additional tools based on flags
-
-**Setup options:**
-
-By default, only base tools and Claude Code are installed. Add optional tools with:
-
-- `--docker`: Install Docker CE with compose plugin
-- `--node`: Install Node.js 22
-- `--python`: Install Python 3 with pip and venv
-- `--chromium`: Install Chromium browser (headless capable)
-  - **Note**: Chrome MCP server requires Node.js. Use `--node` flag or install Node.js later via runtime scripts.
-- `--all`: Install all optional tools (docker, node, python, chromium)
-
-VM configuration:
-- `--disk GB`: Set VM disk size (default: 20GB)
-- `--memory GB`: Set VM memory (default: 8GB)
-
-Examples:
-```bash
-cd ~/my-project
-claude-vm setup                    # Minimal install (base tools + Claude)
-claude-vm setup --all              # Install everything
-claude-vm setup --docker --node    # Install Docker and Node.js only
-claude-vm setup --python --disk 15 # Python with 15GB disk
-```
-
-You need to run `setup` **once per project**. Different projects get different templates.
-
-### Running Claude
-
-Navigate to your project directory and run:
+Create a template VM for your project:
 
 ```bash
-cd /path/to/your/project
-claude-vm "help me with my code"
+claude-vm setup --docker --node
 ```
 
-This will:
-1. Detect your project and find its template
-2. Clone the project template VM
-3. Mount your current directory into the VM
-4. Run Claude Code with your prompt
-5. Clean up and delete the VM when done
+Install all tools:
 
-The template VM is reused across sessions, but each session gets a fresh clone.
+```bash
+claude-vm setup --all
+```
 
-### Debug shell
+### Run Claude
 
-To explore the VM environment or debug issues:
+Run Claude in an ephemeral VM:
+
+```bash
+claude-vm "help me code"
+```
+
+### Shell Access
+
+Open a shell in the template VM:
 
 ```bash
 claude-vm shell
 ```
 
-This opens a bash shell in a fresh VM with your current directory mounted.
+### List Templates
 
-### Managing templates
+List all claude-vm templates:
 
-List all project templates:
 ```bash
 claude-vm list
 ```
 
-Delete the current project's template:
+### Clean Templates
+
+Clean the template for the current project:
+
 ```bash
-cd /path/to/your/project
 claude-vm clean
 ```
 
-Delete all claude-vm templates:
+Clean all templates:
+
 ```bash
 claude-vm clean-all
 ```
 
-### Custom setup scripts
+## Configuration
 
-#### Global template customization
+Create a `.claude-vm.toml` file in your project root or home directory.
 
-Create `~/.claude-vm.setup.sh` to add custom setup steps that run during **every** template creation:
+### Configuration File
 
-```bash
-# Example: Install additional tools for all projects
-sudo apt-get install -y vim neovim
-npm install -g pnpm
+**Minimal example:**
+
+```toml
+[vm]
+disk = 30      # GB
+memory = 16    # GB
+
+[tools]
+docker = true
+node = true
 ```
 
-#### Project template customization
+**Complete example:**
 
-Create `.claude-vm.setup.sh` in your project directory to run setup steps during **this project's** template creation:
+```toml
+[vm]
+disk = 20      # VM disk size in GB (default: 20)
+memory = 8     # VM memory size in GB (default: 8)
 
-```bash
-# Example: Install project-specific tools in the template
-sudo apt-get install -y postgresql-client
-npm install -g typescript
+[tools]
+docker = true     # Install Docker (default: false)
+node = true       # Install Node.js (default: false)
+python = false    # Install Python (default: false)
+chromium = true   # Install Chromium for debugging (default: false)
+
+[setup]
+# ADDITIONAL setup scripts (run during template creation)
+# Standard scripts are auto-detected, no config needed:
+#   - ~/.claude-vm.setup.sh (global)
+#   - ./.claude-vm.setup.sh (project root)
+scripts = [
+    "./scripts/install-extras.sh",
+]
+
+[runtime]
+# ADDITIONAL runtime scripts (run before each session)
+# Standard script is auto-detected, no config needed:
+#   - ./.claude-vm.runtime.sh (current git repo root)
+scripts = [
+    "./scripts/start-services.sh",
+]
+
+[defaults]
+# Additional arguments passed to Claude (--dangerously-skip-permissions is included by default)
+claude_args = ["--max-tokens", "4096"]
 ```
 
-This runs once during `claude-vm setup` and installs into the project's template.
+### Configuration Locations
 
-#### Ad-hoc setup scripts
-
-Pass custom setup scripts via the `--setup-script` flag during setup:
+**Project config:** `.claude-vm.toml` in project root
 
 ```bash
-# Run one or more custom setup scripts
-claude-vm setup --setup-script ./custom-tools.sh
-claude-vm setup --setup-script ~/shared-setup.sh --setup-script ./project-deps.sh
+my-project/
+├── .claude-vm.toml          # Project-specific config
+└── .claude-vm.runtime.sh    # Auto-detected runtime script
 ```
 
-These scripts run during template creation, after the global and project-specific scripts.
-
-**Execution order:**
-1. `~/.claude-vm.setup.sh` (global, if exists)
-2. `.claude-vm.setup.sh` (project-specific, if exists)
-3. Scripts passed via `--setup-script` flags (in order specified)
-
-#### Runtime customization
-
-Create `.claude-vm.runtime.sh` in your project directory to run setup steps for **each VM session**:
+**Global config:** `~/.claude-vm.toml` in home directory
 
 ```bash
-# Example: Install project dependencies (runs every session)
-npm install
-pip install -r requirements.txt
-docker compose up -d
+~/
+├── .claude-vm.toml          # Global config for all projects
+└── .claude-vm.setup.sh      # Auto-detected global setup script
 ```
 
-This runs every time you call `claude-vm` or `claude-vm shell`.
+### Configuration Precedence
 
-## Commands
+Configuration is merged in this order (highest to lowest):
+
+1. **Command-line flags** - `--disk 30 --memory 16`
+2. **Environment variables** - `CLAUDE_VM_DISK=30 CLAUDE_VM_MEMORY=16`
+3. **Project config** - `./.claude-vm.toml`
+4. **Global config** - `~/.claude-vm.toml`
+5. **Built-in defaults** - `disk=20, memory=8`
+
+**Example:**
 
 ```bash
-claude-vm setup [options]   # Create VM template for current project (run once per project)
-claude-vm [args...]         # Run Claude in a fresh VM
-claude-vm shell             # Open debug shell in a fresh VM
-claude-vm list              # List all project templates
-claude-vm clean             # Delete current project's template
-claude-vm clean-all         # Delete all claude-vm templates
-claude-vm --help            # Show help
+# Global config sets disk=20
+# Project config sets disk=30
+# CLI flag sets disk=40
+
+claude-vm setup --disk 40  # Uses 40 (CLI wins)
+claude-vm setup            # Uses 30 (project config)
 ```
 
-## Project detection
+### Environment Variables
 
-Templates are tied to projects using this logic (first match wins):
+Override config values with environment variables:
 
-1. **Git repository root**: If you're in a git repo, uses `git rev-parse --show-toplevel`
-2. **Current directory**: If not in a git repo, uses `pwd`
+```bash
+# Override VM resources
+export CLAUDE_VM_DISK=30
+export CLAUDE_VM_MEMORY=16
 
-Template names use the format: `claude-tpl_<project-name>_<hash>`
-- `<project-name>`: Sanitized basename of the project path (lowercase, alphanumeric + dashes)
-- `<hash>`: 8-character hash for uniqueness
+claude-vm setup  # Uses disk=30, memory=16
+```
 
-Examples:
-- `/Users/you/Projects/my-app` → `claude-tpl_my-app_a1b2c3d4`
-- `/home/user/web_site` → `claude-tpl_web-site_e5f6a7b8`
+**Available variables:**
 
-This means:
-- All subdirectories of a git repo share the same template
-- **Git worktrees** share the same template as the main repo
-  - The main repo directory is automatically mounted in the VM so git commands work
-- Non-git projects get a template per directory
-- Moving a project changes its identity (you'd need to run setup again)
-- Template names are human-readable while remaining unique
+- `CLAUDE_VM_DISK` - VM disk size in GB
+- `CLAUDE_VM_MEMORY` - VM memory size in GB
+
+### Script Auto-Detection
+
+**Setup scripts** (run during `claude-vm setup`):
+
+1. `~/.claude-vm.setup.sh` - Global setup (always checked)
+2. `./.claude-vm.setup.sh` - Project setup (always checked)
+3. Config scripts - Additional custom scripts
+
+**Runtime scripts** (run before `claude-vm` or `claude-vm shell`):
+
+1. `./.claude-vm.runtime.sh` - Project runtime (always checked)
+2. Config scripts - Additional custom scripts
+
+**No configuration needed for standard scripts!** They're automatically detected and executed if they exist.
+
+### Tool Installation
+
+The `[tools]` section controls which tools are installed during setup:
+
+```toml
+[tools]
+docker = true     # Docker Engine + Docker Compose
+node = true       # Node.js (LTS) + npm
+python = true     # Python 3 + pip
+chromium = true   # Chromium + Chrome DevTools MCP
+```
+
+**Or install everything:**
+
+```bash
+claude-vm setup --all  # Installs all tools
+```
+
+### Default Claude Arguments
+
+Claude VM automatically passes `--dangerously-skip-permissions` to Claude by default, since the VM provides a safe isolation boundary.
+
+You can add additional arguments or override the defaults:
+
+```toml
+[defaults]
+claude_args = [
+    "--dangerously-skip-permissions",  # Enabled by default
+    "--max-tokens", "4096"              # Add custom args
+]
+```
+
+These are added to every `claude-vm` invocation:
+
+```bash
+claude-vm "help me"
+# Equivalent to: claude "help me" --dangerously-skip-permissions --max-tokens 4096
+```
+
+To disable permission bypass (not recommended), set an empty array:
+
+```toml
+[defaults]
+claude_args = []
+```
+
+### Configuration Validation
+
+**Valid values:**
+
+- `disk`: 1-1000 (GB)
+- `memory`: 1-64 (GB)
+- `tools`: true/false for each
+- `scripts`: array of file paths (strings)
+- `claude_args`: array of strings
+
+**Example validation error:**
+
+```toml
+[vm]
+disk = "thirty"  # ❌ Error: must be a number
+```
+
+### Complete Example
+
+See [`examples/.claude-vm.toml`](examples/.claude-vm.toml) for a fully commented example configuration.
+
+## Runtime Scripts
+
+Runtime scripts are automatically executed before running Claude or opening a shell. This allows you to set up your environment, start services, or configure the session.
+
+### Automatic Execution
+
+Create a `.claude-vm.runtime.sh` file in your project root (or current git repository root for worktrees):
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Start background services
+echo "Starting services..."
+docker-compose up -d
+
+# Set environment variables
+export API_KEY="dev-key"
+export DEBUG=true
+
+# Run initialization
+./scripts/init-dev-env.sh
+```
+
+This script will automatically run every time you:
+
+- Run Claude: `claude-vm "help me code"`
+- Open a shell: `claude-vm shell`
+
+### Configuration-Based Scripts
+
+Add additional runtime scripts in your `.claude-vm.toml`:
+
+```toml
+[runtime]
+scripts = [
+    "./.claude-vm.runtime.sh",    # Project script (auto-detected)
+    "./scripts/start-services.sh", # Custom scripts
+    "~/scripts/dev-setup.sh",      # Global scripts
+]
+```
+
+### Command-Line Scripts
+
+Pass runtime scripts via CLI flags:
+
+```bash
+claude-vm --runtime-script ./start-db.sh --runtime-script ./seed-data.sh shell
+```
+
+### Execution Order
+
+Scripts run in this order:
+
+1. Project runtime script (`.claude-vm.runtime.sh` if exists)
+2. Config runtime scripts (from `.claude-vm.toml`)
+3. CLI runtime scripts (from `--runtime-script` flags)
+
+### Features
+
+**Runtime Scripts**
+
+- All runtime scripts and the main command run in a single shell invocation
+- More efficient than multiple SSH connections
+- Cleaner output with progress indicators
+
+**Fail-Fast Behavior**
+
+- If any runtime script fails (exit code ≠ 0), the main command won't run
+- Ensures your environment is properly set up before Claude runs
+
+**Shared Environment**
+
+- Runtime scripts share the same shell environment
+- Environment variables set in earlier scripts are available in later scripts and the main command
+- Background processes started in runtime scripts continue running
+
+**Interactive Support**
+
+- Runtime scripts can prompt for user input
+- Use `read` commands for configuration
+- Full terminal support (colors, cursor control)
+
+**Security**
+
+- Script paths are properly escaped to prevent shell injection
+- Filenames are sanitized for safe execution
+- Unicode filenames are supported
+
+### Example: Database Setup
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+echo "Setting up development database..."
+
+# Start PostgreSQL
+docker-compose up -d postgres
+
+# Wait for database to be ready
+until pg_isready -h localhost -p 5432; do
+  echo "Waiting for database..."
+  sleep 1
+done
+
+# Run migrations
+npm run db:migrate
+
+echo "✓ Database ready"
+```
+
+### Example: Interactive Configuration
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Prompt for API key if not set
+if [ -z "$API_KEY" ]; then
+  read -p "Enter API key: " API_KEY
+  export API_KEY
+fi
+
+# Ask if user wants to enable debug mode
+read -p "Enable debug mode? (y/n): " enable_debug
+if [ "$enable_debug" = "y" ]; then
+  export DEBUG=true
+fi
+```
+
+### Debugging
+
+Run with `--verbose` to see detailed Lima logs:
+
+```bash
+claude-vm --verbose shell
+```
+
+This shows:
+
+- Script copying progress with ✓/✗ indicators
+- Lima VM startup logs
+- Script execution output
+- Detailed error messages
+
+## Command-Line Options
+
+### Global Options
+
+- `--disk <GB>` - VM disk size
+- `--memory <GB>` - VM memory size
+- `--runtime-script <PATH>` - Runtime script to execute
+- `-v, --verbose` - Show verbose output including Lima logs
+
+### Setup Options
+
+- `--docker` - Install Docker
+- `--node` - Install Node.js
+- `--python` - Install Python
+- `--chromium` - Install Chromium
+- `--all` - Install all tools
+- `--setup-script <PATH>` - Custom setup script
+
+## Git Worktree Support
+
+Automatically detects and handles git worktrees by:
+
+1. Mounting the worktree directory (writable)
+2. Mounting the main repository (read-only, for git access)
 
 ## Development
 
-### Testing
-
-The project includes a test suite using [bats-core](https://github.com/bats-core/bats-core).
-
-**Install bats:**
-```bash
-# macOS
-brew install bats-core
-
-# Ubuntu/Debian
-sudo apt-get install bats
-```
-
-**Run tests:**
-```bash
-# Run all unit tests (fast, no VMs created)
-bats test/unit/
-
-# Run specific test file
-bats test/unit/test_project_functions.bats
-
-# Run integration tests (slow, creates real VMs)
-INTEGRATION=1 bats test/integration/
-```
-
-See [test/README.md](test/README.md) for detailed testing documentation.
-
-### Contributing
-
-1. Write tests for new features
-2. Run `bats test/unit/` before committing
-3. Run `shellcheck claude-vm` to lint the script
-4. Update documentation as needed
-
-## Security considerations
-
-- Each VM session is completely isolated from your host system
-- VMs are ephemeral - deleted after each use
-- Your project directory is mounted with write access, so Claude can modify files
-- The template VM stores your Claude authentication token (inherited by clones)
-
-## Troubleshooting
-
-**"Template VM not found" error:**
-Run `claude-vm setup` in your project directory to create a template for that project.
-
-**Wrong template being used:**
-Check your project detection with:
-```bash
-git rev-parse --show-toplevel  # Shows git root if in a repo
-pwd                            # Shows current directory otherwise
-```
-
-**Lima not installed:**
-On macOS with Homebrew, Lima will be installed automatically. Otherwise, install from [https://lima-vm.io/docs/installation/](https://lima-vm.io/docs/installation/)
-
-**VM creation is slow:**
-The first `setup` per project takes several minutes to download and configure the VM. Subsequent Claude sessions are much faster as they clone the template.
-
-**Templates taking up disk space:**
-Each template uses ~20GB by default. Use `claude-vm list` to see all templates, and `claude-vm clean` or `claude-vm clean-all` to remove them.
+For development setup, architecture details, testing instructions, and contributing guidelines, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Credits
-
-Based on [agent-vm](https://github.com/sylvinus/agent-vm) by Sylvain Zimmer.
-
-Modified to work as a standalone command without requiring shell sourcing.
+MIT OR Apache-2.0

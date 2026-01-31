@@ -1,0 +1,26 @@
+[package]
+name = "claude-vm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Claude VM Contributors"]
+description = "Run Claude Code inside sandboxed Lima VMs"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "env"] }
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+md5 = "0.7"
+which = "6.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

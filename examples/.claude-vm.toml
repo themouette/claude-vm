@@ -1,0 +1,56 @@
+# Example .claude-vm.toml configuration file
+# Place this in your project root or home directory (~/.claude-vm.toml)
+
+[vm]
+# VM disk size in GB (default: 20)
+disk = 20
+
+# VM memory size in GB (default: 8)
+memory = 8
+
+[tools]
+# Install Docker in the VM (default: false)
+docker = true
+
+# Install Node.js in the VM (default: false)
+node = true
+
+# Install Python in the VM (default: false)
+python = false
+
+# Install Chromium for debugging (default: false)
+chromium = true
+
+[setup]
+# ADDITIONAL setup scripts to run during template creation
+# These run AFTER the automatically detected scripts
+#
+# Auto-detected scripts (no config needed):
+#   1. ~/.claude-vm.setup.sh (global)
+#   2. ./.claude-vm.setup.sh (project root)
+#
+# Add CUSTOM scripts here:
+scripts = [
+    # "./scripts/install-extras.sh",
+    # "~/my-custom-setup.sh",
+]
+
+[runtime]
+# ADDITIONAL runtime scripts to execute before starting each Claude session
+# Useful for starting services, setting up environment, etc.
+#
+# Auto-detected script (no config needed):
+#   - ./.claude-vm.runtime.sh (current git repo root)
+#
+# Add CUSTOM scripts here:
+scripts = [
+    # "./scripts/start-services.sh",
+    # "./scripts/seed-database.sh",
+]
+
+[defaults]
+# Default arguments to pass to Claude
+# These are passed every time Claude runs
+claude_args = [
+    "--dangerously-skip-permissions"
+]
