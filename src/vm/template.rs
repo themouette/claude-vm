@@ -9,9 +9,7 @@ pub fn exists(template_name: &str) -> Result<bool> {
 /// Verify a template exists, return error if not
 pub fn verify(template_name: &str) -> Result<()> {
     if !exists(template_name)? {
-        return Err(ClaudeVmError::TemplateNotFound(
-            template_name.to_string(),
-        ));
+        return Err(ClaudeVmError::TemplateNotFound(template_name.to_string()));
     }
     Ok(())
 }
@@ -19,7 +17,7 @@ pub fn verify(template_name: &str) -> Result<()> {
 /// Delete a template
 pub fn delete(template_name: &str) -> Result<()> {
     if exists(template_name)? {
-        LimaCtl::delete(template_name, true, true)?;  // Always verbose for user-initiated deletes
+        LimaCtl::delete(template_name, true, true)?; // Always verbose for user-initiated deletes
     }
     Ok(())
 }

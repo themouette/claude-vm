@@ -3,7 +3,7 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
     pub vm: VmConfig,
@@ -23,19 +23,6 @@ pub struct Config {
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            vm: VmConfig::default(),
-            tools: ToolsConfig::default(),
-            setup: SetupConfig::default(),
-            runtime: RuntimeConfig::default(),
-            defaults: DefaultsConfig::default(),
-            verbose: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,10 +78,22 @@ pub struct RuntimeConfig {
     pub scripts: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultsConfig {
-    #[serde(default)]
+    #[serde(default = "default_claude_args")]
     pub claude_args: Vec<String>,
+}
+
+impl Default for DefaultsConfig {
+    fn default() -> Self {
+        Self {
+            claude_args: default_claude_args(),
+        }
+    }
+}
+
+fn default_claude_args() -> Vec<String> {
+    vec!["--dangerously-skip-permissions".to_string()]
 }
 
 impl Config {

@@ -20,10 +20,12 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // This ensures we cd into the worktree, not the main repo
     let current_dir = std::env::current_dir()?;
 
-    println!("VM: {} | Dir: {} | Project: {}",
-             session.name(),
-             current_dir.display(),
-             project.template_name());
+    println!(
+        "VM: {} | Dir: {} | Project: {}",
+        session.name(),
+        current_dir.display(),
+        project.template_name()
+    );
     println!("Type 'exit' to stop and delete the VM");
 
     // Open interactive shell with runtime scripts using entrypoint pattern

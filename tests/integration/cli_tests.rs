@@ -3,18 +3,20 @@ use predicates::prelude::*;
 
 #[test]
 fn test_help_output() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("--help");
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Run Claude Code inside sandboxed Lima VMs"))
+        .stdout(predicate::str::contains(
+            "Run Claude Code inside sandboxed Lima VMs",
+        ))
         .stdout(predicate::str::contains("Usage:"));
 }
 
 #[test]
 fn test_version_output() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("--version");
 
     cmd.assert()
@@ -24,7 +26,7 @@ fn test_version_output() {
 
 #[test]
 fn test_setup_help() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["setup", "--help"]);
 
     cmd.assert()
@@ -38,7 +40,7 @@ fn test_setup_help() {
 
 #[test]
 fn test_list_command_exists() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("list");
 
     // Should run (may fail if limactl not installed, but command exists)
@@ -50,7 +52,7 @@ fn test_list_command_exists() {
 
 #[test]
 fn test_shell_command_exists() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("shell");
 
     // Should run (may fail if template doesn't exist, but command exists)
@@ -60,7 +62,7 @@ fn test_shell_command_exists() {
 
 #[test]
 fn test_clean_command_exists() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("clean");
 
     // Should run (may fail if template doesn't exist, but command exists)
@@ -70,7 +72,7 @@ fn test_clean_command_exists() {
 
 #[test]
 fn test_clean_all_command_exists() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("clean-all");
 
     // Should run (may fail, but command exists)
@@ -80,7 +82,7 @@ fn test_clean_all_command_exists() {
 
 #[test]
 fn test_runtime_script_flag() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["--runtime-script", "/tmp/test.sh", "setup", "--help"]);
 
     // Should accept the flag
@@ -89,7 +91,7 @@ fn test_runtime_script_flag() {
 
 #[test]
 fn test_disk_memory_flags() {
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["setup", "--help", "--disk", "30", "--memory", "16"]);
 
     // Should accept the flags

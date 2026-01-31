@@ -11,10 +11,9 @@ pub fn execute(command: &str, args: &[&str]) -> Result<ExitStatus> {
 
 /// Execute a command and capture its output
 pub fn execute_with_output(command: &str, args: &[&str]) -> Result<String> {
-    let output = Command::new(command)
-        .args(args)
-        .output()
-        .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to execute {}: {}", command, e)))?;
+    let output = Command::new(command).args(args).output().map_err(|e| {
+        ClaudeVmError::CommandFailed(format!("Failed to execute {}: {}", command, e))
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

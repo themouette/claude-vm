@@ -284,7 +284,7 @@ mod tests {
         // Attempt to inject commands
         let malicious = "'; rm -rf /; echo '";
         let escaped = shell_escape(malicious);
-        assert_eq!(escaped, "''\\'' rm -rf /; echo '\\'''");
+        assert_eq!(escaped, "''\\''; rm -rf /; echo '\\'''");
         // When used in bash 'command', this will be treated as a literal string
     }
 
@@ -354,11 +354,13 @@ mod tests {
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
         // Verify the malicious command is properly escaped
-        // Should contain the escaped version: 'evil'\'' rm -rf /; echo '\''
-        assert!(entrypoint.contains(r"bash '/tmp/evil'\'' rm -rf /; echo '\''"));
+        // The escaped version uses '\'' to safely include single quotes within the bash string
+        // This results in bash receiving the literal path: /tmp/evil'; rm -rf /; echo '.sh
+        assert!(entrypoint.contains(r"bash '/tmp/evil'\''; rm -rf /; echo '\''"));
 
-        // Verify it does NOT contain unescaped dangerous sequences
-        assert!(!entrypoint.contains("'; rm -rf /;"));
+        // Verify it's wrapped in the escaped quote pattern (not just raw semicolons)
+        // The pattern '\'' safely escapes quotes, preventing command injection
+        assert!(entrypoint.contains(r"'\''"));
     }
 
     #[test]
@@ -409,4 +411,3 @@ mod tests {
         assert!(entrypoint.contains("# Execute main command"));
     }
 }
-

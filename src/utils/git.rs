@@ -52,20 +52,24 @@ pub fn is_worktree() -> bool {
         .args(["rev-parse", "--git-dir"])
         .output()
         .ok()
-        .and_then(|o| if o.status.success() {
-            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-        } else {
-            None
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
         });
 
     let git_common_dir = Command::new("git")
         .args(["rev-parse", "--git-common-dir"])
         .output()
         .ok()
-        .and_then(|o| if o.status.success() {
-            Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
-        } else {
-            None
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
         });
 
     // In a worktree, git-dir and git-common-dir are different

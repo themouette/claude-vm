@@ -107,15 +107,17 @@ mod tests {
         let cleaned_up = Arc::new(AtomicBool::new(false));
 
         // Simulate error scenario
-        let result: Result<()> = (|| {
+        let result: Result<()> = {
             let _guard = CleanupGuard {
                 vm_name: "test-vm".to_string(),
                 cleaned_up: Arc::clone(&cleaned_up),
                 verbose: false,
             };
             // Simulate failure
-            Err(crate::error::ClaudeVmError::LimaExecution("simulated error".to_string()))
-        })();
+            Err(crate::error::ClaudeVmError::LimaExecution(
+                "simulated error".to_string(),
+            ))
+        };
 
         // Verify error was returned
         assert!(result.is_err());

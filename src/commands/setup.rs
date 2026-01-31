@@ -11,7 +11,10 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
         return Err(ClaudeVmError::LimaNotInstalled);
     }
 
-    println!("Setting up template for project: {}", project.root().display());
+    println!(
+        "Setting up template for project: {}",
+        project.root().display()
+    );
     println!("Template name: {}", project.template_name());
 
     // Clean old template if it exists
@@ -25,7 +28,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Start the VM
     println!("Starting template VM...");
-    LimaCtl::start(project.template_name(), true)?;  // Always verbose for setup
+    LimaCtl::start(project.template_name(), true)?; // Always verbose for setup
 
     // Store project metadata
     store_project_metadata(project)?;
@@ -55,7 +58,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Stop template
     println!("Stopping template VM...");
-    LimaCtl::stop(project.template_name(), true)?;  // Always verbose for setup
+    LimaCtl::stop(project.template_name(), true)?; // Always verbose for setup
 
     println!("\nTemplate ready for project: {}", project.root().display());
     println!("Run 'claude-vm' in this project directory to use it.");
@@ -66,13 +69,13 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 fn create_base_template(project: &Project, config: &Config) -> Result<()> {
     println!("Creating base template VM...");
 
-    // Use default Debian template
+    // Use Debian 13 template
     LimaCtl::create(
         project.template_name(),
-        "default",
+        "debian-13",
         config.vm.disk,
         config.vm.memory,
-        true,  // Always verbose for setup
+        true, // Always verbose for setup
     )?;
 
     Ok(())
@@ -197,7 +200,9 @@ fn configure_chrome_mcp(project: &Project, config: &Config) -> Result<()> {
     println!("Configuring Chrome DevTools MCP server...");
 
     if !config.tools.node {
-        println!("  Note: Chrome MCP requires Node.js to run. Use --node flag or install Node.js later.");
+        println!(
+            "  Note: Chrome MCP requires Node.js to run. Use --node flag or install Node.js later."
+        );
     }
 
     let mcp_config_script = r#"
@@ -234,7 +239,10 @@ fi
 fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
     // Standard setup script locations
     let standard_scripts = vec![
-        format!("{}/.claude-vm.setup.sh", std::env::var("HOME").unwrap_or_default()),
+        format!(
+            "{}/.claude-vm.setup.sh",
+            std::env::var("HOME").unwrap_or_default()
+        ),
         format!("{}/.claude-vm.setup.sh", project.root().display()),
     ];
 

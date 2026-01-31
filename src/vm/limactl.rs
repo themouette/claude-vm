@@ -14,29 +14,34 @@ impl LimaCtl {
     /// Create a new Lima VM from template
     pub fn create(name: &str, template: &str, disk: u32, memory: u32, verbose: bool) -> Result<()> {
         let mut cmd = Command::new("limactl");
-        cmd.args([
-            "create",
-            "--name",
-            name,
-            template,
-            "--vm-type=vz",
-            "--mount-type=virtiofs",
-            "--rosetta",
-            "--tty=false",  // Non-interactive mode
-            &format!("--set=.cpus=4"),
-            &format!("--set=.memory={}GiB", memory),
-            &format!("--set=.disk={}GiB", disk),
-        ]);
+
+        // Format template with template: prefix if not already present
+        let template_arg = if template.starts_with("template:") {
+            template.to_string()
+        } else {
+            format!("template:{}", template)
+        };
+
+        cmd.arg("create")
+            .arg(format!("--name={}", name))
+            .arg(&template_arg)
+            .arg("--vm-type=vz")
+            .arg("--mount-type=virtiofs")
+            .arg("--rosetta")
+            .arg("--tty=false")
+            .arg("--set")
+            .arg(".mounts=[]")
+            .arg(format!("--disk={}", disk))
+            .arg(format!("--memory={}", memory));
 
         let result = if verbose {
             cmd.status()
         } else {
-            cmd.stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
+            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
         };
 
-        let status = result.map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to create VM: {}", e)))?;
+        let status = result
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to create VM: {}", e)))?;
 
         if !status.success() {
             return Err(ClaudeVmError::LimaExecution(format!(
@@ -56,12 +61,11 @@ impl LimaCtl {
         let result = if verbose {
             cmd.status()
         } else {
-            cmd.stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
+            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
         };
 
-        let status = result.map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to start VM: {}", e)))?;
+        let status = result
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to start VM: {}", e)))?;
 
         if !status.success() {
             return Err(ClaudeVmError::LimaExecution(format!(
@@ -81,12 +85,11 @@ impl LimaCtl {
         let result = if verbose {
             cmd.status()
         } else {
-            cmd.stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
+            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
         };
 
-        let status = result.map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to stop VM: {}", e)))?;
+        let status = result
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to stop VM: {}", e)))?;
 
         if !status.success() {
             return Err(ClaudeVmError::LimaExecution(format!(
@@ -112,12 +115,11 @@ impl LimaCtl {
         let result = if verbose {
             cmd.status()
         } else {
-            cmd.stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status()
+            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
         };
 
-        let status = result.map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to delete VM: {}", e)))?;
+        let status = result
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to delete VM: {}", e)))?;
 
         if !status.success() {
             return Err(ClaudeVmError::LimaExecution(format!(
@@ -143,7 +145,13 @@ impl LimaCtl {
         Self::try_clone_command("copy", source, dest, mounts, verbose)
     }
 
-    fn try_clone_command(command: &str, source: &str, dest: &str, mounts: &[Mount], verbose: bool) -> Result<()> {
+    fn try_clone_command(
+        command: &str,
+        source: &str,
+        dest: &str,
+        mounts: &[Mount],
+        verbose: bool,
+    ) -> Result<()> {
         // Build mounts JSON array (matches bash format)
         let mounts_array = if !mounts.is_empty() {
             let mount_jsons: Vec<String> = mounts
@@ -175,9 +183,9 @@ impl LimaCtl {
             cmd.stdout(Stdio::null()).stderr(Stdio::null());
         }
 
-        let status = cmd
-            .status()
-            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e)))?;
+        let status = cmd.status().map_err(|e| {
+            ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e))
+        })?;
 
         if !status.success() {
             return Err(ClaudeVmError::LimaExecution(format!(
@@ -245,7 +253,9 @@ impl LimaCtl {
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to list VMs: {}", e)))?;
 
         if !output.status.success() {
-            return Err(ClaudeVmError::LimaExecution("Failed to list VMs".to_string()));
+            return Err(ClaudeVmError::LimaExecution(
+                "Failed to list VMs".to_string(),
+            ));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);

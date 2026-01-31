@@ -13,7 +13,10 @@ impl Project {
     pub fn detect() -> Result<Self> {
         let root = Self::get_project_root()?;
         let template_name = Self::generate_template_name(&root);
-        Ok(Self { root, template_name })
+        Ok(Self {
+            root,
+            template_name,
+        })
     }
 
     /// Get the project root directory
@@ -41,8 +44,9 @@ impl Project {
         }
 
         // Fallback to current directory
-        std::env::current_dir()
-            .map_err(|e| ClaudeVmError::ProjectDetection(format!("Failed to get current directory: {}", e)))
+        std::env::current_dir().map_err(|e| {
+            ClaudeVmError::ProjectDetection(format!("Failed to get current directory: {}", e))
+        })
     }
 
     /// Generate template name: claude-tpl_{sanitized-basename}_{8-char-md5-hash}
