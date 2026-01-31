@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+set -e
+
+# Release script for claude-vm
+# Usage: ./bin/release [patch|minor|major|VERSION]
+# Examples:
+#   ./bin/release patch   # 0.1.0 -> 0.1.1
+#   ./bin/release minor   # 0.1.0 -> 0.2.0
+#   ./bin/release major   # 0.1.0 -> 1.0.0
+#   ./bin/release 0.2.0   # Set specific version
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() {
+  echo -e "${BLUE}==>${NC} $1"
+}
+
+log_success() {
+  echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warning() {
+  echo -e "${YELLOW}⚠${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}✗${NC} $1"
+}
+
+# Check if a command exists
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Show help message
+show_help() {
+  cat << EOF
+Usage: $(basename "$0") [OPTIONS] [VERSION]
+
+Create a new release with automated version bumping, testing, and GitHub release.
+
+ARGUMENTS:
+    patch               Bump patch version (0.1.0 -> 0.1.1) for bug fixes
+    minor               Bump minor version (0.1.0 -> 0.2.0) for new features
+    major               Bump major version (0.1.0 -> 1.0.0) for breaking changes
+    VERSION             Set specific version (e.g., 0.2.0)
+    (none)              Interactive mode with prompts
+
+OPTIONS:
+    -h, --help          Show this help message
+
+EXAMPLES:
+    # Interactive mode
+    $(basename "$0")
+
+    # Bump patch version for bug fixes
+    $(basename "$0") patch
+
+    # Bump minor version for new features
+    $(basename "$0") minor
+
+    # Bump major version for breaking changes
+    $(basename "$0") major
+
+    # Set specific version
+    $(basename "$0") 0.2.0
+
+WHAT IT DOES:
+    1. Validates version format (semantic versioning)
+    2. Checks git working tree is clean
+    3. Verifies you're on the main branch
+    4. Runs all tests (cargo test --all)
+    5. Runs clippy (cargo clippy -- -D warnings)
+    6. Updates version in Cargo.toml and Cargo.lock
+    7. Creates git commit and annotated tag
+    8. Pushes to remote (triggers GitHub Actions release)
+
+REQUIREMENTS:
+    - Clean git working tree (no uncommitted changes)
+    - All tests passing
+    - No clippy warnings
+    - Git remote configured
+
+GITHUB INTEGRATION:
+    When the tag is pushed, GitHub Actions automatically:
+    - Builds binaries for all platforms (macOS, Linux, x86_64, ARM64)
+    - Creates a GitHub release
+    - Uploads binaries as release assets
+
+For more details, see DEVELOPMENT.md
+
+EOF
+}
+
+# Get current version from Cargo.toml
+get_current_version() {
+  grep '^version = ' "$PROJECT_ROOT/Cargo.toml" | head -n1 | sed 's/version = "\(.*\)"/\1/'
+}
+
+# Validate version format (semantic versioning)
+validate_version() {
+  local version=$1
+  if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    log_error "Invalid version format: $version"
+    log_error "Expected format: MAJOR.MINOR.PATCH (e.g., 0.2.0)"
+    return 1
+  fi
+  return 0
+}
+
+# Compare two semantic versions
+# Returns 0 (true) if version1 > version2, 1 (false) otherwise
+version_greater_than() {
+  local version1=$1
+  local version2=$2
+
+  # Parse version1
+  if [[ $version1 =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local v1_major="${BASH_REMATCH[1]}"
+    local v1_minor="${BASH_REMATCH[2]}"
+    local v1_patch="${BASH_REMATCH[3]}"
+  else
+    return 1
+  fi
+
+  # Parse version2
+  if [[ $version2 =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local v2_major="${BASH_REMATCH[1]}"
+    local v2_minor="${BASH_REMATCH[2]}"
+    local v2_patch="${BASH_REMATCH[3]}"
+  else
+    return 1
+  fi
+
+  # Compare major
+  if [ "$v1_major" -gt "$v2_major" ]; then
+    return 0
+  elif [ "$v1_major" -lt "$v2_major" ]; then
+    return 1
+  fi
+
+  # Major versions are equal, compare minor
+  if [ "$v1_minor" -gt "$v2_minor" ]; then
+    return 0
+  elif [ "$v1_minor" -lt "$v2_minor" ]; then
+    return 1
+  fi
+
+  # Major and minor are equal, compare patch
+  if [ "$v1_patch" -gt "$v2_patch" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Bump version based on type (patch, minor, major)
+bump_version() {
+  local current=$1
+  local bump_type=$2
+
+  # Parse current version
+  if [[ $current =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+  else
+    log_error "Invalid current version format: $current"
+    exit 1
+  fi
+
+  # Bump appropriate part
+  case "$bump_type" in
+    patch)
+      patch=$((patch + 1))
+      ;;
+    minor)
+      minor=$((minor + 1))
+      patch=0
+      ;;
+    major)
+      major=$((major + 1))
+      minor=0
+      patch=0
+      ;;
+    *)
+      log_error "Invalid bump type: $bump_type"
+      log_error "Expected: patch, minor, or major"
+      exit 1
+      ;;
+  esac
+
+  echo "${major}.${minor}.${patch}"
+}
+
+# Check if working directory is clean
+check_working_tree() {
+  log_info "Checking git working tree..."
+
+  if ! git diff-index --quiet HEAD --; then
+    log_error "Working tree is not clean. Please commit or stash your changes."
+    git status --short
+    exit 1
+  fi
+
+  log_success "Working tree is clean"
+}
+
+# Check if we're on main branch
+check_branch() {
+  local current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+  if [ "$current_branch" != "main" ]; then
+    log_warning "You are on branch '$current_branch', not 'main'"
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      log_info "Release cancelled"
+      exit 0
+    fi
+  fi
+}
+
+# Run tests
+run_tests() {
+  log_info "Running tests..."
+  cd "$PROJECT_ROOT"
+
+  if ! cargo test --all; then
+    log_error "Tests failed. Please fix failing tests before releasing."
+    exit 1
+  fi
+
+  log_success "All tests passed"
+}
+
+# Run clippy
+run_clippy() {
+  log_info "Running clippy..."
+  cd "$PROJECT_ROOT"
+
+  if ! cargo clippy -- -D warnings; then
+    log_error "Clippy found issues. Please fix them before releasing."
+    exit 1
+  fi
+
+  log_success "Clippy passed"
+}
+
+# Check if version tag already exists
+check_tag_exists() {
+  local version=$1
+  local tag="v$version"
+
+  if git rev-parse "$tag" >/dev/null 2>&1; then
+    log_error "Tag $tag already exists"
+    exit 1
+  fi
+}
+
+# Update version in Cargo.toml
+update_version() {
+  local new_version=$1
+
+  log_info "Updating version in Cargo.toml to $new_version..."
+
+  # Update version in Cargo.toml (cross-platform sed)
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS requires a backup extension
+    sed -i.bak "s/^version = \".*\"/version = \"$new_version\"/" "$PROJECT_ROOT/Cargo.toml"
+    rm "$PROJECT_ROOT/Cargo.toml.bak"
+  else
+    # Linux doesn't require a backup extension
+    sed -i "s/^version = \".*\"/version = \"$new_version\"/" "$PROJECT_ROOT/Cargo.toml"
+  fi
+
+  # Update Cargo.lock
+  cargo build --release >/dev/null 2>&1 || true
+
+  log_success "Version updated to $new_version"
+}
+
+# Create git commit and tag
+create_release() {
+  local version=$1
+  local tag="v$version"
+
+  log_info "Creating release commit and tag..."
+
+  # Commit version bump
+  git add "$PROJECT_ROOT/Cargo.toml" "$PROJECT_ROOT/Cargo.lock"
+  git commit -m "Release version $version"
+
+  # Create annotated tag
+  git tag -a "$tag" -m "Release version $version"
+
+  log_success "Created tag $tag"
+}
+
+# Push to remote
+push_release() {
+  local version=$1
+  local tag="v$version"
+
+  log_info "Pushing to remote..."
+
+  # Get remote name (usually 'origin')
+  local remote=$(git remote | head -n1)
+
+  if [ -z "$remote" ]; then
+    log_error "No git remote configured"
+    exit 1
+  fi
+
+  # Push commit and tag
+  git push "$remote" HEAD
+  git push "$remote" "$tag"
+
+  log_success "Pushed to $remote"
+}
+
+# Print next steps
+print_next_steps() {
+  local version=$1
+  local tag="v$version"
+
+  echo ""
+  log_success "Release $version created successfully!"
+  echo ""
+  echo "Next steps:"
+  echo "  1. GitHub Actions will automatically build binaries for all platforms"
+  echo "  2. A new release will be created at: https://github.com/themouette/claude-vm/releases/tag/$tag"
+  echo "  3. Binaries will be available for download once the workflow completes"
+  echo ""
+  echo "Monitor the build progress at:"
+  echo "  https://github.com/themouette/claude-vm/actions"
+  echo ""
+}
+
+# Main release flow
+main() {
+  local version_arg="${1:-}"
+
+  # Check for help flag
+  if [[ "$version_arg" == "-h" || "$version_arg" == "--help" ]]; then
+    show_help
+    exit 0
+  fi
+
+  echo ""
+  log_info "Claude VM Release Script"
+  echo ""
+
+  # Check required commands
+  if ! command_exists git; then
+    log_error "git is required but not installed"
+    exit 1
+  fi
+
+  if ! command_exists cargo; then
+    log_error "cargo is required but not installed"
+    exit 1
+  fi
+
+  # Get current version
+  local current_version=$(get_current_version)
+  log_info "Current version: $current_version"
+
+  # Determine new version
+  local new_version=""
+
+  if [ -z "$version_arg" ]; then
+    # Interactive mode
+    echo ""
+    echo "Enter version bump type or specific version:"
+    echo "  - patch: $current_version -> $(bump_version "$current_version" patch)"
+    echo "  - minor: $current_version -> $(bump_version "$current_version" minor)"
+    echo "  - major: $current_version -> $(bump_version "$current_version" major)"
+    echo "  - Or enter a specific version (e.g., 1.2.3)"
+    echo ""
+    read -p "Version: " version_arg
+
+    if [ -z "$version_arg" ]; then
+      log_error "Version cannot be empty"
+      exit 1
+    fi
+  fi
+
+  # Check if it's a bump type or specific version
+  case "$version_arg" in
+    patch|minor|major)
+      new_version=$(bump_version "$current_version" "$version_arg")
+      log_info "Bumping $version_arg version"
+      ;;
+    *)
+      # Assume it's a specific version
+      new_version="$version_arg"
+      # Validate version format
+      if ! validate_version "$new_version"; then
+        exit 1
+      fi
+      ;;
+  esac
+
+  # Check if new version is different from current
+  if [ "$new_version" = "$current_version" ]; then
+    log_error "New version ($new_version) must be different from current version ($current_version)"
+    exit 1
+  fi
+
+  # Check if new version is greater than current version
+  if ! version_greater_than "$new_version" "$current_version"; then
+    log_error "New version ($new_version) must be greater than current version ($current_version)"
+    log_error "Use 'patch', 'minor', or 'major' to bump the version correctly"
+    exit 1
+  fi
+
+  log_info "New version: $new_version"
+  echo ""
+
+  # Confirm release
+  log_warning "This will create release v$new_version"
+  read -p "Continue? (y/N): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log_info "Release cancelled"
+    exit 0
+  fi
+
+  # Pre-release checks
+  check_working_tree
+  check_branch
+  check_tag_exists "$new_version"
+
+  # Run quality checks
+  run_tests
+  run_clippy
+
+  # Update version and create release
+  update_version "$new_version"
+  create_release "$new_version"
+
+  # Push to remote
+  log_warning "Ready to push to remote. This will trigger the release workflow."
+  read -p "Push now? (y/N): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log_info "Release created locally but not pushed."
+    log_info "To push manually, run:"
+    echo "  git push origin HEAD"
+    echo "  git push origin v$new_version"
+    exit 0
+  fi
+
+  push_release "$new_version"
+
+  # Print next steps
+  print_next_steps "$new_version"
+}
+
+# Run main function
+main "$@"

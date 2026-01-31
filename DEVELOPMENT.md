@@ -209,9 +209,81 @@ tail -f ~/.lima/vm-name/ha.stdout.log
 
 ## Release Process
 
+The project includes an automated release script that handles version bumping, testing, and GitHub release creation.
+
+### Using the Release Script
+
+```bash
+# Show help and usage information
+./bin/release --help
+
+# Bump patch version (0.1.0 -> 0.1.1) - for bug fixes
+./bin/release patch
+
+# Bump minor version (0.1.0 -> 0.2.0) - for new features
+./bin/release minor
+
+# Bump major version (0.1.0 -> 1.0.0) - for breaking changes
+./bin/release major
+
+# Set specific version
+./bin/release 0.2.0
+
+# Interactive mode with prompts
+./bin/release
+```
+
+### What the Release Script Does
+
+1. Validates the version format (semantic versioning)
+2. Checks that the git working tree is clean
+3. Verifies you're on the main branch (with confirmation if not)
+4. Checks that the version tag doesn't already exist
+5. Runs all tests: `cargo test --all`
+6. Runs clippy: `cargo clippy -- -D warnings`
+7. Updates the version in `Cargo.toml`
+8. Updates `Cargo.lock`
+9. Creates a git commit with the version bump
+10. Creates an annotated git tag (e.g., `v0.2.0`)
+11. Pushes the commit and tag to the remote repository
+12. Triggers the GitHub Actions release workflow
+
+### Version Bumping
+
+- **patch**: Increments the patch version (0.1.0 -> 0.1.1) - for bug fixes
+- **minor**: Increments the minor version and resets patch (0.1.0 -> 0.2.0) - for new features
+- **major**: Increments the major version and resets minor/patch (0.1.0 -> 1.0.0) - for breaking changes
+
+### GitHub Actions Workflow
+
+When the release tag is pushed, `.github/workflows/release.yml` automatically:
+
+1. Builds binaries for all supported platforms:
+   - macOS x86_64 (Intel)
+   - macOS aarch64 (Apple Silicon)
+   - Linux x86_64
+   - Linux aarch64 (ARM64)
+2. Creates a GitHub release with the version tag
+3. Uploads all platform binaries as release assets
+4. Generates installation instructions in the release notes
+
+### Requirements
+
+- Clean git working tree (no uncommitted changes)
+- All tests passing
+- No clippy warnings
+- Git remote configured
+- Version must follow semantic versioning (e.g., 0.2.0, 1.0.0, 2.1.3)
+
+### Manual Release Process
+
+If you need to release manually without the script:
+
 1. Update version in `Cargo.toml`
 2. Update CHANGELOG.md
 3. Run all tests: `cargo test --all`
-4. Build release binary: `cargo build --release`
-5. Tag release: `git tag v0.x.0`
-6. Push tag: `git push origin v0.x.0`
+4. Run clippy: `cargo clippy -- -D warnings`
+5. Build release binary: `cargo build --release`
+6. Commit changes: `git commit -am "Release version X.Y.Z"`
+7. Tag release: `git tag -a vX.Y.Z -m "Release version X.Y.Z"`
+8. Push commit and tag: `git push origin main && git push origin vX.Y.Z`
