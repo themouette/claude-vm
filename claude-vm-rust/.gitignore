@@ -1,0 +1,20 @@
+# Rust
+/target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Testing
+*.profraw
+*.profdata
+
+# Lima VM mount points
+claude-tpl_*/
