@@ -15,9 +15,10 @@ pub fn current_platform() -> Result<String> {
         ("macos", "x86_64") => Ok("macos-x86_64".to_string()),
         ("linux", "aarch64") => Ok("linux-aarch64".to_string()),
         ("linux", "x86_64") => Ok("linux-x86_64".to_string()),
-        (os, arch) => Err(crate::error::ClaudeVmError::UpdateError(
-            format!("Unsupported platform: {}-{}", os, arch),
-        )),
+        (os, arch) => Err(crate::error::ClaudeVmError::UpdateError(format!(
+            "Unsupported platform: {}-{}",
+            os, arch
+        ))),
     }
 }
 

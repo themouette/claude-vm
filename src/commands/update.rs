@@ -72,7 +72,8 @@ fn perform_update(target: Option<String>, skip_confirm: bool) -> Result<()> {
             let err_string = e.to_string();
             if err_string.contains("Permission denied") || err_string.contains("EACCES") {
                 return Err(ClaudeVmError::PermissionDenied(
-                    "Cannot replace binary. Try running with sudo: sudo claude-vm update".to_string(),
+                    "Cannot replace binary. Try running with sudo: sudo claude-vm update"
+                        .to_string(),
                 ));
             }
             return Err(ClaudeVmError::from(e));

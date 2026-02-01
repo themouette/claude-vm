@@ -16,7 +16,11 @@ fn main() -> Result<()> {
             commands::version::execute(*check)?;
             return Ok(());
         }
-        Some(Commands::Update { check, version, yes }) => {
+        Some(Commands::Update {
+            check,
+            version,
+            yes,
+        }) => {
             commands::update::execute(*check, version.clone(), *yes)?;
             return Ok(());
         }
