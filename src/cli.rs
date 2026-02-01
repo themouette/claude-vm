@@ -50,6 +50,10 @@ pub enum Commands {
         #[arg(long)]
         chromium: bool,
 
+        /// Enable GPG agent forwarding
+        #[arg(long)]
+        gpg: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,

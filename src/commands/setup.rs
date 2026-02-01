@@ -1,7 +1,8 @@
+use crate::capabilities;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
-use crate::scripts::{runner, INSTALL_CHROMIUM, INSTALL_DOCKER, INSTALL_NODE, INSTALL_PYTHON};
+use crate::scripts::runner;
 use crate::vm::{limactl::LimaCtl, template};
 use std::path::Path;
 
@@ -30,6 +31,9 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     println!("Starting template VM...");
     LimaCtl::start(project.template_name(), true)?; // Always verbose for setup
 
+    // Run host setup hooks for capabilities
+    capabilities::execute_host_setup(project, config)?;
+
     // Store project metadata
     store_project_metadata(project)?;
 
@@ -39,8 +43,11 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Install base packages
     install_base_packages(project)?;
 
-    // Install optional tools
-    install_optional_tools(project, config)?;
+    // Install optional tools via capability system (vm_setup hooks)
+    capabilities::execute_vm_setup(project, config)?;
+
+    // Install vm_runtime scripts into template
+    capabilities::install_vm_runtime_scripts(project, config)?;
 
     // Install Claude Code
     install_claude(project)?;
@@ -48,12 +55,10 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Authenticate Claude
     authenticate_claude(project)?;
 
-    // Configure MCP if chromium is installed
-    if config.tools.chromium {
-        configure_chrome_mcp(project, config)?;
-    }
+    // Configure all MCP servers from capabilities
+    capabilities::configure_mcp_servers(project, config)?;
 
-    // Run setup scripts
+    // Run user-defined setup scripts
     run_setup_scripts(project, config)?;
 
     // Stop template
@@ -69,12 +74,20 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 fn create_base_template(project: &Project, config: &Config) -> Result<()> {
     println!("Creating base template VM...");
 
+    // Collect port forwards from enabled capabilities
+    let port_forwards = capabilities::get_port_forwards(config)?;
+
+    if !port_forwards.is_empty() {
+        println!("Configuring {} port forward(s)...", port_forwards.len());
+    }
+
     // Use Debian 13 template
     LimaCtl::create(
         project.template_name(),
         "debian-13",
         config.vm.disk,
         config.vm.memory,
+        &port_forwards,
         true, // Always verbose for setup
     )?;
 
@@ -141,29 +154,7 @@ fn install_base_packages(project: &Project) -> Result<()> {
     Ok(())
 }
 
-fn install_optional_tools(project: &Project, config: &Config) -> Result<()> {
-    if config.tools.docker {
-        runner::execute_script(project.template_name(), INSTALL_DOCKER, "install_docker.sh")?;
-    }
-
-    if config.tools.python {
-        runner::execute_script(project.template_name(), INSTALL_PYTHON, "install_python.sh")?;
-    }
-
-    if config.tools.node {
-        runner::execute_script(project.template_name(), INSTALL_NODE, "install_node.sh")?;
-    }
-
-    if config.tools.chromium {
-        runner::execute_script(
-            project.template_name(),
-            INSTALL_CHROMIUM,
-            "install_chromium.sh",
-        )?;
-    }
-
-    Ok(())
-}
+// Removed: install_optional_tools - now handled by capability system
 
 fn install_claude(project: &Project) -> Result<()> {
     println!("Installing Claude Code...");
@@ -196,45 +187,7 @@ fn authenticate_claude(project: &Project) -> Result<()> {
     Ok(())
 }
 
-fn configure_chrome_mcp(project: &Project, config: &Config) -> Result<()> {
-    println!("Configuring Chrome DevTools MCP server...");
-
-    if !config.tools.node {
-        println!(
-            "  Note: Chrome MCP requires Node.js to run. Use --node flag or install Node.js later."
-        );
-    }
-
-    let mcp_config_script = r#"
-CONFIG="$HOME/.claude.json"
-if [ -f "$CONFIG" ]; then
-  jq '.mcpServers["chrome-devtools"] = {
-    "command": "npx",
-    "args": ["-y", "chrome-devtools-mcp@latest", "--headless=true", "--isolated=true"]
-  }' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
-else
-  cat > "$CONFIG" << 'JSON'
-{
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest", "--headless=true", "--isolated=true"]
-    }
-  }
-}
-JSON
-fi
-"#;
-
-    LimaCtl::shell(
-        project.template_name(),
-        None,
-        "bash",
-        &["-c", mcp_config_script],
-    )?;
-
-    Ok(())
-}
+// Removed: configure_chrome_mcp - now handled by capability system
 
 fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
     // Standard setup script locations

@@ -1,0 +1,13 @@
+[capability]
+id = "chromium"
+name = "Chromium Browser"
+description = "Headless Chromium for web automation and testing"
+
+[vm_setup]
+script_file = "vm_setup.sh"
+
+[[mcp]]
+id = "chrome-devtools"
+command = "npx"
+args = ["-y", "chrome-devtools-mcp@latest", "--headless=true", "--isolated=true"]
+enabled_when = "node"

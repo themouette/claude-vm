@@ -1,0 +1,7 @@
+[capability]
+id = "python"
+name = "Python"
+description = "Python 3 with pip and development tools"
+
+[vm_setup]
+script_file = "vm_setup.sh"

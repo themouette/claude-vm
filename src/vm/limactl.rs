@@ -1,5 +1,6 @@
 use crate::error::{ClaudeVmError, Result};
 use crate::vm::mount::Mount;
+use crate::vm::port_forward::PortForward;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -12,7 +13,14 @@ impl LimaCtl {
     }
 
     /// Create a new Lima VM from template
-    pub fn create(name: &str, template: &str, disk: u32, memory: u32, verbose: bool) -> Result<()> {
+    pub fn create(
+        name: &str,
+        template: &str,
+        disk: u32,
+        memory: u32,
+        port_forwards: &[PortForward],
+        verbose: bool,
+    ) -> Result<()> {
         let mut cmd = Command::new("limactl");
 
         // Format template with template: prefix if not already present
@@ -33,6 +41,13 @@ impl LimaCtl {
             .arg(".mounts=[]")
             .arg(format!("--disk={}", disk))
             .arg(format!("--memory={}", memory));
+
+        // Add port forwards using --set flags
+        for (index, port_forward) in port_forwards.iter().enumerate() {
+            for (key, value) in port_forward.to_set_args(index) {
+                cmd.arg("--set").arg(format!("{}={}", key, value));
+            }
+        }
 
         let result = if verbose {
             cmd.status()
