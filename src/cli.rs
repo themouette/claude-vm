@@ -78,4 +78,26 @@ pub enum Commands {
 
     /// Clean all claude-vm templates
     CleanAll,
+
+    /// Check claude-vm version and updates
+    Version {
+        /// Check for available updates
+        #[arg(long)]
+        check: bool,
+    },
+
+    /// Update claude-vm to the latest version
+    Update {
+        /// Check for updates without installing
+        #[arg(long)]
+        check: bool,
+
+        /// Update to specific version
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 }

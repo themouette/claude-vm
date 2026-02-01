@@ -10,7 +10,28 @@ fn main() -> Result<()> {
     // Parse CLI arguments
     let cli = Cli::parse();
 
-    // Detect project
+    // Handle commands that don't need project detection first
+    match &cli.command {
+        Some(Commands::Version { check }) => {
+            commands::version::execute(*check)?;
+            return Ok(());
+        }
+        Some(Commands::Update { check, version, yes }) => {
+            commands::update::execute(*check, version.clone(), *yes)?;
+            return Ok(());
+        }
+        Some(Commands::List) => {
+            commands::list::execute()?;
+            return Ok(());
+        }
+        Some(Commands::CleanAll) => {
+            commands::clean_all::execute()?;
+            return Ok(());
+        }
+        _ => {}
+    }
+
+    // Detect project for commands that need it
     let project = Project::detect().map_err(|e| match e {
         ClaudeVmError::ProjectDetection(msg) => {
             eprintln!("Error: {}", msg);
@@ -30,19 +51,14 @@ fn main() -> Result<()> {
         Some(Commands::Shell) => {
             commands::shell::execute(&project, &config)?;
         }
-        Some(Commands::List) => {
-            commands::list::execute()?;
-        }
         Some(Commands::Clean) => {
             commands::clean::execute(&project)?;
-        }
-        Some(Commands::CleanAll) => {
-            commands::clean_all::execute()?;
         }
         None => {
             // Default: run Claude with provided arguments
             commands::run::execute(&project, &config, &cli.claude_args)?;
         }
+        _ => unreachable!(),
     }
 
     Ok(())
