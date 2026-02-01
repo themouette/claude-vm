@@ -91,6 +91,7 @@ impl PortForward {
         const ALLOWED_COMMANDS: &[&str] = &[
             "gpgconf --list-dir agent-extra-socket",
             "gpgconf --list-dir agent-socket",
+            "echo $SSH_AUTH_SOCK",
         ];
 
         if !ALLOWED_COMMANDS.contains(&command) {
@@ -211,7 +212,8 @@ mod tests {
 
     #[test]
     fn test_socket_path_validation_path_traversal() {
-        let result = PortForward::unix_socket("/tmp/../etc/passwd".to_string(), "/tmp/socket".to_string());
+        let result =
+            PortForward::unix_socket("/tmp/../etc/passwd".to_string(), "/tmp/socket".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("path traversal"));
     }
@@ -225,21 +227,27 @@ mod tests {
 
     #[test]
     fn test_socket_path_validation_null_byte() {
-        let result = PortForward::unix_socket("/tmp/socket\0".to_string(), "/tmp/socket".to_string());
+        let result =
+            PortForward::unix_socket("/tmp/socket\0".to_string(), "/tmp/socket".to_string());
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("null byte"));
     }
 
     #[test]
     fn test_socket_path_validation_newline() {
-        let result = PortForward::unix_socket("/tmp/socket\n".to_string(), "/tmp/socket".to_string());
+        let result =
+            PortForward::unix_socket("/tmp/socket\n".to_string(), "/tmp/socket".to_string());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid characters"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid characters"));
     }
 
     #[test]
     fn test_socket_path_validation_valid() {
-        let result = PortForward::unix_socket("/tmp/socket".to_string(), "/var/run/socket".to_string());
+        let result =
+            PortForward::unix_socket("/tmp/socket".to_string(), "/var/run/socket".to_string());
         assert!(result.is_ok());
     }
 }

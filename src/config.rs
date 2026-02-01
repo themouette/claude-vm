@@ -23,6 +23,10 @@ pub struct Config {
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
+
+    /// Forward SSH agent to VM (not stored in config file)
+    #[serde(skip)]
+    pub forward_ssh_agent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,6 +214,9 @@ impl Config {
     pub fn with_cli_overrides(mut self, cli: &Cli) -> Self {
         // Verbose flag
         self.verbose = cli.verbose;
+
+        // SSH agent forwarding
+        self.forward_ssh_agent = cli.forward_ssh_agent;
 
         // Global CLI overrides
         if let Some(disk) = cli.disk {

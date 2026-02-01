@@ -82,6 +82,7 @@ pub fn install_vm_runtime_scripts_to_template(
         None,
         "sudo",
         &["mkdir", "-p", RUNTIME_SCRIPT_DIR],
+        false,
     )?;
 
     // Install each capability's vm_runtime script
@@ -110,6 +111,7 @@ pub fn install_vm_runtime_scripts_to_template(
                 None,
                 "sudo",
                 &["mv", "-f", &temp_path, &install_path],
+                false,
             )?;
 
             // Make executable
@@ -118,6 +120,7 @@ pub fn install_vm_runtime_scripts_to_template(
                 None,
                 "sudo",
                 &["chmod", "+x", &install_path],
+                false,
             )?;
 
             Ok(())
@@ -272,6 +275,7 @@ echo "MCP servers configured in $CONFIG"
         None,
         "bash",
         &["-c", &mcp_config_script],
+        false,
     )?;
 
     Ok(())

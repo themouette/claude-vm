@@ -28,6 +28,10 @@ pub struct Cli {
     /// Show verbose output including Lima logs
     #[arg(short = 'v', long = "verbose", global = true)]
     pub verbose: bool,
+
+    /// Forward SSH agent to VM
+    #[arg(short = 'A', long = "forward-ssh-agent", global = true)]
+    pub forward_ssh_agent: bool,
 }
 
 #[derive(Subcommand, Debug)]

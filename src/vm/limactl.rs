@@ -213,13 +213,24 @@ impl LimaCtl {
     }
 
     /// Execute a shell command in a Lima VM
-    pub fn shell(name: &str, workdir: Option<&Path>, cmd: &str, args: &[&str]) -> Result<()> {
+    pub fn shell(
+        name: &str,
+        workdir: Option<&Path>,
+        cmd: &str,
+        args: &[&str],
+        forward_ssh_agent: bool,
+    ) -> Result<()> {
         let mut command = Command::new("limactl");
         command.arg("shell");
 
         // Add --workdir BEFORE the VM name (limactl syntax)
         if let Some(wd) = workdir {
             command.args(["--workdir", &wd.to_string_lossy()]);
+        }
+
+        // Add SSH agent forwarding if requested
+        if forward_ssh_agent {
+            command.arg("-A");
         }
 
         // Now add VM name and command

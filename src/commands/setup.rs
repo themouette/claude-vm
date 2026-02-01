@@ -103,7 +103,7 @@ fn store_project_metadata(project: &Project) -> Result<()> {
         project_root
     );
 
-    LimaCtl::shell(project.template_name(), None, "bash", &["-c", &cmd])?;
+    LimaCtl::shell(project.template_name(), None, "bash", &["-c", &cmd], false)?;
 
     Ok(())
 }
@@ -113,7 +113,13 @@ fn disable_needrestart(project: &Project) -> Result<()> {
 
     let cmd = r#"mkdir -p /etc/needrestart/conf.d && echo '$nrconf{restart} = '"'"'a'"'"';' > /etc/needrestart/conf.d/no-prompt.conf"#;
 
-    LimaCtl::shell(project.template_name(), None, "sudo", &["bash", "-c", cmd])?;
+    LimaCtl::shell(
+        project.template_name(),
+        None,
+        "sudo",
+        &["bash", "-c", cmd],
+        false,
+    )?;
 
     Ok(())
 }
@@ -126,6 +132,7 @@ fn install_base_packages(project: &Project) -> Result<()> {
         None,
         "sudo",
         &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update"],
+        false,
     )?;
 
     LimaCtl::shell(
@@ -149,6 +156,7 @@ fn install_base_packages(project: &Project) -> Result<()> {
             "zip",
             "ca-certificates",
         ],
+        false,
     )?;
 
     Ok(())
@@ -164,11 +172,12 @@ fn install_claude(project: &Project) -> Result<()> {
         None,
         "bash",
         &["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+        false,
     )?;
 
     // Add to PATH
     let cmd = r#"echo "export PATH=$HOME/.local/bin:$HOME/.claude/local/bin:$PATH" >> ~/.bashrc"#;
-    LimaCtl::shell(project.template_name(), None, "bash", &["-c", cmd])?;
+    LimaCtl::shell(project.template_name(), None, "bash", &["-c", cmd], false)?;
 
     Ok(())
 }
@@ -182,6 +191,7 @@ fn authenticate_claude(project: &Project) -> Result<()> {
         None,
         "bash",
         &["-lc", "claude 'Ok I am logged in, I can exit now.'"],
+        false,
     )?;
 
     Ok(())

@@ -137,7 +137,10 @@ pub fn get_port_forwards(config: &Config) -> Result<Vec<PortForward>> {
                 }
             };
 
-            port_forwards.push(PortForward::unix_socket(host_socket, forward.guest.clone())?);
+            port_forwards.push(PortForward::unix_socket(
+                host_socket,
+                forward.guest.clone(),
+            )?);
         }
     }
 

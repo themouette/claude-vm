@@ -61,8 +61,8 @@ pub fn execute_script(vm_name: &str, script_content: &str, script_name: &str) ->
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
 
     // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path])?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path])?;
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
 
     // Cleanup local temp file
     std::fs::remove_file(&local_temp)?;
@@ -85,8 +85,8 @@ pub fn execute_script_silent(vm_name: &str, script_content: &str, script_name: &
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
 
     // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path])?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path])?;
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
 
     // Cleanup local temp file
     std::fs::remove_file(&local_temp)?;
@@ -123,8 +123,8 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
     LimaCtl::copy(script_path, vm_name, &temp_path)?;
 
     // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path])?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path])?;
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
 
     Ok(())
 }
@@ -242,7 +242,10 @@ pub fn execute_command_with_runtime_scripts(
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
-    entrypoint.push_str(&format!("  for script in {}/*.sh; do\n", RUNTIME_SCRIPT_DIR));
+    entrypoint.push_str(&format!(
+        "  for script in {}/*.sh; do\n",
+        RUNTIME_SCRIPT_DIR
+    ));
     entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
     entrypoint.push_str("      . \"$script\" 2>&1 || echo \"Warning: Failed to source $script\"\n");
     entrypoint.push_str("    fi\n");
@@ -272,7 +275,13 @@ pub fn execute_command_with_runtime_scripts(
     shell_args.push(cmd);
     shell_args.extend(args);
 
-    LimaCtl::shell(vm_name, workdir, "bash", &shell_args)
+    LimaCtl::shell(
+        vm_name,
+        workdir,
+        "bash",
+        &shell_args,
+        config.forward_ssh_agent,
+    )
 }
 
 /// Build entrypoint script for testing purposes
@@ -283,7 +292,10 @@ fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) 
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
-    entrypoint.push_str(&format!("  for script in {}/*.sh; do\n", RUNTIME_SCRIPT_DIR));
+    entrypoint.push_str(&format!(
+        "  for script in {}/*.sh; do\n",
+        RUNTIME_SCRIPT_DIR
+    ));
     entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
     entrypoint.push_str("      . \"$script\"\n");
     entrypoint.push_str("    fi\n");
