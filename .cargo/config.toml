@@ -1,0 +1,12 @@
+# Cross-compilation configuration
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+
+[target.aarch64-apple-darwin]
+# macOS cross-compilation from x86_64 to aarch64 works without additional config
+# when building on macOS runners
+
+[target.x86_64-apple-darwin]
+# macOS cross-compilation from aarch64 to x86_64 works without additional config
+# when building on macOS runners

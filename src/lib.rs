@@ -5,4 +5,5 @@ pub mod error;
 pub mod project;
 pub mod scripts;
 pub mod utils;
+pub mod version;
 pub mod vm;

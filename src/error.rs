@@ -32,6 +32,21 @@ pub enum ClaudeVmError {
 
     #[error("Command failed: {0}")]
     CommandFailed(String),
+
+    #[error("Update error: {0}")]
+    UpdateError(String),
+
+    #[error("Network error: {0}")]
+    NetworkError(String),
+
+    #[error("Permission denied: {0}. Try running with sudo.")]
+    PermissionDenied(String),
+}
+
+impl From<self_update::errors::Error> for ClaudeVmError {
+    fn from(err: self_update::errors::Error) -> Self {
+        ClaudeVmError::UpdateError(err.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, ClaudeVmError>;
