@@ -20,6 +20,9 @@ pub struct Config {
     #[serde(default)]
     pub defaults: DefaultsConfig,
 
+    #[serde(default)]
+    pub mounts: Vec<MountEntry>,
+
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
@@ -27,6 +30,10 @@ pub struct Config {
     /// Forward SSH agent to VM (not stored in config file)
     #[serde(skip)]
     pub forward_ssh_agent: bool,
+
+    /// Mount Claude conversation folder in VM (not stored in config file)
+    #[serde(skip)]
+    pub mount_conversations: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +110,8 @@ impl ToolsConfig {
 pub struct SetupConfig {
     #[serde(default)]
     pub scripts: Vec<String>,
+    #[serde(default)]
+    pub mounts: Vec<MountEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -127,6 +136,19 @@ impl Default for DefaultsConfig {
 
 fn default_claude_args() -> Vec<String> {
     vec!["--dangerously-skip-permissions".to_string()]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountEntry {
+    pub location: String,
+    #[serde(default = "default_writable")]
+    pub writable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_point: Option<String>,
+}
+
+fn default_writable() -> bool {
+    true
 }
 
 impl Config {
@@ -218,6 +240,27 @@ impl Config {
         // SSH agent forwarding
         self.forward_ssh_agent = cli.forward_ssh_agent;
 
+        // Mount conversations (inverted: --no-conversations means mount_conversations = false)
+        self.mount_conversations = !cli.no_conversations;
+
+        // Custom mounts from CLI (accumulate with config mounts)
+        // Parse CLI mount specs immediately to validate and extract values
+        for mount_spec in &cli.mounts {
+            // Parse the mount spec to extract location, mount_point, and writable
+            match crate::vm::mount::Mount::from_spec(mount_spec) {
+                Ok(mount) => {
+                    self.mounts.push(MountEntry {
+                        location: mount.location.to_string_lossy().to_string(),
+                        writable: mount.writable,
+                        mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Warning: Invalid mount spec '{}': {}", mount_spec, e);
+                }
+            }
+        }
+
         // Global CLI overrides
         if let Some(disk) = cli.disk {
             self.vm.disk = disk;
@@ -237,6 +280,7 @@ impl Config {
             disk,
             memory,
             setup_scripts,
+            mounts,
         }) = &cli.command
         {
             if *all {
@@ -274,6 +318,22 @@ impl Config {
             for script in setup_scripts {
                 if let Some(script_str) = script.to_str() {
                     self.setup.scripts.push(script_str.to_string());
+                }
+            }
+
+            // Add setup mounts from CLI (parse immediately like runtime mounts)
+            for mount_spec in mounts {
+                match crate::vm::mount::Mount::from_spec(mount_spec) {
+                    Ok(mount) => {
+                        self.setup.mounts.push(MountEntry {
+                            location: mount.location.to_string_lossy().to_string(),
+                            writable: mount.writable,
+                            mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Invalid setup mount spec '{}': {}", mount_spec, e);
+                    }
                 }
             }
         }

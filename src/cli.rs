@@ -32,6 +32,14 @@ pub struct Cli {
     /// Forward SSH agent to VM
     #[arg(short = 'A', long = "forward-ssh-agent", global = true)]
     pub forward_ssh_agent: bool,
+
+    /// Don't mount Claude conversation folder in VM
+    #[arg(long = "no-conversations", global = true)]
+    pub no_conversations: bool,
+
+    /// Custom mount in docker-style format: /host/path[:vm/path][:ro|rw]
+    #[arg(long = "mount", global = true)]
+    pub mounts: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -73,6 +81,10 @@ pub enum Commands {
         /// Setup scripts to execute
         #[arg(long = "setup-script")]
         setup_scripts: Vec<PathBuf>,
+
+        /// Setup-only mounts (available during template creation only)
+        #[arg(long = "mount")]
+        mounts: Vec<String>,
     },
 
     /// Open a shell in the template VM

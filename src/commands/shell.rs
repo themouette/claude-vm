@@ -13,7 +13,12 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     }
 
     // Create ephemeral session (like run command)
-    let session = VmSession::new(project, config.verbose)?;
+    let session = VmSession::new(
+        project,
+        config.verbose,
+        config.mount_conversations,
+        &config.mounts,
+    )?;
     let _cleanup = session.ensure_cleanup();
 
     // Use current directory for workdir (not project root)

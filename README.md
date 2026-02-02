@@ -209,6 +209,16 @@ scripts = [
 [defaults]
 # Additional arguments passed to Claude (--dangerously-skip-permissions is included by default)
 claude_args = ["--max-tokens", "4096"]
+
+# Custom mounts (optional)
+[[mounts]]
+location = "/Users/me/data"
+writable = true
+
+[[mounts]]
+location = "~/shared"
+mount_point = "/vm/shared"
+writable = false
 ```
 
 ### Configuration Locations
@@ -504,6 +514,8 @@ This shows:
 - `--memory <GB>` - VM memory size
 - `--runtime-script <PATH>` - Runtime script to execute
 - `-A, --forward-ssh-agent` - Forward SSH agent to VM
+- `--no-conversations` - Don't mount Claude conversation folder in VM
+- `--mount <SPEC>` - Custom mount in docker-style format (can be used multiple times)
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options
@@ -515,6 +527,7 @@ This shows:
 - `--gpg` - Enable GPG agent forwarding
 - `--all` - Install all tools
 - `--setup-script <PATH>` - Custom setup script
+- `--mount <SPEC>` - Setup-only mount (available during template creation only)
 
 ## Agent Forwarding
 
@@ -570,7 +583,221 @@ claude-vm -A "git push"
 Automatically detects and handles git worktrees by:
 
 1. Mounting the worktree directory (writable)
-2. Mounting the main repository (read-only, for git access)
+2. Mounting the main repository (writable, for git operations)
+
+Git commands in worktrees require write access to the main repository's `.git` directory to update refs, create commits, and perform other operations.
+
+## Claude Conversation History
+
+By default, claude-vm automatically shares your Claude conversation history with the VM, allowing Claude to access context from previous conversations in the same project.
+
+### How It Works
+
+Claude stores conversation history in `~/.claude/projects/` with path-encoded folder names. Claude-vm automatically:
+
+1. Detects the current project path
+2. Finds or creates the corresponding conversation folder
+3. Mounts it at `~/.claude/projects/` inside the VM
+
+**Privacy note:** Only the current project's conversation folder is mounted. Conversations from other projects remain isolated and are not accessible in the VM.
+
+This means commands running in the VM (including Claude itself) can access conversation history, artifacts, and other project-specific Claude data.
+
+### Disabling Conversation Sharing
+
+To run Claude in an isolated session without access to conversation history, use the `--no-conversations` flag:
+
+```bash
+# Shell without conversation history
+claude-vm --no-conversations shell
+
+# Run Claude without conversation history
+claude-vm --no-conversations "help me code"
+```
+
+This is useful when:
+- You want a completely isolated testing environment
+- You're debugging conversation-related issues
+- You need to ensure no historical context influences Claude's behavior
+
+## Custom Mounts
+
+Beyond the automatic mounts (project directory, worktrees, conversations), you can add custom mounts to share additional directories with the VM.
+
+### Docker-Style Mount Syntax
+
+Use docker-style mount specifications for the CLI:
+
+```bash
+# Simple mount (writable, same path in VM)
+claude-vm --mount /host/data shell
+
+# Read-only mount
+claude-vm --mount /host/data:ro shell
+
+# Custom VM path (writable)
+claude-vm --mount /host/data:/vm/data shell
+
+# Custom VM path (read-only)
+claude-vm --mount /host/data:/vm/data:ro shell
+
+# Multiple mounts
+claude-vm --mount /host/data1 --mount /host/data2:ro shell
+
+# Tilde expansion supported
+claude-vm --mount ~/Documents:/vm/docs shell
+```
+
+### TOML Configuration
+
+Define persistent mounts in `.claude-vm.toml`:
+
+```toml
+[[mounts]]
+location = "/Users/me/data"
+writable = true
+
+[[mounts]]
+location = "/Users/me/shared"
+writable = false
+mount_point = "/vm/shared"  # Optional: custom path in VM
+
+[[mounts]]
+location = "~/Documents"    # Tilde expansion supported
+writable = true
+```
+
+### How It Works
+
+- **Accumulation**: Mounts from global config, project config, and CLI are all applied
+- **Deduplication**: Duplicate mount locations are automatically filtered
+- **Path Expansion**: `~` is expanded to your home directory
+- **Validation**: Paths must be absolute (after expansion)
+- **Mount Points**: By default, host paths are mounted at the same location in the VM
+
+### Examples
+
+**Share a dataset with the VM:**
+```bash
+claude-vm --mount ~/datasets:/data:ro shell
+# Dataset accessible at /data in VM (read-only)
+```
+
+**Mount multiple data sources:**
+```toml
+# .claude-vm.toml
+[[mounts]]
+location = "/mnt/storage/data"
+mount_point = "/data"
+writable = false
+
+[[mounts]]
+location = "/mnt/storage/cache"
+mount_point = "/cache"
+writable = true
+```
+
+**Temporary mount for a single session:**
+```bash
+claude-vm --mount /tmp/experiment:/experiment "analyze this data"
+```
+
+## Setup-Specific Mounts
+
+Setup-specific mounts are directories that are available **only during template creation**, not at runtime. This allows you to transfer binaries, assets, or configuration files from your host to the template VM during setup.
+
+### Why Use Setup Mounts?
+
+Setup mounts are useful when you need to:
+- Transfer pre-built binaries or compiled assets to the template
+- Copy configuration files or credentials (that won't be in git)
+- Install local packages or dependencies from your host machine
+- Seed the template with data that all sessions should have
+
+**Key difference from runtime mounts**: Setup mounts are "baked into" the template. Files copied from setup mounts become part of the template itself and are available in all cloned VMs, even though the mount itself is not present at runtime.
+
+### CLI Usage
+
+Add setup mounts when running `claude-vm setup`:
+
+```bash
+# Mount a directory during setup to copy files
+claude-vm setup --node --mount /path/to/binaries:/tmp/binaries
+
+# Use in setup script to copy files into the template
+# In .claude-vm.setup.sh:
+# cp /tmp/binaries/* /usr/local/bin/
+```
+
+### TOML Configuration
+
+Define setup mounts in your `.claude-vm.toml`:
+
+```toml
+[[setup.mounts]]
+location = "/Users/me/local-packages"
+mount_point = "/tmp/packages"
+writable = false
+
+[[setup.mounts]]
+location = "~/project-assets"
+mount_point = "/tmp/assets"
+writable = false
+```
+
+These mounts will be automatically applied every time you run `claude-vm setup`.
+
+### Example: Installing Local Binary
+
+Suppose you have a pre-compiled binary you want available in all VM sessions:
+
+**1. Setup mount configuration:**
+```toml
+# .claude-vm.toml
+[[setup.mounts]]
+location = "~/my-tools/bin"
+mount_point = "/tmp/host-bin"
+writable = false
+```
+
+**2. Setup script to copy binary:**
+```bash
+#!/bin/bash
+# .claude-vm.setup.sh
+
+# Copy binary from setup mount to template
+sudo cp /tmp/host-bin/my-tool /usr/local/bin/
+sudo chmod +x /usr/local/bin/my-tool
+```
+
+**3. Run setup:**
+```bash
+claude-vm setup --node
+```
+
+Now `my-tool` is permanently installed in the template and available in every cloned VM session, even though the `/tmp/host-bin` mount doesn't exist at runtime.
+
+### Example: Seeding Data
+
+Transfer a dataset to the template during setup:
+
+```bash
+# Mount dataset directory during setup
+claude-vm setup --mount ~/datasets:/tmp/data:ro
+
+# In .claude-vm.setup.sh:
+# mkdir -p /home/lima.linux/datasets
+# cp -r /tmp/data/* /home/lima.linux/datasets/
+```
+
+The dataset is now part of the template and available in all sessions without needing to remount it.
+
+### Important Notes
+
+- **Setup mounts are temporary**: They're only available during `claude-vm setup`, not during `claude-vm` or `claude-vm shell`
+- **Files persist**: Any files you copy from setup mounts into the template filesystem become permanent parts of the template
+- **Use setup scripts**: Combine setup mounts with setup scripts (`.claude-vm.setup.sh`) to copy files from the mount into the template
+- **Security**: Setup mounts use the same validation as runtime mounts (conflict detection, path validation, etc.)
 
 ## Development
 

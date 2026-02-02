@@ -18,11 +18,16 @@ impl VmSession {
     /// - If clone fails: No cleanup needed (VM doesn't exist)
     /// - If start fails: VM is deleted automatically
     /// - If successful: Cleanup guard is registered for later cleanup
-    pub fn new(project: &Project, verbose: bool) -> Result<Self> {
+    pub fn new(
+        project: &Project,
+        verbose: bool,
+        mount_conversations: bool,
+        custom_mounts: &[crate::config::MountEntry],
+    ) -> Result<Self> {
         let name = format!("{}-{}", project.template_name(), std::process::id());
 
-        // Compute mounts for worktree support
-        let mounts = mount::compute_mounts()?;
+        // Compute mounts for worktree support, conversation folder, and custom mounts
+        let mounts = mount::compute_mounts(mount_conversations, custom_mounts)?;
 
         // Clone the template with additional mounts
         // If this fails, no cleanup needed (VM doesn't exist yet)

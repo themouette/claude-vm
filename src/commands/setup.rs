@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
-use crate::vm::{limactl::LimaCtl, template};
+use crate::vm::{limactl::LimaCtl, mount, template};
 use std::path::Path;
 
 pub fn execute(project: &Project, config: &Config) -> Result<()> {
@@ -81,13 +81,21 @@ fn create_base_template(project: &Project, config: &Config) -> Result<()> {
         println!("Configuring {} port forward(s)...", port_forwards.len());
     }
 
-    // Use Debian 13 template
+    // Convert setup mounts from config using shared helper
+    let setup_mounts = mount::convert_mount_entries(&config.setup.mounts)?;
+
+    if !setup_mounts.is_empty() {
+        println!("Configuring {} setup mount(s)...", setup_mounts.len());
+    }
+
+    // Use Debian 13 template with setup mounts
     LimaCtl::create(
         project.template_name(),
         "debian-13",
         config.vm.disk,
         config.vm.memory,
         &port_forwards,
+        &setup_mounts,
         true, // Always verbose for setup
     )?;
 
