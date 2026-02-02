@@ -504,6 +504,7 @@ This shows:
 - `--memory <GB>` - VM memory size
 - `--runtime-script <PATH>` - Runtime script to execute
 - `-A, --forward-ssh-agent` - Forward SSH agent to VM
+- `--no-conversations` - Don't mount Claude conversation folder in VM
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options
@@ -570,7 +571,42 @@ claude-vm -A "git push"
 Automatically detects and handles git worktrees by:
 
 1. Mounting the worktree directory (writable)
-2. Mounting the main repository (read-only, for git access)
+2. Mounting the main repository (writable, for git operations)
+
+Git commands in worktrees require write access to the main repository's `.git` directory to update refs, create commits, and perform other operations.
+
+## Claude Conversation History
+
+By default, claude-vm automatically shares your Claude conversation history with the VM, allowing Claude to access context from previous conversations in the same project.
+
+### How It Works
+
+Claude stores conversation history in `~/.claude/projects/` with path-encoded folder names. Claude-vm automatically:
+
+1. Detects the current project path
+2. Finds or creates the corresponding conversation folder
+3. Mounts it at `~/.claude/projects/` inside the VM
+
+**Privacy note:** Only the current project's conversation folder is mounted. Conversations from other projects remain isolated and are not accessible in the VM.
+
+This means commands running in the VM (including Claude itself) can access conversation history, artifacts, and other project-specific Claude data.
+
+### Disabling Conversation Sharing
+
+To run Claude in an isolated session without access to conversation history, use the `--no-conversations` flag:
+
+```bash
+# Shell without conversation history
+claude-vm --no-conversations shell
+
+# Run Claude without conversation history
+claude-vm --no-conversations "help me code"
+```
+
+This is useful when:
+- You want a completely isolated testing environment
+- You're debugging conversation-related issues
+- You need to ensure no historical context influences Claude's behavior
 
 ## Development
 
