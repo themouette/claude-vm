@@ -85,7 +85,8 @@ pub fn compute_mounts(mount_conversations: bool) -> Result<Vec<Mount>> {
                 let main_repo = main_repo.to_path_buf();
                 // Only add if different from already mounted directories
                 if !mounts.iter().any(|m| m.location == main_repo) {
-                    mounts.push(Mount::new(main_repo, false));
+                    // Mount as writable to allow git operations from worktree
+                    mounts.push(Mount::new(main_repo, true));
                 }
             }
         }
