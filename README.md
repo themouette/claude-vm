@@ -134,6 +134,28 @@ Clean all templates:
 claude-vm clean-all
 ```
 
+### Update Claude VM
+
+Check for available updates:
+
+```bash
+claude-vm update --check
+```
+
+Update to the latest version:
+
+```bash
+claude-vm update
+```
+
+Update to a specific version:
+
+```bash
+claude-vm update --version 1.2.3
+```
+
+Updates are downloaded from the [GitHub releases](https://github.com/themouette/claude-vm/releases).
+
 ## Configuration
 
 Create a `.claude-vm.toml` file in your project root or home directory.

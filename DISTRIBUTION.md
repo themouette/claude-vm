@@ -33,11 +33,11 @@ git push origin v0.1.0
 **User Installation:**
 ```bash
 # macOS Apple Silicon
-curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/v0.1.0/claude-vm-macos-aarch64.tar.gz | tar xz
+curl -L https://github.com/themouette/claude-vm/releases/download/v0.1.0/claude-vm-macos-aarch64.tar.gz | tar xz
 sudo mv claude-vm /usr/local/bin/
 
 # Linux x86_64
-curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/v0.1.0/claude-vm-linux-x86_64.tar.gz | tar xz
+curl -L https://github.com/themouette/claude-vm/releases/download/v0.1.0/claude-vm-linux-x86_64.tar.gz | tar xz
 sudo mv claude-vm /usr/local/bin/
 ```
 
@@ -63,13 +63,13 @@ sudo mv claude-vm /usr/local/bin/
 **Usage:**
 ```bash
 # Install latest version
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
 
 # Install specific version
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/install.sh | bash -s -- v0.1.0
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- v0.1.0
 
 # Install to custom directory
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/install.sh | bash -s -- v0.1.0 ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- v0.1.0 ~/.local/bin
 ```
 
 **Pros:**
@@ -100,11 +100,11 @@ curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/instal
 **User Installation:**
 ```bash
 # From tap
-brew tap YOUR_USERNAME/tap
+brew tap themouette/tap
 brew install claude-vm
 
 # Or directly
-brew install YOUR_USERNAME/tap/claude-vm
+brew install themouette/tap/claude-vm
 ```
 
 **Updating Formula:**
@@ -158,8 +158,8 @@ version = "0.1.0"
 authors = ["Your Name <email@example.com>"]
 edition = "2021"
 description = "Run Claude Code inside sandboxed Lima VMs"
-repository = "https://github.com/YOUR_USERNAME/claude-vm"
-homepage = "https://github.com/YOUR_USERNAME/claude-vm"
+repository = "https://github.com/themouette/claude-vm"
+homepage = "https://github.com/themouette/claude-vm"
 license = "MIT OR Apache-2.0"
 keywords = ["cli", "vm", "lima", "claude"]
 categories = ["command-line-utilities", "development-tools"]
@@ -184,7 +184,7 @@ categories = ["command-line-utilities", "development-tools"]
 **Usage:**
 ```bash
 # Download from releases page
-wget https://github.com/YOUR_USERNAME/claude-vm/releases/download/v0.1.0/claude-vm-linux-x86_64.tar.gz
+wget https://github.com/themouette/claude-vm/releases/download/v0.1.0/claude-vm-linux-x86_64.tar.gz
 
 # Extract
 tar xzf claude-vm-linux-x86_64.tar.gz
@@ -399,13 +399,13 @@ Add to README:
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
 ```
 
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew tap YOUR_USERNAME/tap
+brew tap themouette/tap
 brew install claude-vm
 ```
 
@@ -417,7 +417,7 @@ cargo install claude-vm
 
 ### Pre-built Binaries
 
-Download from [GitHub Releases](https://github.com/YOUR_USERNAME/claude-vm/releases)
+Download from [GitHub Releases](https://github.com/themouette/claude-vm/releases)
 
 **macOS:**
 ```bash
@@ -444,7 +444,7 @@ sudo mv claude-vm /usr/local/bin/
 ### From Source
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/claude-vm
+git clone https://github.com/themouette/claude-vm
 cd claude-vm-rust
 cargo build --release
 sudo cp target/release/claude-vm /usr/local/bin/

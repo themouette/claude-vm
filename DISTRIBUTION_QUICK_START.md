@@ -8,7 +8,7 @@ Quick reference for distributing claude-vm binaries.
 
 **Fastest and easiest:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
 ```
 
 **What it does:**
@@ -20,7 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/claude-vm/main/instal
 ### 🍺 macOS Users: Homebrew
 
 ```bash
-brew tap YOUR_USERNAME/tap
+brew tap themouette/tap
 brew install claude-vm
 ```
 
@@ -42,7 +42,7 @@ cargo install claude-vm
 
 ### 📦 Manual: Download Binary
 
-1. Go to [Releases](https://github.com/YOUR_USERNAME/claude-vm/releases)
+1. Go to [Releases](https://github.com/themouette/claude-vm/releases)
 2. Download for your platform:
    - `claude-vm-macos-aarch64.tar.gz` (Apple Silicon)
    - `claude-vm-macos-x86_64.tar.gz` (Intel Mac)
