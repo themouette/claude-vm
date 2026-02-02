@@ -1,6 +1,6 @@
 use crate::error::{ClaudeVmError, Result};
 use crate::utils::git;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Mount {
@@ -106,10 +106,11 @@ pub fn expand_path(path: &str) -> Result<PathBuf> {
 /// Matches Claude Code's encoding logic:
 /// 1. Canonicalize path (resolve symlinks like /tmp -> /private/tmp)
 /// 2. Replace all non-alphanumeric characters with dashes
-/// Example: /tmp/project@2024:v1.0 -> -private-tmp-project-2024-v1-0
-fn encode_project_path(path: &PathBuf) -> String {
+///
+///    Example: /tmp/project@2024:v1.0 -> -private-tmp-project-2024-v1-0
+fn encode_project_path(path: &Path) -> String {
     // Canonicalize path first (resolve symlinks)
-    let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     // Replace all non-alphanumeric characters with dashes
     canonical
@@ -123,7 +124,7 @@ fn encode_project_path(path: &PathBuf) -> String {
 /// Claude stores conversations in ~/.claude/projects/ with path-encoded folder names
 /// Example: /Users/user/Projects/lab/my-project -> ~/.claude/projects/-Users-user-Projects-lab-my-project
 /// Creates the folder if it doesn't exist
-pub(crate) fn get_claude_conversation_folder(project_path: &PathBuf) -> Option<PathBuf> {
+pub(crate) fn get_claude_conversation_folder(project_path: &Path) -> Option<PathBuf> {
     // Encode the path: replace / with -
     let encoded = encode_project_path(project_path);
 
