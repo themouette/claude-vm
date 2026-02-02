@@ -21,6 +21,9 @@ pub struct Config {
     pub defaults: DefaultsConfig,
 
     #[serde(default)]
+    pub context: ContextConfig,
+
+    #[serde(default)]
     pub mounts: Vec<MountEntry>,
 
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
@@ -125,6 +128,13 @@ pub struct RuntimeConfig {
     pub scripts: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextConfig {
+    /// User-provided instructions for Claude
+    #[serde(default)]
+    pub instructions: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultsConfig {
     #[serde(default = "default_claude_args")]
@@ -217,6 +227,11 @@ impl Config {
 
         // Default Claude args (append)
         self.defaults.claude_args.extend(other.defaults.claude_args);
+
+        // Context (replace if not empty)
+        if !other.context.instructions.is_empty() {
+            self.context.instructions = other.context.instructions;
+        }
 
         self
     }

@@ -340,6 +340,33 @@ To disable permission bypass (not recommended), set an empty array:
 claude_args = []
 ```
 
+### Claude Context Instructions
+
+The `[context]` section allows you to provide project-specific instructions that are automatically included in `~/.claude/CLAUDE.md` before Claude starts. This is useful for providing context about your project, coding conventions, or preferences.
+
+```toml
+[context]
+instructions = """
+This is a Rust project using:
+- Cargo for build management
+- Tokio for async runtime
+- Serde for serialization
+
+Please:
+- Include code examples in your responses
+- Follow Rust best practices
+- Use proper error handling with Result types
+"""
+```
+
+The context is automatically generated and includes:
+- VM configuration (disk, memory)
+- Enabled capabilities (docker, node, etc.)
+- Mounted directories
+- User-provided instructions
+
+This context is merged with any existing `~/.claude/CLAUDE.md` content using HTML comment markers, preserving your custom instructions while updating VM-specific information on each session.
+
 ### Configuration Validation
 
 **Valid values:**

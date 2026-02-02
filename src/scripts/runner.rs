@@ -1,8 +1,10 @@
+use crate::capabilities;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::utils::git;
 use crate::vm::limactl::LimaCtl;
+use crate::vm::{mount, session::VmSession};
 use std::path::{Path, PathBuf};
 
 /// Directory where capability runtime scripts are installed in the VM
@@ -129,6 +131,70 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Generate base context markdown for Claude
+///
+/// Creates a markdown file with VM configuration, enabled capabilities,
+/// mounted directories, and user-provided instructions.
+fn generate_base_context(
+    config: &Config,
+) -> Result<String> {
+    let mut context = String::new();
+
+    // Header
+    context.push_str("<!-- claude-vm-context-start -->\n");
+    context.push_str("# Claude VM Context\n\n");
+    context.push_str("You are running in an isolated Lima VM with the following configuration.\n\n");
+
+    // VM Configuration
+    context.push_str("## VM Configuration\n");
+    context.push_str(&format!("- **Disk**: {} GB\n", config.vm.disk));
+    context.push_str(&format!("- **Memory**: {} GB\n", config.vm.memory));
+    context.push_str("\n");
+
+    // Enabled Capabilities
+    context.push_str("## Enabled Capabilities\n");
+    let registry = capabilities::registry::CapabilityRegistry::load()?;
+    let enabled = registry.get_enabled_capabilities(config)?;
+    if enabled.is_empty() {
+        context.push_str("None\n");
+    } else {
+        for cap in enabled {
+            context.push_str(&format!("- {}: {}\n", cap.capability.id, cap.capability.description));
+        }
+    }
+    context.push_str("\n");
+
+    // Mounted Directories
+    context.push_str("## Mounted Directories\n");
+    let mounts = mount::compute_mounts(config.mount_conversations, &config.mounts)?;
+    if mounts.is_empty() {
+        context.push_str("None\n");
+    } else {
+        for m in mounts {
+            let mode = if m.writable { "writable" } else { "read-only" };
+            let vm_path = m.mount_point.as_ref().unwrap_or(&m.location);
+            context.push_str(&format!("- {} ({})\n", vm_path.display(), mode));
+        }
+    }
+    context.push_str("\n");
+
+    // User Instructions (if provided)
+    if !config.context.instructions.is_empty() {
+        context.push_str("## User Instructions\n");
+        context.push_str(&config.context.instructions);
+        if !config.context.instructions.ends_with('\n') {
+            context.push_str("\n");
+        }
+        context.push_str("\n");
+    }
+
+    // Placeholder for runtime context
+    context.push_str("<!-- claude-vm-context-runtime-placeholder -->\n");
+    context.push_str("<!-- claude-vm-context-end -->\n");
+
+    Ok(context)
+}
+
 /// Execute a command with runtime scripts using an entrypoint pattern.
 ///
 /// This function runs all runtime scripts followed by the main command in a single
@@ -145,6 +211,7 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
 /// - `vm_name`: Name of the VM instance
 /// - `_project`: Project context (currently unused but kept for consistency)
 /// - `config`: Configuration containing runtime scripts from .claude-vm.toml
+/// - `session`: VM session containing mount and other session information
 /// - `workdir`: Optional working directory for command execution
 /// - `cmd`: Main command to execute after runtime scripts
 /// - `args`: Arguments to pass to the main command (properly quoted/preserved)
@@ -174,6 +241,7 @@ pub fn execute_command_with_runtime_scripts(
     vm_name: &str,
     _project: &Project,
     config: &Config,
+    _session: &VmSession,
     workdir: Option<&Path>,
     cmd: &str,
     args: &[&str],
@@ -197,9 +265,22 @@ pub fn execute_command_with_runtime_scripts(
         scripts.push(script_path);
     }
 
+    // Generate and copy base context
+    let base_context = generate_base_context(config)?;
+    let temp_dir = std::env::temp_dir();
+    let pid = std::process::id();
+    let context_file = temp_dir.join(format!("claude-vm-context-{}.md", pid));
+    std::fs::write(&context_file, base_context)?;
+
+    // Copy context to VM
+    LimaCtl::copy(
+        &context_file,
+        vm_name,
+        "/tmp/claude-vm-context-base.md",
+    )?;
+
     // Copy all scripts to VM with unique names
     let mut vm_script_paths = Vec::new();
-    let pid = std::process::id();
 
     for (i, script) in scripts.iter().enumerate() {
         // Sanitize filename to prevent injection
@@ -239,6 +320,10 @@ pub fn execute_command_with_runtime_scripts(
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
 
+    // Create context directory for runtime scripts
+    entrypoint.push_str("# Create context directory for runtime scripts\n");
+    entrypoint.push_str("mkdir -p ~/.claude-vm/context ~/.claude\n\n");
+
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
@@ -263,6 +348,55 @@ pub fn execute_command_with_runtime_scripts(
         // Use shell_escape to prevent injection attacks
         entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
     }
+
+    // Generate final CLAUDE.md with runtime context
+    entrypoint.push_str("# Generate final CLAUDE.md with runtime context\n");
+    entrypoint.push_str("cp /tmp/claude-vm-context-base.md ~/.claude/CLAUDE.md.new\n\n");
+
+    entrypoint.push_str("# Add runtime script results if any exist\n");
+    entrypoint.push_str("if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
+    entrypoint.push_str("  # Insert runtime context section header\n");
+    entrypoint.push_str("  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
+
+    entrypoint.push_str("  # Add each context file\n");
+    entrypoint.push_str("  for context_file in ~/.claude-vm/context/*.txt; do\n");
+    entrypoint.push_str("    if [ -f \"$context_file\" ]; then\n");
+    entrypoint.push_str("      name=$(basename \"$context_file\" .txt)\n");
+    entrypoint.push_str("      # Insert subsection header\n");
+    entrypoint.push_str("      sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("      # Insert file contents\n");
+    entrypoint.push_str("      sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("      # Add blank line after content\n");
+    entrypoint.push_str("      sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("    fi\n");
+    entrypoint.push_str("  done\n");
+    entrypoint.push_str("fi\n\n");
+
+    entrypoint.push_str("# Remove the placeholder marker\n");
+    entrypoint.push_str("sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n");
+
+    entrypoint.push_str("# Merge with existing CLAUDE.md if present\n");
+    entrypoint.push_str("if [ -f ~/.claude/CLAUDE.md ]; then\n");
+    entrypoint.push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
+    entrypoint.push_str("    # Replace content between markers\n");
+    entrypoint.push_str("    awk '\n");
+    entrypoint.push_str("      /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
+    entrypoint.push_str("      /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
+    entrypoint.push_str("      !skip\n");
+    entrypoint.push_str("    ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
+    entrypoint.push_str("    cat ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old > ~/.claude/CLAUDE.md\n");
+    entrypoint.push_str("  else\n");
+    entrypoint.push_str("    # Prepend our context to existing content\n");
+    entrypoint.push_str("    cat ~/.claude/CLAUDE.md >> ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
+    entrypoint.push_str("  fi\n");
+    entrypoint.push_str("else\n");
+    entrypoint.push_str("  # No existing file, use our generated context\n");
+    entrypoint.push_str("  mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
+    entrypoint.push_str("fi\n\n");
+
+    entrypoint.push_str("# Cleanup temporary files\n");
+    entrypoint.push_str("rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old /tmp/claude-vm-context-base.md\n\n");
 
     // Exec main command - $@ contains all positional parameters
     entrypoint.push_str("# Execute main command (replaces shell process)\n");

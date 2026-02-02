@@ -48,6 +48,21 @@ scripts = [
     # "./scripts/seed-database.sh",
 ]
 
+[context]
+# Instructions for Claude about your project
+# This will be automatically included in ~/.claude/CLAUDE.md
+instructions = """
+This is a Rust project using:
+- Cargo for build management
+- Tokio for async runtime
+- Serde for serialization
+
+Please:
+- Include code examples in your responses
+- Follow Rust best practices
+- Use proper error handling with Result types
+"""
+
 [defaults]
 # Default arguments to pass to Claude
 # These are passed every time Claude runs
