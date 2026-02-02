@@ -350,7 +350,10 @@ pub fn execute_command_with_runtime_scripts(
 
     // Generate final CLAUDE.md with runtime context
     entrypoint.push_str("# Generate final CLAUDE.md with runtime context\n");
-    entrypoint.push_str(&format!("cp {} ~/.claude/CLAUDE.md.new\n\n", vm_context_path));
+    entrypoint.push_str(&format!(
+        "cp {} ~/.claude/CLAUDE.md.new\n\n",
+        vm_context_path
+    ));
 
     entrypoint.push_str("# Add runtime script results if any exist\n");
     entrypoint.push_str("if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
@@ -380,7 +383,8 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("if [ -f ~/.claude/CLAUDE.md ]; then\n");
     entrypoint
         .push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
-    entrypoint.push_str("    # Replace content between markers, preserving user content position\n");
+    entrypoint
+        .push_str("    # Replace content between markers, preserving user content position\n");
     entrypoint.push_str("    awk '\n");
     entrypoint.push_str("      /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
     entrypoint.push_str("      /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
@@ -391,7 +395,9 @@ pub fn execute_command_with_runtime_scripts(
     );
     entrypoint.push_str("  else\n");
     entrypoint.push_str("    # Append our context to existing content\n");
-    entrypoint.push_str("    cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n");
+    entrypoint.push_str(
+        "    cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
+    );
     entrypoint.push_str("    mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
     entrypoint.push_str("  fi\n");
     entrypoint.push_str("else\n");
