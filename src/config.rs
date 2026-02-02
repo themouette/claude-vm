@@ -242,12 +242,21 @@ impl Config {
         self.mount_conversations = !cli.no_conversations;
 
         // Custom mounts from CLI (accumulate with config mounts)
+        // Parse CLI mount specs immediately to validate and extract values
         for mount_spec in &cli.mounts {
-            self.mounts.push(MountEntry {
-                location: mount_spec.clone(),
-                writable: true,    // Will be parsed from spec
-                mount_point: None, // Will be parsed from spec
-            });
+            // Parse the mount spec to extract location, mount_point, and writable
+            match crate::vm::mount::Mount::from_spec(mount_spec) {
+                Ok(mount) => {
+                    self.mounts.push(MountEntry {
+                        location: mount.location.to_string_lossy().to_string(),
+                        writable: mount.writable,
+                        mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Warning: Invalid mount spec '{}': {}", mount_spec, e);
+                }
+            }
         }
 
         // Global CLI overrides

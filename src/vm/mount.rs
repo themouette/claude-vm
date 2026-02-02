@@ -200,25 +200,47 @@ pub fn compute_mounts(
 
     // Add custom mounts from configuration
     for mount_entry in custom_mounts {
-        // Parse the mount spec (handles docker-style format)
-        let mut custom_mount = Mount::from_spec(&mount_entry.location)?;
+        // Expand and validate the host path
+        let host_path = expand_path(&mount_entry.location)?;
 
-        // Override with explicit values if provided in config
+        // Create mount with explicit values from config
+        let mut custom_mount = Mount::new(host_path, mount_entry.writable);
+
+        // Set mount point if provided
         if let Some(ref mount_point) = mount_entry.mount_point {
             let vm_path = expand_path(mount_point)?;
             custom_mount = custom_mount.with_mount_point(vm_path);
         }
 
-        // Note: writable is already parsed from spec if using CLI format,
-        // but TOML config can override it explicitly
-        if !mount_entry.writable {
-            custom_mount.writable = false;
+        // Validate host path exists
+        if !custom_mount.location.exists() {
+            eprintln!(
+                "Warning: Mount path does not exist: {}",
+                custom_mount.location.display()
+            );
         }
 
-        // Check for duplicate mount locations
-        if !mounts.iter().any(|m| m.location == custom_mount.location) {
-            mounts.push(custom_mount);
+        // Check for duplicate host locations
+        if mounts.iter().any(|m| m.location == custom_mount.location) {
+            continue; // Skip duplicate
         }
+
+        // Check for conflicting VM mount points
+        let target_path = custom_mount
+            .mount_point
+            .as_ref()
+            .unwrap_or(&custom_mount.location);
+        if mounts.iter().any(|m| {
+            let existing_target = m.mount_point.as_ref().unwrap_or(&m.location);
+            existing_target == target_path
+        }) {
+            return Err(ClaudeVmError::InvalidConfig(format!(
+                "Mount point conflict: {} is already mounted",
+                target_path.display()
+            )));
+        }
+
+        mounts.push(custom_mount);
     }
 
     Ok(mounts)
@@ -516,5 +538,78 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("HOME environment variable"));
+    }
+
+    // Test 5: Mount point conflict detection
+    #[test]
+    fn test_mount_point_conflict() {
+        use crate::config::MountEntry;
+
+        let custom_mounts = vec![
+            MountEntry {
+                location: "/host/path1".to_string(),
+                writable: true,
+                mount_point: Some("/vm/shared".to_string()),
+            },
+            MountEntry {
+                location: "/host/path2".to_string(),
+                writable: true,
+                mount_point: Some("/vm/shared".to_string()), // Conflict!
+            },
+        ];
+
+        let result = compute_mounts(false, &custom_mounts);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Mount point conflict"));
+    }
+
+    #[test]
+    fn test_mount_deduplication() {
+        use crate::config::MountEntry;
+
+        let custom_mounts = vec![
+            MountEntry {
+                location: "/host/data".to_string(),
+                writable: true,
+                mount_point: None,
+            },
+            MountEntry {
+                location: "/host/data".to_string(), // Duplicate location
+                writable: false,
+                mount_point: None,
+            },
+        ];
+
+        let result = compute_mounts(false, &custom_mounts).unwrap();
+        // Should only have one mount (duplicate filtered)
+        assert_eq!(
+            result
+                .iter()
+                .filter(|m| m.location.to_string_lossy() == "/host/data")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_writable_override() {
+        use crate::config::MountEntry;
+
+        // Mount entry with writable=false should create read-only mount
+        let custom_mounts = vec![MountEntry {
+            location: "/host/data".to_string(),
+            writable: false, // Explicitly read-only
+            mount_point: None,
+        }];
+
+        let result = compute_mounts(false, &custom_mounts).unwrap();
+        let mount = result
+            .iter()
+            .find(|m| m.location.to_string_lossy() == "/host/data");
+        assert!(mount.is_some());
+        assert!(!mount.unwrap().writable); // Should be read-only
     }
 }
