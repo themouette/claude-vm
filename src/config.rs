@@ -552,12 +552,19 @@ mod tests {
     fn test_context_tilde_expansion() {
         use std::io::Write;
 
-        // Create a temporary file in home directory
-        let home = std::env::var("HOME").unwrap();
-        let context_file = PathBuf::from(&home).join(".test-context-tilde.md");
+        // Create a temporary home directory
+        let temp_home = std::env::temp_dir().join(format!("claude-vm-test-home-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_home).unwrap();
+
+        // Create context file in temp home
+        let context_file = temp_home.join(".test-context-tilde.md");
         let mut file = std::fs::File::create(&context_file).unwrap();
         writeln!(file, "Tilde test content").unwrap();
         drop(file);
+
+        // Temporarily set HOME
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &temp_home);
 
         // Create config with ~ path
         let mut config = Config::default();
@@ -569,7 +576,14 @@ mod tests {
         // Verify content was loaded
         assert!(config.context.instructions.contains("Tilde test content"));
 
+        // Restore original HOME
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+
         // Cleanup
-        std::fs::remove_file(&context_file).unwrap();
+        std::fs::remove_dir_all(&temp_home).unwrap();
     }
 }
