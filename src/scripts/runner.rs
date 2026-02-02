@@ -135,21 +135,20 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
 ///
 /// Creates a markdown file with VM configuration, enabled capabilities,
 /// mounted directories, and user-provided instructions.
-fn generate_base_context(
-    config: &Config,
-) -> Result<String> {
+fn generate_base_context(config: &Config) -> Result<String> {
     let mut context = String::new();
 
     // Header
     context.push_str("<!-- claude-vm-context-start -->\n");
     context.push_str("# Claude VM Context\n\n");
-    context.push_str("You are running in an isolated Lima VM with the following configuration.\n\n");
+    context
+        .push_str("You are running in an isolated Lima VM with the following configuration.\n\n");
 
     // VM Configuration
     context.push_str("## VM Configuration\n");
     context.push_str(&format!("- **Disk**: {} GB\n", config.vm.disk));
     context.push_str(&format!("- **Memory**: {} GB\n", config.vm.memory));
-    context.push_str("\n");
+    context.push('\n');
 
     // Enabled Capabilities
     context.push_str("## Enabled Capabilities\n");
@@ -159,10 +158,13 @@ fn generate_base_context(
         context.push_str("None\n");
     } else {
         for cap in enabled {
-            context.push_str(&format!("- {}: {}\n", cap.capability.id, cap.capability.description));
+            context.push_str(&format!(
+                "- {}: {}\n",
+                cap.capability.id, cap.capability.description
+            ));
         }
     }
-    context.push_str("\n");
+    context.push('\n');
 
     // Mounted Directories
     context.push_str("## Mounted Directories\n");
@@ -176,16 +178,16 @@ fn generate_base_context(
             context.push_str(&format!("- {} ({})\n", vm_path.display(), mode));
         }
     }
-    context.push_str("\n");
+    context.push('\n');
 
     // User Instructions (if provided)
     if !config.context.instructions.is_empty() {
         context.push_str("## User Instructions\n");
         context.push_str(&config.context.instructions);
         if !config.context.instructions.ends_with('\n') {
-            context.push_str("\n");
+            context.push('\n');
         }
-        context.push_str("\n");
+        context.push('\n');
     }
 
     // Placeholder for runtime context
@@ -273,11 +275,7 @@ pub fn execute_command_with_runtime_scripts(
     std::fs::write(&context_file, base_context)?;
 
     // Copy context to VM
-    LimaCtl::copy(
-        &context_file,
-        vm_name,
-        "/tmp/claude-vm-context-base.md",
-    )?;
+    LimaCtl::copy(&context_file, vm_name, "/tmp/claude-vm-context-base.md")?;
 
     // Copy all scripts to VM with unique names
     let mut vm_script_paths = Vec::new();
@@ -373,18 +371,23 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("fi\n\n");
 
     entrypoint.push_str("# Remove the placeholder marker\n");
-    entrypoint.push_str("sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n");
+    entrypoint.push_str(
+        "sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
+    );
 
     entrypoint.push_str("# Merge with existing CLAUDE.md if present\n");
     entrypoint.push_str("if [ -f ~/.claude/CLAUDE.md ]; then\n");
-    entrypoint.push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
+    entrypoint
+        .push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
     entrypoint.push_str("    # Replace content between markers\n");
     entrypoint.push_str("    awk '\n");
     entrypoint.push_str("      /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
     entrypoint.push_str("      /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
     entrypoint.push_str("      !skip\n");
     entrypoint.push_str("    ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
-    entrypoint.push_str("    cat ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old > ~/.claude/CLAUDE.md\n");
+    entrypoint.push_str(
+        "    cat ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old > ~/.claude/CLAUDE.md\n",
+    );
     entrypoint.push_str("  else\n");
     entrypoint.push_str("    # Prepend our context to existing content\n");
     entrypoint.push_str("    cat ~/.claude/CLAUDE.md >> ~/.claude/CLAUDE.md.new\n");
@@ -396,7 +399,9 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("fi\n\n");
 
     entrypoint.push_str("# Cleanup temporary files\n");
-    entrypoint.push_str("rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old /tmp/claude-vm-context-base.md\n\n");
+    entrypoint.push_str(
+        "rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old /tmp/claude-vm-context-base.md\n\n",
+    );
 
     // Exec main command - $@ contains all positional parameters
     entrypoint.push_str("# Execute main command (replaces shell process)\n");
