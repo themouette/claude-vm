@@ -81,7 +81,7 @@ impl Mount {
 }
 
 /// Expand path with ~ support and make it absolute
-fn expand_path(path: &str) -> Result<PathBuf> {
+pub fn expand_path(path: &str) -> Result<PathBuf> {
     let expanded = if path.starts_with('~') {
         let home = std::env::var("HOME").map_err(|_| {
             ClaudeVmError::InvalidConfig("HOME environment variable not set".to_string())
@@ -147,6 +147,55 @@ pub(crate) fn get_claude_conversation_folder(project_path: &PathBuf) -> Option<P
     }
 }
 
+/// Convert a slice of MountEntry configs to Mount structs with validation
+/// Checks for duplicates, conflicts, and warns about non-existent paths
+pub fn convert_mount_entries(mount_entries: &[crate::config::MountEntry]) -> Result<Vec<Mount>> {
+    let mut mounts: Vec<Mount> = Vec::new();
+
+    for mount_entry in mount_entries {
+        // Expand and validate the host path
+        let host_path = expand_path(&mount_entry.location)?;
+
+        // Create mount with explicit values from config
+        let mut mount = Mount::new(host_path, mount_entry.writable);
+
+        // Set mount point if provided
+        if let Some(ref mount_point) = mount_entry.mount_point {
+            let vm_path = expand_path(mount_point)?;
+            mount = mount.with_mount_point(vm_path);
+        }
+
+        // Validate host path exists
+        if !mount.location.exists() {
+            eprintln!(
+                "Warning: Mount path does not exist: {}",
+                mount.location.display()
+            );
+        }
+
+        // Check for duplicate host locations
+        if mounts.iter().any(|m| m.location == mount.location) {
+            continue; // Skip duplicate
+        }
+
+        // Check for conflicting VM mount points
+        let target_path = mount.mount_point.as_ref().unwrap_or(&mount.location);
+        if mounts.iter().any(|m| {
+            let existing_target = m.mount_point.as_ref().unwrap_or(&m.location);
+            existing_target == target_path
+        }) {
+            return Err(ClaudeVmError::InvalidConfig(format!(
+                "Mount point conflict: {} is already mounted",
+                target_path.display()
+            )));
+        }
+
+        mounts.push(mount);
+    }
+
+    Ok(mounts)
+}
+
 /// Compute the mounts needed for the VM
 /// Mounts the git repository root (if in a git repo), plus main repo if in a worktree,
 /// plus the Claude conversation folder for the current project (if mount_conversations is true),
@@ -210,33 +259,16 @@ pub fn compute_mounts(
     }
 
     // Add custom mounts from configuration
-    for mount_entry in custom_mounts {
-        // Expand and validate the host path
-        let host_path = expand_path(&mount_entry.location)?;
+    let custom_mount_list = convert_mount_entries(custom_mounts)?;
 
-        // Create mount with explicit values from config
-        let mut custom_mount = Mount::new(host_path, mount_entry.writable);
-
-        // Set mount point if provided
-        if let Some(ref mount_point) = mount_entry.mount_point {
-            let vm_path = expand_path(mount_point)?;
-            custom_mount = custom_mount.with_mount_point(vm_path);
-        }
-
-        // Validate host path exists
-        if !custom_mount.location.exists() {
-            eprintln!(
-                "Warning: Mount path does not exist: {}",
-                custom_mount.location.display()
-            );
-        }
-
+    // Merge custom mounts, checking for conflicts with existing mounts
+    for custom_mount in custom_mount_list {
         // Check for duplicate host locations
         if mounts.iter().any(|m| m.location == custom_mount.location) {
             continue; // Skip duplicate
         }
 
-        // Check for conflicting VM mount points
+        // Check for conflicting VM mount points with existing mounts
         let target_path = custom_mount
             .mount_point
             .as_ref()

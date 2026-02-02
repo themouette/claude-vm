@@ -19,6 +19,7 @@ impl LimaCtl {
         disk: u32,
         memory: u32,
         port_forwards: &[PortForward],
+        mounts: &[Mount],
         verbose: bool,
     ) -> Result<()> {
         let mut cmd = Command::new("limactl");
@@ -36,10 +37,36 @@ impl LimaCtl {
             .arg("--vm-type=vz")
             .arg("--mount-type=virtiofs")
             .arg("--rosetta")
-            .arg("--tty=false")
-            .arg("--set")
-            .arg(".mounts=[]")
-            .arg(format!("--disk={}", disk))
+            .arg("--tty=false");
+
+        // Build mounts JSON array (same format as clone)
+        if !mounts.is_empty() {
+            let mount_jsons: Vec<String> = mounts
+                .iter()
+                .map(|m| {
+                    if let Some(ref mount_point) = m.mount_point {
+                        format!(
+                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
+                            m.location.display(),
+                            mount_point.display(),
+                            m.writable
+                        )
+                    } else {
+                        format!(
+                            "{{\"location\":\"{}\",\"writable\":{}}}",
+                            m.location.display(),
+                            m.writable
+                        )
+                    }
+                })
+                .collect();
+            cmd.arg("--set")
+                .arg(format!(".mounts=[{}]", mount_jsons.join(",")));
+        } else {
+            cmd.arg("--set").arg(".mounts=[]");
+        }
+
+        cmd.arg(format!("--disk={}", disk))
             .arg(format!("--memory={}", memory));
 
         // Add port forwards using --set flags

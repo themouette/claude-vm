@@ -81,6 +81,10 @@ pub enum Commands {
         /// Setup scripts to execute
         #[arg(long = "setup-script")]
         setup_scripts: Vec<PathBuf>,
+
+        /// Setup-only mounts (available during template creation only)
+        #[arg(long = "mount")]
+        mounts: Vec<String>,
     },
 
     /// Open a shell in the template VM

@@ -110,6 +110,8 @@ impl ToolsConfig {
 pub struct SetupConfig {
     #[serde(default)]
     pub scripts: Vec<String>,
+    #[serde(default)]
+    pub mounts: Vec<MountEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -278,6 +280,7 @@ impl Config {
             disk,
             memory,
             setup_scripts,
+            mounts,
         }) = &cli.command
         {
             if *all {
@@ -315,6 +318,22 @@ impl Config {
             for script in setup_scripts {
                 if let Some(script_str) = script.to_str() {
                     self.setup.scripts.push(script_str.to_string());
+                }
+            }
+
+            // Add setup mounts from CLI (parse immediately like runtime mounts)
+            for mount_spec in mounts {
+                match crate::vm::mount::Mount::from_spec(mount_spec) {
+                    Ok(mount) => {
+                        self.setup.mounts.push(MountEntry {
+                            location: mount.location.to_string_lossy().to_string(),
+                            writable: mount.writable,
+                            mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: Invalid setup mount spec '{}': {}", mount_spec, e);
+                    }
                 }
             }
         }
