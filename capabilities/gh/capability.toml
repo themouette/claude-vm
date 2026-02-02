@@ -1,0 +1,7 @@
+[capability]
+id = "gh"
+name = "GitHub CLI"
+description = "GitHub CLI for repository operations and authentication"
+
+[vm_setup]
+script_file = "vm_setup.sh"

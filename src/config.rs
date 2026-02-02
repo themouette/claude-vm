@@ -78,6 +78,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub gpg: bool,
+
+    #[serde(default)]
+    pub gh: bool,
 }
 
 impl ToolsConfig {
@@ -89,6 +92,7 @@ impl ToolsConfig {
             "python" => self.python,
             "chromium" => self.chromium,
             "gpg" => self.gpg,
+            "gh" => self.gh,
             _ => false,
         }
     }
@@ -101,6 +105,7 @@ impl ToolsConfig {
             "python" => self.python = true,
             "chromium" => self.chromium = true,
             "gpg" => self.gpg = true,
+            "gh" => self.gh = true,
             _ => {}
         }
     }
@@ -204,6 +209,7 @@ impl Config {
         self.tools.python = self.tools.python || other.tools.python;
         self.tools.chromium = self.tools.chromium || other.tools.chromium;
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
+        self.tools.gh = self.tools.gh || other.tools.gh;
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
@@ -276,6 +282,7 @@ impl Config {
             python,
             chromium,
             gpg,
+            gh,
             all,
             disk,
             memory,
@@ -289,6 +296,7 @@ impl Config {
                 self.tools.enable("python");
                 self.tools.enable("chromium");
                 self.tools.enable("gpg");
+                self.tools.enable("gh");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -304,6 +312,9 @@ impl Config {
                 }
                 if *gpg {
                     self.tools.enable("gpg");
+                }
+                if *gh {
+                    self.tools.enable("gh");
                 }
             }
 
