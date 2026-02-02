@@ -527,6 +527,7 @@ This shows:
 - `--gpg` - Enable GPG agent forwarding
 - `--all` - Install all tools
 - `--setup-script <PATH>` - Custom setup script
+- `--mount <SPEC>` - Setup-only mount (available during template creation only)
 
 ## Agent Forwarding
 
@@ -700,6 +701,103 @@ writable = true
 ```bash
 claude-vm --mount /tmp/experiment:/experiment "analyze this data"
 ```
+
+## Setup-Specific Mounts
+
+Setup-specific mounts are directories that are available **only during template creation**, not at runtime. This allows you to transfer binaries, assets, or configuration files from your host to the template VM during setup.
+
+### Why Use Setup Mounts?
+
+Setup mounts are useful when you need to:
+- Transfer pre-built binaries or compiled assets to the template
+- Copy configuration files or credentials (that won't be in git)
+- Install local packages or dependencies from your host machine
+- Seed the template with data that all sessions should have
+
+**Key difference from runtime mounts**: Setup mounts are "baked into" the template. Files copied from setup mounts become part of the template itself and are available in all cloned VMs, even though the mount itself is not present at runtime.
+
+### CLI Usage
+
+Add setup mounts when running `claude-vm setup`:
+
+```bash
+# Mount a directory during setup to copy files
+claude-vm setup --node --mount /path/to/binaries:/tmp/binaries
+
+# Use in setup script to copy files into the template
+# In .claude-vm.setup.sh:
+# cp /tmp/binaries/* /usr/local/bin/
+```
+
+### TOML Configuration
+
+Define setup mounts in your `.claude-vm.toml`:
+
+```toml
+[[setup.mounts]]
+location = "/Users/me/local-packages"
+mount_point = "/tmp/packages"
+writable = false
+
+[[setup.mounts]]
+location = "~/project-assets"
+mount_point = "/tmp/assets"
+writable = false
+```
+
+These mounts will be automatically applied every time you run `claude-vm setup`.
+
+### Example: Installing Local Binary
+
+Suppose you have a pre-compiled binary you want available in all VM sessions:
+
+**1. Setup mount configuration:**
+```toml
+# .claude-vm.toml
+[[setup.mounts]]
+location = "~/my-tools/bin"
+mount_point = "/tmp/host-bin"
+writable = false
+```
+
+**2. Setup script to copy binary:**
+```bash
+#!/bin/bash
+# .claude-vm.setup.sh
+
+# Copy binary from setup mount to template
+sudo cp /tmp/host-bin/my-tool /usr/local/bin/
+sudo chmod +x /usr/local/bin/my-tool
+```
+
+**3. Run setup:**
+```bash
+claude-vm setup --node
+```
+
+Now `my-tool` is permanently installed in the template and available in every cloned VM session, even though the `/tmp/host-bin` mount doesn't exist at runtime.
+
+### Example: Seeding Data
+
+Transfer a dataset to the template during setup:
+
+```bash
+# Mount dataset directory during setup
+claude-vm setup --mount ~/datasets:/tmp/data:ro
+
+# In .claude-vm.setup.sh:
+# mkdir -p /home/lima.linux/datasets
+# cp -r /tmp/data/* /home/lima.linux/datasets/
+```
+
+The dataset is now part of the template and available in all sessions without needing to remount it.
+
+### Important Notes
+
+- **Setup mounts are temporary**: They're only available during `claude-vm setup`, not during `claude-vm` or `claude-vm shell`
+- **Files persist**: Any files you copy from setup mounts into the template filesystem become permanent parts of the template
+- **Use setup scripts**: Combine setup mounts with setup scripts (`.claude-vm.setup.sh`) to copy files from the mount into the template
+- **Security**: Setup mounts use the same validation as runtime mounts (conflict detection, path validation, etc.)
 
 ## Development
 
