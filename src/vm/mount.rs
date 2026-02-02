@@ -103,9 +103,20 @@ fn expand_path(path: &str) -> Result<PathBuf> {
 }
 
 /// Encode a project path for use as a Claude conversation folder name
-/// Converts /Users/user/Projects/lab/my-project to -Users-user-Projects-lab-my-project
+/// Matches Claude Code's encoding logic:
+/// 1. Canonicalize path (resolve symlinks like /tmp -> /private/tmp)
+/// 2. Replace all non-alphanumeric characters with dashes
+/// Example: /tmp/project@2024:v1.0 -> -private-tmp-project-2024-v1-0
 fn encode_project_path(path: &PathBuf) -> String {
-    path.to_string_lossy().replace('/', "-")
+    // Canonicalize path first (resolve symlinks)
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.clone());
+
+    // Replace all non-alphanumeric characters with dashes
+    canonical
+        .to_string_lossy()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '-' })
+        .collect()
 }
 
 /// Get the Claude conversation folder for the current project
@@ -290,32 +301,68 @@ mod tests {
     // Test 2: Path encoding logic tests
     #[test]
     fn test_encode_project_path() {
-        let path = PathBuf::from("/Users/user/Projects/lab/my-project");
-        assert_eq!(
-            encode_project_path(&path),
-            "-Users-user-Projects-lab-my-project"
-        );
+        // Use a path that exists to test canonicalization
+        let temp_dir = std::env::temp_dir();
+        let test_path = temp_dir.join("test-encode-basic");
+        std::fs::create_dir_all(&test_path).unwrap();
+
+        let encoded = encode_project_path(&test_path);
+        // All non-alphanumeric chars should be replaced with dashes
+        assert!(encoded.chars().all(|c| c.is_alphanumeric() || c == '-'));
+        assert!(encoded.contains("test-encode-basic"));
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_path);
     }
 
     #[test]
     fn test_encode_project_path_with_spaces() {
-        let path = PathBuf::from("/Users/user/My Projects/test project");
-        assert_eq!(
-            encode_project_path(&path),
-            "-Users-user-My Projects-test project"
-        );
+        let temp_dir = std::env::temp_dir();
+        let test_path = temp_dir.join("My Test Project");
+        std::fs::create_dir_all(&test_path).unwrap();
+
+        let encoded = encode_project_path(&test_path);
+        // Spaces should be replaced with dashes
+        assert!(!encoded.contains(' '));
+        assert!(encoded.contains("My-Test-Project"));
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_path);
+    }
+
+    #[test]
+    fn test_encode_project_path_special_chars() {
+        let temp_dir = std::env::temp_dir();
+        let test_path = temp_dir.join("project@2024:v1.0");
+        std::fs::create_dir_all(&test_path).unwrap();
+
+        let encoded = encode_project_path(&test_path);
+        // @ : and . should all be replaced with dashes
+        assert!(!encoded.contains('@'));
+        assert!(!encoded.contains(':'));
+        assert!(!encoded.contains('.'));
+        assert!(encoded.contains("project-2024-v1-0"));
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&test_path);
     }
 
     #[test]
     fn test_encode_project_path_root() {
         let path = PathBuf::from("/");
-        assert_eq!(encode_project_path(&path), "-");
+        let encoded = encode_project_path(&path);
+        // Root should be all dashes
+        assert!(encoded.chars().all(|c| c == '-'));
     }
 
     #[test]
-    fn test_encode_project_path_no_leading_slash() {
-        let path = PathBuf::from("relative/path");
-        assert_eq!(encode_project_path(&path), "relative-path");
+    fn test_encode_project_path_nonexistent() {
+        // For non-existent paths, should still encode them
+        let path = PathBuf::from("/nonexistent/path/to/project");
+        let encoded = encode_project_path(&path);
+        // All non-alphanumeric chars should be replaced
+        assert!(encoded.chars().all(|c| c.is_alphanumeric() || c == '-'));
+        assert!(encoded.contains("nonexistent-path-to-project"));
     }
 
     // Test 3: Integration tests with temp directories
