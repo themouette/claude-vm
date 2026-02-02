@@ -138,8 +138,12 @@ pub(crate) fn get_claude_conversation_folder(project_path: &PathBuf) -> Option<P
 
 /// Compute the mounts needed for the VM
 /// Mounts the git repository root (if in a git repo), plus main repo if in a worktree,
-/// plus the Claude conversation folder for the current project (if mount_conversations is true)
-pub fn compute_mounts(mount_conversations: bool) -> Result<Vec<Mount>> {
+/// plus the Claude conversation folder for the current project (if mount_conversations is true),
+/// plus any custom mounts from the configuration
+pub fn compute_mounts(
+    mount_conversations: bool,
+    custom_mounts: &[crate::config::MountEntry],
+) -> Result<Vec<Mount>> {
     let mut mounts = Vec::new();
     let mut project_path: Option<PathBuf> = None;
 
@@ -191,6 +195,29 @@ pub fn compute_mounts(mount_conversations: bool) -> Result<Vec<Mount>> {
                     }
                 }
             }
+        }
+    }
+
+    // Add custom mounts from configuration
+    for mount_entry in custom_mounts {
+        // Parse the mount spec (handles docker-style format)
+        let mut custom_mount = Mount::from_spec(&mount_entry.location)?;
+
+        // Override with explicit values if provided in config
+        if let Some(ref mount_point) = mount_entry.mount_point {
+            let vm_path = expand_path(mount_point)?;
+            custom_mount = custom_mount.with_mount_point(vm_path);
+        }
+
+        // Note: writable is already parsed from spec if using CLI format,
+        // but TOML config can override it explicitly
+        if !mount_entry.writable {
+            custom_mount.writable = false;
+        }
+
+        // Check for duplicate mount locations
+        if !mounts.iter().any(|m| m.location == custom_mount.location) {
+            mounts.push(custom_mount);
         }
     }
 

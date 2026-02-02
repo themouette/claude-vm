@@ -20,6 +20,9 @@ pub struct Config {
     #[serde(default)]
     pub defaults: DefaultsConfig,
 
+    #[serde(default)]
+    pub mounts: Vec<MountEntry>,
+
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
@@ -133,6 +136,19 @@ fn default_claude_args() -> Vec<String> {
     vec!["--dangerously-skip-permissions".to_string()]
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MountEntry {
+    pub location: String,
+    #[serde(default = "default_writable")]
+    pub writable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_point: Option<String>,
+}
+
+fn default_writable() -> bool {
+    true
+}
+
 impl Config {
     /// Load configuration with precedence:
     /// 1. CLI flags (applied later via with_cli_overrides)
@@ -224,6 +240,15 @@ impl Config {
 
         // Mount conversations (inverted: --no-conversations means mount_conversations = false)
         self.mount_conversations = !cli.no_conversations;
+
+        // Custom mounts from CLI (accumulate with config mounts)
+        for mount_spec in &cli.mounts {
+            self.mounts.push(MountEntry {
+                location: mount_spec.clone(),
+                writable: true,    // Will be parsed from spec
+                mount_point: None, // Will be parsed from spec
+            });
+        }
 
         // Global CLI overrides
         if let Some(disk) = cli.disk {

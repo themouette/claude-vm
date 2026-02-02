@@ -36,6 +36,10 @@ pub struct Cli {
     /// Don't mount Claude conversation folder in VM
     #[arg(long = "no-conversations", global = true)]
     pub no_conversations: bool,
+
+    /// Custom mount in docker-style format: /host/path[:vm/path][:ro|rw]
+    #[arg(long = "mount", global = true)]
+    pub mounts: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
