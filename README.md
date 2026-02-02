@@ -150,6 +150,7 @@ memory = 16    # GB
 [tools]
 docker = true
 node = true
+gpg = true
 ```
 
 **Complete example:**
@@ -164,6 +165,7 @@ docker = true     # Install Docker (default: false)
 node = true       # Install Node.js (default: false)
 python = false    # Install Python (default: false)
 chromium = true   # Install Chromium for debugging (default: false)
+gpg = true        # Enable GPG agent forwarding (default: false)
 
 [setup]
 # ADDITIONAL setup scripts (run during template creation)
@@ -268,6 +270,7 @@ docker = true     # Docker Engine + Docker Compose
 node = true       # Node.js (LTS) + npm
 python = true     # Python 3 + pip
 chromium = true   # Chromium + Chrome DevTools MCP
+gpg = true        # GPG agent forwarding + key sync
 ```
 
 **Or install everything:**
@@ -478,6 +481,7 @@ This shows:
 - `--disk <GB>` - VM disk size
 - `--memory <GB>` - VM memory size
 - `--runtime-script <PATH>` - Runtime script to execute
+- `-A, --forward-ssh-agent` - Forward SSH agent to VM
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options
@@ -486,8 +490,58 @@ This shows:
 - `--node` - Install Node.js
 - `--python` - Install Python
 - `--chromium` - Install Chromium
+- `--gpg` - Enable GPG agent forwarding
 - `--all` - Install all tools
 - `--setup-script <PATH>` - Custom setup script
+
+## Agent Forwarding
+
+### GPG Agent Forwarding
+
+Enable GPG signing in the VM by forwarding your GPG agent:
+
+```bash
+# Setup with GPG support
+claude-vm setup --gpg
+
+# Or enable in config
+[tools]
+gpg = true
+```
+
+**What it does:**
+- Forwards your GPG agent socket to the VM
+- Syncs your public keys to the VM
+- Enables git commit signing inside the VM
+- Works automatically on every session
+
+**Usage in VM:**
+```bash
+# Sign commits (uses your host GPG key)
+git commit -S -m "Signed commit"
+
+# Sign files
+gpg --sign document.txt
+```
+
+### SSH Agent Forwarding
+
+Forward your SSH agent for git operations over SSH:
+
+```bash
+# Run with SSH agent forwarding
+claude-vm -A shell
+
+# Or with run command
+claude-vm -A "git push"
+```
+
+**Use cases:**
+- Push/pull from private repositories
+- SSH to remote servers
+- Any operation requiring SSH authentication
+
+**Security note:** SSH agent forwarding uses native SSH agent forwarding (`ssh -A`). Your keys never leave the host machine - the VM can only use them for authentication.
 
 ## Git Worktree Support
 

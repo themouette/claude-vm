@@ -5,6 +5,9 @@ use crate::utils::git;
 use crate::vm::limactl::LimaCtl;
 use std::path::{Path, PathBuf};
 
+/// Directory where capability runtime scripts are installed in the VM
+const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
+
 /// Escape a string for safe use in shell single quotes
 /// Converts: foo'bar -> 'foo'\''bar'
 fn shell_escape(s: &str) -> String {
@@ -58,8 +61,32 @@ pub fn execute_script(vm_name: &str, script_content: &str, script_name: &str) ->
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
 
     // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path])?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path])?;
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
+
+    // Cleanup local temp file
+    std::fs::remove_file(&local_temp)?;
+
+    Ok(())
+}
+
+/// Execute a script from string content in a VM silently (only show output on error)
+///
+/// This function is similar to `execute_script` but suppresses output unless there's an error.
+/// Used for runtime scripts that shouldn't clutter the output.
+pub fn execute_script_silent(vm_name: &str, script_content: &str, script_name: &str) -> Result<()> {
+    // Write script to temp file
+    let temp_path = format!("/tmp/{}", script_name);
+    let local_temp = std::env::temp_dir().join(script_name);
+
+    std::fs::write(&local_temp, script_content)?;
+
+    // Copy to VM
+    LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
+
+    // Make executable and run
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
 
     // Cleanup local temp file
     std::fs::remove_file(&local_temp)?;
@@ -96,8 +123,8 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
     LimaCtl::copy(script_path, vm_name, &temp_path)?;
 
     // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path])?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path])?;
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
 
     Ok(())
 }
@@ -170,11 +197,6 @@ pub fn execute_command_with_runtime_scripts(
         scripts.push(script_path);
     }
 
-    // If no scripts, just run the command directly
-    if scripts.is_empty() {
-        return LimaCtl::shell(vm_name, workdir, cmd, args);
-    }
-
     // Copy all scripts to VM with unique names
     let mut vm_script_paths = Vec::new();
     let pid = std::process::id();
@@ -216,7 +238,22 @@ pub fn execute_command_with_runtime_scripts(
 
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
-    entrypoint.push_str("# Runtime scripts - executed in order\n");
+
+    // Source capability runtime scripts first
+    entrypoint.push_str("# Source capability runtime scripts\n");
+    entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
+    entrypoint.push_str(&format!(
+        "  for script in {}/*.sh; do\n",
+        RUNTIME_SCRIPT_DIR
+    ));
+    entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
+    entrypoint.push_str("      . \"$script\" 2>&1 || echo \"Warning: Failed to source $script\"\n");
+    entrypoint.push_str("    fi\n");
+    entrypoint.push_str("  done\n");
+    entrypoint.push_str("fi\n\n");
+
+    // Then run user runtime scripts
+    entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
         entrypoint.push_str(&format!(
@@ -238,14 +275,35 @@ pub fn execute_command_with_runtime_scripts(
     shell_args.push(cmd);
     shell_args.extend(args);
 
-    LimaCtl::shell(vm_name, workdir, "bash", &shell_args)
+    LimaCtl::shell(
+        vm_name,
+        workdir,
+        "bash",
+        &shell_args,
+        config.forward_ssh_agent,
+    )
 }
 
 /// Build entrypoint script for testing purposes
 #[cfg(test)]
 fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) -> String {
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
-    entrypoint.push_str("# Runtime scripts - executed in order\n");
+
+    // Source capability runtime scripts first
+    entrypoint.push_str("# Source capability runtime scripts\n");
+    entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
+    entrypoint.push_str(&format!(
+        "  for script in {}/*.sh; do\n",
+        RUNTIME_SCRIPT_DIR
+    ));
+    entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
+    entrypoint.push_str("      . \"$script\"\n");
+    entrypoint.push_str("    fi\n");
+    entrypoint.push_str("  done\n");
+    entrypoint.push_str("fi\n\n");
+
+    // Then run user runtime scripts
+    entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
         entrypoint.push_str(&format!(
@@ -381,9 +439,11 @@ mod tests {
 
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
-        // Even with no scripts, should have basic structure
+        // Even with no user scripts, should source capability scripts and have basic structure
         assert!(entrypoint.contains("#!/bin/bash"));
         assert!(entrypoint.contains("set -e"));
+        assert!(entrypoint.contains("# Source capability runtime scripts"));
+        assert!(entrypoint.contains("/usr/local/share/claude-vm/runtime"));
         assert!(entrypoint.contains("exec \"$@\""));
     }
 
@@ -407,7 +467,8 @@ mod tests {
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
         // Verify helpful comments are present
-        assert!(entrypoint.contains("# Runtime scripts"));
+        assert!(entrypoint.contains("# Source capability runtime scripts"));
+        assert!(entrypoint.contains("# User runtime scripts"));
         assert!(entrypoint.contains("# Execute main command"));
     }
 }

@@ -1,0 +1,46 @@
+[capability]
+id = "gpg"
+name = "GPG Agent Forwarding"
+description = "Forward GPG agent from host to VM for signing operations"
+
+[host_setup]
+script_file = "host_setup.sh"
+
+[vm_setup]
+script_file = "vm_setup.sh"
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Setup GPG environment for each session
+export GPG_TTY=$(tty)
+
+# Create socket directory
+gpgconf --create-socketdir 2>/dev/null || true
+
+# Get the correct socket location from gpgconf
+GPG_SOCKET=$(gpgconf --list-dirs agent-socket)
+FORWARDED_SOCKET="/tmp/claude-vm-gpg-agent.socket"
+
+# Remove old socket/symlink if it exists
+rm -f "$GPG_SOCKET"
+
+# Create symlink from forwarded socket to where GPG expects it
+if [ -S "$FORWARDED_SOCKET" ]; then
+  ln -sf "$FORWARDED_SOCKET" "$GPG_SOCKET"
+else
+  echo "Warning: Forwarded GPG socket not found at $FORWARDED_SOCKET"
+  echo "GPG signing may not work properly"
+fi
+
+# Kill any local gpg-agent (shouldn't exist but just in case)
+gpgconf --kill gpg-agent 2>/dev/null || true
+"""
+
+# Forward GPG agent socket from host to VM
+# This uses Lima's reverse port forwarding feature for Unix sockets
+# Using a fixed path to avoid UID issues
+[[forwards]]
+type = "unix_socket"
+host = { detect = "gpgconf --list-dir agent-extra-socket" }
+guest = "/tmp/claude-vm-gpg-agent.socket"

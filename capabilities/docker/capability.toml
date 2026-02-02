@@ -1,0 +1,7 @@
+[capability]
+id = "docker"
+name = "Docker"
+description = "Docker engine for container management"
+
+[vm_setup]
+script_file = "vm_setup.sh"

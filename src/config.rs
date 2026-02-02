@@ -23,6 +23,10 @@ pub struct Config {
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
+
+    /// Forward SSH agent to VM (not stored in config file)
+    #[serde(skip)]
+    pub forward_ssh_agent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +68,35 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub chromium: bool,
+
+    #[serde(default)]
+    pub gpg: bool,
+}
+
+impl ToolsConfig {
+    /// Check if a capability is enabled by ID
+    pub fn is_enabled(&self, id: &str) -> bool {
+        match id {
+            "docker" => self.docker,
+            "node" => self.node,
+            "python" => self.python,
+            "chromium" => self.chromium,
+            "gpg" => self.gpg,
+            _ => false,
+        }
+    }
+
+    /// Enable a capability by ID
+    pub fn enable(&mut self, id: &str) {
+        match id {
+            "docker" => self.docker = true,
+            "node" => self.node = true,
+            "python" => self.python = true,
+            "chromium" => self.chromium = true,
+            "gpg" => self.gpg = true,
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -148,6 +181,7 @@ impl Config {
         self.tools.node = self.tools.node || other.tools.node;
         self.tools.python = self.tools.python || other.tools.python;
         self.tools.chromium = self.tools.chromium || other.tools.chromium;
+        self.tools.gpg = self.tools.gpg || other.tools.gpg;
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
@@ -181,6 +215,9 @@ impl Config {
         // Verbose flag
         self.verbose = cli.verbose;
 
+        // SSH agent forwarding
+        self.forward_ssh_agent = cli.forward_ssh_agent;
+
         // Global CLI overrides
         if let Some(disk) = cli.disk {
             self.vm.disk = disk;
@@ -195,6 +232,7 @@ impl Config {
             node,
             python,
             chromium,
+            gpg,
             all,
             disk,
             memory,
@@ -202,22 +240,26 @@ impl Config {
         }) = &cli.command
         {
             if *all {
-                self.tools.docker = true;
-                self.tools.node = true;
-                self.tools.python = true;
-                self.tools.chromium = true;
+                self.tools.enable("docker");
+                self.tools.enable("node");
+                self.tools.enable("python");
+                self.tools.enable("chromium");
+                self.tools.enable("gpg");
             } else {
                 if *docker {
-                    self.tools.docker = true;
+                    self.tools.enable("docker");
                 }
                 if *node {
-                    self.tools.node = true;
+                    self.tools.enable("node");
                 }
                 if *python {
-                    self.tools.python = true;
+                    self.tools.enable("python");
                 }
                 if *chromium {
-                    self.tools.chromium = true;
+                    self.tools.enable("chromium");
+                }
+                if *gpg {
+                    self.tools.enable("gpg");
                 }
             }
 

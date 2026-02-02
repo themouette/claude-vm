@@ -1,0 +1,7 @@
+[capability]
+id = "node"
+name = "Node.js"
+description = "Node.js runtime and npm package manager"
+
+[vm_setup]
+script_file = "vm_setup.sh"
