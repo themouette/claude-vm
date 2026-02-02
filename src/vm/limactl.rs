@@ -172,11 +172,20 @@ impl LimaCtl {
             let mount_jsons: Vec<String> = mounts
                 .iter()
                 .map(|m| {
-                    format!(
-                        "{{\"location\":\"{}\",\"writable\":{}}}",
-                        m.location.display(),
-                        m.writable
-                    )
+                    if let Some(ref mount_point) = m.mount_point {
+                        format!(
+                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
+                            m.location.display(),
+                            mount_point.display(),
+                            m.writable
+                        )
+                    } else {
+                        format!(
+                            "{{\"location\":\"{}\",\"writable\":{}}}",
+                            m.location.display(),
+                            m.writable
+                        )
+                    }
                 })
                 .collect();
 
