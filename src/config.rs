@@ -455,4 +455,121 @@ mod tests {
         assert_eq!(merged.vm.memory, 16); // From override
         assert!(merged.tools.docker); // From override
     }
+
+    #[test]
+    fn test_context_instructions_inline() {
+        let mut config = Config::default();
+        config.context.instructions = "Test instructions".to_string();
+
+        assert_eq!(config.context.instructions, "Test instructions");
+    }
+
+    #[test]
+    fn test_context_merge() {
+        let mut base = Config::default();
+        base.context.instructions = "Base instructions".to_string();
+
+        let mut override_cfg = Config::default();
+        override_cfg.context.instructions = "Override instructions".to_string();
+
+        let merged = base.merge(override_cfg);
+        assert_eq!(merged.context.instructions, "Override instructions");
+    }
+
+    #[test]
+    fn test_context_file_loading() {
+        use std::io::Write;
+
+        // Create a temporary context file
+        let temp_dir = std::env::temp_dir();
+        let context_file = temp_dir.join("test-context.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "# Test Context\nThis is test content.").unwrap();
+        drop(file);
+
+        // Create config with context file
+        let mut config = Config::default();
+        config.context.instructions_file = context_file.to_string_lossy().to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify content was loaded
+        assert!(config.context.instructions.contains("Test Context"));
+        assert!(config.context.instructions.contains("This is test content"));
+
+        // Cleanup
+        std::fs::remove_file(&context_file).unwrap();
+    }
+
+    #[test]
+    fn test_context_instructions_precedence() {
+        use std::io::Write;
+
+        // Create a temporary context file
+        let temp_dir = std::env::temp_dir();
+        let context_file = temp_dir.join("test-context-precedence.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "File content").unwrap();
+        drop(file);
+
+        // Create config with both instructions and file
+        let mut config = Config::default();
+        config.context.instructions = "Inline content".to_string();
+        config.context.instructions_file = context_file.to_string_lossy().to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify inline instructions take precedence
+        assert_eq!(config.context.instructions, "Inline content");
+
+        // Cleanup
+        std::fs::remove_file(&context_file).unwrap();
+    }
+
+    #[test]
+    fn test_context_file_not_found() {
+        // Create config with non-existent file
+        let mut config = Config::default();
+        config.context.instructions_file = "/nonexistent/path/to/file.md".to_string();
+
+        // Should not error, just warn and leave instructions empty
+        let config = config.resolve_context_file().unwrap();
+        assert!(config.context.instructions.is_empty());
+    }
+
+    #[test]
+    fn test_context_file_empty_when_no_file() {
+        let config = Config::default();
+        let config = config.resolve_context_file().unwrap();
+
+        // Should remain empty
+        assert!(config.context.instructions.is_empty());
+    }
+
+    #[test]
+    fn test_context_tilde_expansion() {
+        use std::io::Write;
+
+        // Create a temporary file in home directory
+        let home = std::env::var("HOME").unwrap();
+        let context_file = PathBuf::from(&home).join(".test-context-tilde.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "Tilde test content").unwrap();
+        drop(file);
+
+        // Create config with ~ path
+        let mut config = Config::default();
+        config.context.instructions_file = "~/.test-context-tilde.md".to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify content was loaded
+        assert!(config.context.instructions.contains("Tilde test content"));
+
+        // Cleanup
+        std::fs::remove_file(&context_file).unwrap();
+    }
 }

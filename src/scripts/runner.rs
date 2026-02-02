@@ -605,4 +605,93 @@ mod tests {
         assert!(entrypoint.contains("# User runtime scripts"));
         assert!(entrypoint.contains("# Execute main command"));
     }
+
+    #[test]
+    fn test_generate_base_context_structure() {
+        let config = Config::default();
+        let context = generate_base_context(&config).unwrap();
+
+        // Verify HTML markers
+        assert!(context.contains("<!-- claude-vm-context-start -->"));
+        assert!(context.contains("<!-- claude-vm-context-end -->"));
+        assert!(context.contains("<!-- claude-vm-context-runtime-placeholder -->"));
+
+        // Verify sections
+        assert!(context.contains("# Claude VM Context"));
+        assert!(context.contains("## VM Configuration"));
+        assert!(context.contains("## Enabled Capabilities"));
+        assert!(context.contains("## Mounted Directories"));
+    }
+
+    #[test]
+    fn test_generate_base_context_vm_config() {
+        let mut config = Config::default();
+        config.vm.disk = 50;
+        config.vm.memory = 16;
+
+        let context = generate_base_context(&config).unwrap();
+
+        // Verify VM config values
+        assert!(context.contains("**Disk**: 50 GB"));
+        assert!(context.contains("**Memory**: 16 GB"));
+    }
+
+    #[test]
+    fn test_generate_base_context_with_instructions() {
+        let mut config = Config::default();
+        config.context.instructions = "Test instructions\nMultiple lines".to_string();
+
+        let context = generate_base_context(&config).unwrap();
+
+        // Verify user instructions section
+        assert!(context.contains("## User Instructions"));
+        assert!(context.contains("Test instructions"));
+        assert!(context.contains("Multiple lines"));
+    }
+
+    #[test]
+    fn test_generate_base_context_no_instructions() {
+        let config = Config::default();
+        let context = generate_base_context(&config).unwrap();
+
+        // Should not have user instructions section when empty
+        assert!(!context.contains("## User Instructions"));
+    }
+
+    #[test]
+    fn test_generate_base_context_with_capabilities() {
+        let mut config = Config::default();
+        config.tools.docker = true;
+        config.tools.node = true;
+
+        let context = generate_base_context(&config).unwrap();
+
+        // Verify capabilities are listed
+        assert!(context.contains("docker"));
+        assert!(context.contains("node"));
+        assert!(context.contains("Docker engine"));
+        assert!(context.contains("Node.js runtime"));
+    }
+
+    #[test]
+    fn test_generate_base_context_no_capabilities() {
+        let config = Config::default();
+        let context = generate_base_context(&config).unwrap();
+
+        // Should show "None" when no capabilities enabled
+        assert!(context.contains("## Enabled Capabilities"));
+        assert!(context.contains("None"));
+    }
+
+    #[test]
+    fn test_generate_base_context_instructions_trailing_newline() {
+        let mut config = Config::default();
+        // Test instructions without trailing newline
+        config.context.instructions = "Test without newline".to_string();
+
+        let context = generate_base_context(&config).unwrap();
+
+        // Should add newline after instructions
+        assert!(context.contains("Test without newline\n\n"));
+    }
 }
