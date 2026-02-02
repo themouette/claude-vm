@@ -44,6 +44,7 @@ pub fn execute(project: &Project, config: &Config, claude_args: &[String]) -> Re
         session.name(),
         project,
         config,
+        &session,
         workdir,
         "claude",
         &args,

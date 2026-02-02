@@ -21,6 +21,9 @@ pub struct Config {
     pub defaults: DefaultsConfig,
 
     #[serde(default)]
+    pub context: ContextConfig,
+
+    #[serde(default)]
     pub mounts: Vec<MountEntry>,
 
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
@@ -125,6 +128,17 @@ pub struct RuntimeConfig {
     pub scripts: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ContextConfig {
+    /// User-provided instructions for Claude
+    #[serde(default)]
+    pub instructions: String,
+
+    /// Path to a file containing instructions for Claude
+    #[serde(default)]
+    pub instructions_file: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultsConfig {
     #[serde(default = "default_claude_args")]
@@ -183,6 +197,9 @@ impl Config {
         // 3. Apply environment variables
         config = config.merge_env();
 
+        // 4. Resolve context file if needed
+        config = config.resolve_context_file()?;
+
         Ok(config)
     }
 
@@ -218,7 +235,84 @@ impl Config {
         // Default Claude args (append)
         self.defaults.claude_args.extend(other.defaults.claude_args);
 
+        // Context (replace if not empty)
+        if !other.context.instructions.is_empty() {
+            self.context.instructions = other.context.instructions;
+        }
+        if !other.context.instructions_file.is_empty() {
+            self.context.instructions_file = other.context.instructions_file;
+        }
+
         self
+    }
+
+    /// Load context from file if instructions_file is set and instructions is empty
+    fn resolve_context_file(mut self) -> Result<Self> {
+        // If instructions is already set, don't load from file
+        if !self.context.instructions.is_empty() {
+            return Ok(self);
+        }
+
+        // If instructions_file is set, load from file
+        if !self.context.instructions_file.is_empty() {
+            let file_path = if self.context.instructions_file.starts_with('~') {
+                // Expand ~ to home directory
+                if let Some(home) = home_dir() {
+                    let path_without_tilde = self.context.instructions_file.trim_start_matches('~');
+                    home.join(path_without_tilde.trim_start_matches('/'))
+                } else {
+                    PathBuf::from(&self.context.instructions_file)
+                }
+            } else {
+                PathBuf::from(&self.context.instructions_file)
+            };
+
+            // Read file content
+            match std::fs::read_to_string(&file_path) {
+                Ok(content) => {
+                    self.context.instructions = content;
+                }
+                Err(e) => {
+                    use std::io::{self, Write};
+
+                    // Print highly visible warning
+                    eprintln!();
+                    eprintln!("╔═══════════════════════════════════════════════════════╗");
+                    eprintln!("║ ⚠️  WARNING: Failed to load context file            ║");
+                    eprintln!("╚═══════════════════════════════════════════════════════╝");
+                    eprintln!("  File: {}", file_path.display());
+                    eprintln!("  Error: {}", e);
+                    eprintln!();
+                    eprintln!("  Claude will start WITHOUT your custom instructions.");
+                    eprintln!();
+
+                    // Prompt user to continue
+                    eprint!("Continue anyway? [y/N]: ");
+                    io::stderr().flush().ok();
+
+                    let mut input = String::new();
+                    match io::stdin().read_line(&mut input) {
+                        Ok(_) => {
+                            if !input.trim().eq_ignore_ascii_case("y") {
+                                return Err(crate::error::ClaudeVmError::InvalidConfig(
+                                    "Context file load failed and user chose to abort".to_string(),
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            // If stdin is not available (non-interactive), abort
+                            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                                "Failed to read context file '{}': {}",
+                                file_path.display(),
+                                e
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(self)
     }
 
     /// Apply environment variable overrides
@@ -390,5 +484,143 @@ mod tests {
         assert_eq!(merged.vm.disk, 30); // Kept from base
         assert_eq!(merged.vm.memory, 16); // From override
         assert!(merged.tools.docker); // From override
+    }
+
+    #[test]
+    fn test_context_instructions_inline() {
+        let mut config = Config::default();
+        config.context.instructions = "Test instructions".to_string();
+
+        assert_eq!(config.context.instructions, "Test instructions");
+    }
+
+    #[test]
+    fn test_context_merge() {
+        let mut base = Config::default();
+        base.context.instructions = "Base instructions".to_string();
+
+        let mut override_cfg = Config::default();
+        override_cfg.context.instructions = "Override instructions".to_string();
+
+        let merged = base.merge(override_cfg);
+        assert_eq!(merged.context.instructions, "Override instructions");
+    }
+
+    #[test]
+    fn test_context_file_loading() {
+        use std::io::Write;
+
+        // Create a temporary context file
+        let temp_dir = std::env::temp_dir();
+        let context_file = temp_dir.join("test-context.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "# Test Context\nThis is test content.").unwrap();
+        drop(file);
+
+        // Create config with context file
+        let mut config = Config::default();
+        config.context.instructions_file = context_file.to_string_lossy().to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify content was loaded
+        assert!(config.context.instructions.contains("Test Context"));
+        assert!(config.context.instructions.contains("This is test content"));
+
+        // Cleanup
+        std::fs::remove_file(&context_file).unwrap();
+    }
+
+    #[test]
+    fn test_context_instructions_precedence() {
+        use std::io::Write;
+
+        // Create a temporary context file
+        let temp_dir = std::env::temp_dir();
+        let context_file = temp_dir.join("test-context-precedence.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "File content").unwrap();
+        drop(file);
+
+        // Create config with both instructions and file
+        let mut config = Config::default();
+        config.context.instructions = "Inline content".to_string();
+        config.context.instructions_file = context_file.to_string_lossy().to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify inline instructions take precedence
+        assert_eq!(config.context.instructions, "Inline content");
+
+        // Cleanup
+        std::fs::remove_file(&context_file).unwrap();
+    }
+
+    #[test]
+    fn test_context_file_not_found() {
+        // Create config with non-existent file
+        let mut config = Config::default();
+        config.context.instructions_file = "/nonexistent/path/to/file.md".to_string();
+
+        // Should error in non-interactive mode (tests have no user input)
+        let result = config.resolve_context_file();
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        // Either stdin read fails, or user doesn't confirm
+        assert!(
+            error_msg.contains("Failed to read context file")
+                || error_msg.contains("Context file load failed")
+        );
+    }
+
+    #[test]
+    fn test_context_file_empty_when_no_file() {
+        let config = Config::default();
+        let config = config.resolve_context_file().unwrap();
+
+        // Should remain empty
+        assert!(config.context.instructions.is_empty());
+    }
+
+    #[test]
+    fn test_context_tilde_expansion() {
+        use std::io::Write;
+
+        // Create a temporary home directory
+        let temp_home =
+            std::env::temp_dir().join(format!("claude-vm-test-home-{}", std::process::id()));
+        std::fs::create_dir_all(&temp_home).unwrap();
+
+        // Create context file in temp home
+        let context_file = temp_home.join(".test-context-tilde.md");
+        let mut file = std::fs::File::create(&context_file).unwrap();
+        writeln!(file, "Tilde test content").unwrap();
+        drop(file);
+
+        // Temporarily set HOME
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &temp_home);
+
+        // Create config with ~ path
+        let mut config = Config::default();
+        config.context.instructions_file = "~/.test-context-tilde.md".to_string();
+
+        // Resolve context file
+        let config = config.resolve_context_file().unwrap();
+
+        // Verify content was loaded
+        assert!(config.context.instructions.contains("Tilde test content"));
+
+        // Restore original HOME
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+
+        // Cleanup
+        std::fs::remove_dir_all(&temp_home).unwrap();
     }
 }

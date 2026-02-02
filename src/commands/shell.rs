@@ -39,6 +39,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
         session.name(),
         project,
         config,
+        &session,
         workdir,
         "bash",
         &["-l"],

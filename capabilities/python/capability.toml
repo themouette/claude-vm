@@ -5,3 +5,15 @@ description = "Python 3 with pip and development tools"
 
 [vm_setup]
 script_file = "vm_setup.sh"
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Write Python context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/python.txt <<EOF
+Python version: $(python3 --version 2>/dev/null || echo "not available")
+pip version: $(pip3 --version 2>/dev/null || echo "not available")
+Virtual environment: $([ -n "$VIRTUAL_ENV" ] && echo "$VIRTUAL_ENV" || echo "none")
+EOF
+"""

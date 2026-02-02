@@ -5,3 +5,15 @@ description = "Docker engine for container management"
 
 [vm_setup]
 script_file = "vm_setup.sh"
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Write Docker context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/docker.txt <<EOF
+Docker version: $(docker --version 2>/dev/null || echo "not available")
+Docker Compose version: $(docker compose version 2>/dev/null || echo "not available")
+Docker daemon status: $(systemctl is-active docker 2>/dev/null || echo "unknown")
+EOF
+"""
