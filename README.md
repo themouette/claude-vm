@@ -209,6 +209,16 @@ scripts = [
 [defaults]
 # Additional arguments passed to Claude (--dangerously-skip-permissions is included by default)
 claude_args = ["--max-tokens", "4096"]
+
+# Custom mounts (optional)
+[[mounts]]
+location = "/Users/me/data"
+writable = true
+
+[[mounts]]
+location = "~/shared"
+mount_point = "/vm/shared"
+writable = false
 ```
 
 ### Configuration Locations
@@ -505,6 +515,7 @@ This shows:
 - `--runtime-script <PATH>` - Runtime script to execute
 - `-A, --forward-ssh-agent` - Forward SSH agent to VM
 - `--no-conversations` - Don't mount Claude conversation folder in VM
+- `--mount <SPEC>` - Custom mount in docker-style format (can be used multiple times)
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options
@@ -607,6 +618,88 @@ This is useful when:
 - You want a completely isolated testing environment
 - You're debugging conversation-related issues
 - You need to ensure no historical context influences Claude's behavior
+
+## Custom Mounts
+
+Beyond the automatic mounts (project directory, worktrees, conversations), you can add custom mounts to share additional directories with the VM.
+
+### Docker-Style Mount Syntax
+
+Use docker-style mount specifications for the CLI:
+
+```bash
+# Simple mount (writable, same path in VM)
+claude-vm --mount /host/data shell
+
+# Read-only mount
+claude-vm --mount /host/data:ro shell
+
+# Custom VM path (writable)
+claude-vm --mount /host/data:/vm/data shell
+
+# Custom VM path (read-only)
+claude-vm --mount /host/data:/vm/data:ro shell
+
+# Multiple mounts
+claude-vm --mount /host/data1 --mount /host/data2:ro shell
+
+# Tilde expansion supported
+claude-vm --mount ~/Documents:/vm/docs shell
+```
+
+### TOML Configuration
+
+Define persistent mounts in `.claude-vm.toml`:
+
+```toml
+[[mounts]]
+location = "/Users/me/data"
+writable = true
+
+[[mounts]]
+location = "/Users/me/shared"
+writable = false
+mount_point = "/vm/shared"  # Optional: custom path in VM
+
+[[mounts]]
+location = "~/Documents"    # Tilde expansion supported
+writable = true
+```
+
+### How It Works
+
+- **Accumulation**: Mounts from global config, project config, and CLI are all applied
+- **Deduplication**: Duplicate mount locations are automatically filtered
+- **Path Expansion**: `~` is expanded to your home directory
+- **Validation**: Paths must be absolute (after expansion)
+- **Mount Points**: By default, host paths are mounted at the same location in the VM
+
+### Examples
+
+**Share a dataset with the VM:**
+```bash
+claude-vm --mount ~/datasets:/data:ro shell
+# Dataset accessible at /data in VM (read-only)
+```
+
+**Mount multiple data sources:**
+```toml
+# .claude-vm.toml
+[[mounts]]
+location = "/mnt/storage/data"
+mount_point = "/data"
+writable = false
+
+[[mounts]]
+location = "/mnt/storage/cache"
+mount_point = "/cache"
+writable = true
+```
+
+**Temporary mount for a single session:**
+```bash
+claude-vm --mount /tmp/experiment:/experiment "analyze this data"
+```
 
 ## Development
 
