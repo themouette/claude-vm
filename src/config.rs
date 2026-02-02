@@ -273,11 +273,41 @@ impl Config {
                     self.context.instructions = content;
                 }
                 Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to read context file '{}': {}",
-                        file_path.display(),
-                        e
-                    );
+                    use std::io::{self, Write};
+
+                    // Print highly visible warning
+                    eprintln!();
+                    eprintln!("╔═══════════════════════════════════════════════════════╗");
+                    eprintln!("║ ⚠️  WARNING: Failed to load context file            ║");
+                    eprintln!("╚═══════════════════════════════════════════════════════╝");
+                    eprintln!("  File: {}", file_path.display());
+                    eprintln!("  Error: {}", e);
+                    eprintln!();
+                    eprintln!("  Claude will start WITHOUT your custom instructions.");
+                    eprintln!();
+
+                    // Prompt user to continue
+                    eprint!("Continue anyway? [y/N]: ");
+                    io::stderr().flush().ok();
+
+                    let mut input = String::new();
+                    match io::stdin().read_line(&mut input) {
+                        Ok(_) => {
+                            if !input.trim().eq_ignore_ascii_case("y") {
+                                return Err(crate::error::ClaudeVmError::InvalidConfig(
+                                    "Context file load failed and user chose to abort".to_string(),
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            // If stdin is not available (non-interactive), abort
+                            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                                "Failed to read context file '{}': {}",
+                                file_path.display(),
+                                e
+                            )));
+                        }
+                    }
                 }
             }
         }
@@ -534,9 +564,15 @@ mod tests {
         let mut config = Config::default();
         config.context.instructions_file = "/nonexistent/path/to/file.md".to_string();
 
-        // Should not error, just warn and leave instructions empty
-        let config = config.resolve_context_file().unwrap();
-        assert!(config.context.instructions.is_empty());
+        // Should error in non-interactive mode (tests have no user input)
+        let result = config.resolve_context_file();
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        // Either stdin read fails, or user doesn't confirm
+        assert!(
+            error_msg.contains("Failed to read context file")
+                || error_msg.contains("Context file load failed")
+        );
     }
 
     #[test]
@@ -553,7 +589,8 @@ mod tests {
         use std::io::Write;
 
         // Create a temporary home directory
-        let temp_home = std::env::temp_dir().join(format!("claude-vm-test-home-{}", std::process::id()));
+        let temp_home =
+            std::env::temp_dir().join(format!("claude-vm-test-home-{}", std::process::id()));
         std::fs::create_dir_all(&temp_home).unwrap();
 
         // Create context file in temp home
