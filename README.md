@@ -408,6 +408,8 @@ This context is merged with any existing `~/.claude/CLAUDE.md` content using HTM
 - `tools`: true/false for each
 - `scripts`: array of file paths (strings)
 - `claude_args`: array of strings
+- `instructions`: string (multiline supported)
+- `instructions_file`: file path (string, supports ~ expansion)
 
 **Example validation error:**
 
