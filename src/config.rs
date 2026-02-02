@@ -133,6 +133,10 @@ pub struct ContextConfig {
     /// User-provided instructions for Claude
     #[serde(default)]
     pub instructions: String,
+
+    /// Path to a file containing instructions for Claude
+    #[serde(default)]
+    pub instructions_file: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,6 +197,9 @@ impl Config {
         // 3. Apply environment variables
         config = config.merge_env();
 
+        // 4. Resolve context file if needed
+        config = config.resolve_context_file()?;
+
         Ok(config)
     }
 
@@ -232,8 +239,50 @@ impl Config {
         if !other.context.instructions.is_empty() {
             self.context.instructions = other.context.instructions;
         }
+        if !other.context.instructions_file.is_empty() {
+            self.context.instructions_file = other.context.instructions_file;
+        }
 
         self
+    }
+
+    /// Load context from file if instructions_file is set and instructions is empty
+    fn resolve_context_file(mut self) -> Result<Self> {
+        // If instructions is already set, don't load from file
+        if !self.context.instructions.is_empty() {
+            return Ok(self);
+        }
+
+        // If instructions_file is set, load from file
+        if !self.context.instructions_file.is_empty() {
+            let file_path = if self.context.instructions_file.starts_with('~') {
+                // Expand ~ to home directory
+                if let Some(home) = home_dir() {
+                    let path_without_tilde = self.context.instructions_file.trim_start_matches('~');
+                    home.join(path_without_tilde.trim_start_matches('/'))
+                } else {
+                    PathBuf::from(&self.context.instructions_file)
+                }
+            } else {
+                PathBuf::from(&self.context.instructions_file)
+            };
+
+            // Read file content
+            match std::fs::read_to_string(&file_path) {
+                Ok(content) => {
+                    self.context.instructions = content;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to read context file '{}': {}",
+                        file_path.display(),
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok(self)
     }
 
     /// Apply environment variable overrides

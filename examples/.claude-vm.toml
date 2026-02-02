@@ -51,6 +51,8 @@ scripts = [
 [context]
 # Instructions for Claude about your project
 # This will be automatically included in ~/.claude/CLAUDE.md
+
+# Option 1: Inline instructions
 instructions = """
 This is a Rust project using:
 - Cargo for build management
@@ -62,6 +64,10 @@ Please:
 - Follow Rust best practices
 - Use proper error handling with Result types
 """
+
+# Option 2: Load from file (commented out - uncomment to use)
+# instructions_file = ".claude-context.md"
+# Note: If both are set, instructions takes precedence
 
 [defaults]
 # Default arguments to pass to Claude

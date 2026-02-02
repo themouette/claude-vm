@@ -346,6 +346,8 @@ claude_args = []
 
 The `[context]` section allows you to provide project-specific instructions that are automatically included in `~/.claude/CLAUDE.md` before Claude starts. This is useful for providing context about your project, coding conventions, or preferences.
 
+**Option 1: Inline instructions**
+
 ```toml
 [context]
 instructions = """
@@ -361,11 +363,39 @@ Please:
 """
 ```
 
+**Option 2: Load from file**
+
+```toml
+[context]
+instructions_file = ".claude-context.md"
+# Or use absolute path: instructions_file = "~/my-project-context.md"
+```
+
+Then create `.claude-context.md`:
+
+```markdown
+# Project Context
+
+This is a Rust project for building CLI tools.
+
+## Architecture
+- Uses clap for command-line parsing
+- TOML for configuration
+- Modular capability system
+
+## Coding Standards
+- Include examples in responses
+- Follow Rust best practices
+- Use proper error handling with Result types
+```
+
+**Precedence:** If both `instructions` and `instructions_file` are set, `instructions` takes precedence. The file is only loaded if `instructions` is empty.
+
 The context is automatically generated and includes:
 - VM configuration (disk, memory)
 - Enabled capabilities (docker, node, etc.)
 - Mounted directories
-- User-provided instructions
+- User-provided instructions (inline or from file)
 
 This context is merged with any existing `~/.claude/CLAUDE.md` content using HTML comment markers, preserving your custom instructions while updating VM-specific information on each session.
 
