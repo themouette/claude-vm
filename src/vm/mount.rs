@@ -400,6 +400,7 @@ mod tests {
 
     // Test 3: Integration tests with temp directories
     #[test]
+    #[serial_test::serial]
     fn test_get_claude_conversation_folder_creates_directory() {
         use std::env;
 
@@ -431,6 +432,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_get_claude_conversation_folder_existing_directory() {
         use std::env;
 
@@ -467,6 +469,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_get_claude_conversation_folder_no_home() {
         use std::env;
 
@@ -586,6 +589,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_expand_path_tilde() {
         use std::env;
         let home = env::var("HOME").unwrap();
@@ -601,6 +605,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_expand_path_no_home() {
         use std::env;
         let original_home = env::var("HOME").ok();

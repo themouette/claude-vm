@@ -23,6 +23,7 @@ indicatif = "0.17"
 assert_cmd = "2.0"
 predicates = "3.1"
 tempfile = "3.10"
+serial_test = "3.2"
 
 [profile.release]
 strip = true
