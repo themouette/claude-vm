@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{ClaudeVmError, Result};
 use crate::utils::git;
 use std::path::PathBuf;
 
@@ -22,6 +22,84 @@ impl Mount {
         self.mount_point = Some(mount_point);
         self
     }
+
+    /// Parse a docker-style mount specification string
+    /// Formats:
+    /// - `/host/path` - writable, same path in VM
+    /// - `/host/path:ro` - read-only, same path in VM
+    /// - `/host/path:/vm/path` - writable, custom VM path
+    /// - `/host/path:/vm/path:ro` - read-only, custom VM path
+    pub fn from_spec(spec: &str) -> Result<Self> {
+        let parts: Vec<&str> = spec.split(':').collect();
+
+        let (host_path, vm_path, writable) = match parts.len() {
+            1 => {
+                // Format: /host/path
+                let path = expand_path(parts[0])?;
+                (path.clone(), None, true)
+            }
+            2 => {
+                // Format: /host/path:ro OR /host/path:/vm/path
+                let host = expand_path(parts[0])?;
+                if parts[1] == "ro" || parts[1] == "rw" {
+                    // Format: /host/path:ro
+                    let writable = parts[1] == "rw";
+                    (host, None, writable)
+                } else {
+                    // Format: /host/path:/vm/path
+                    let vm = expand_path(parts[1])?;
+                    (host, Some(vm), true)
+                }
+            }
+            3 => {
+                // Format: /host/path:/vm/path:ro
+                let host = expand_path(parts[0])?;
+                let vm = expand_path(parts[1])?;
+                let writable = parts[2] == "rw";
+                if parts[2] != "ro" && parts[2] != "rw" {
+                    return Err(ClaudeVmError::InvalidConfig(format!(
+                        "Invalid mount mode '{}': must be 'ro' or 'rw'",
+                        parts[2]
+                    )));
+                }
+                (host, Some(vm), writable)
+            }
+            _ => {
+                return Err(ClaudeVmError::InvalidConfig(format!(
+                    "Invalid mount specification '{}': too many colons",
+                    spec
+                )));
+            }
+        };
+
+        let mut mount = Mount::new(host_path, writable);
+        if let Some(vm) = vm_path {
+            mount = mount.with_mount_point(vm);
+        }
+        Ok(mount)
+    }
+}
+
+/// Expand path with ~ support and make it absolute
+fn expand_path(path: &str) -> Result<PathBuf> {
+    let expanded = if path.starts_with('~') {
+        let home = std::env::var("HOME").map_err(|_| {
+            ClaudeVmError::InvalidConfig("HOME environment variable not set".to_string())
+        })?;
+        PathBuf::from(path.replacen('~', &home, 1))
+    } else {
+        PathBuf::from(path)
+    };
+
+    // Ensure path is absolute
+    if !expanded.is_absolute() {
+        return Err(ClaudeVmError::InvalidConfig(format!(
+            "Mount path must be absolute: {}",
+            path
+        )));
+    }
+
+    Ok(expanded)
 }
 
 /// Encode a project path for use as a Claude conversation folder name
@@ -275,5 +353,141 @@ mod tests {
         }
 
         assert!(result.is_none());
+    }
+
+    // Test 4: Docker-style mount spec parsing
+    #[test]
+    fn test_from_spec_simple_path() {
+        let mount = Mount::from_spec("/absolute/path").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/absolute/path"));
+        assert_eq!(mount.mount_point, None);
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_readonly() {
+        let mount = Mount::from_spec("/absolute/path:ro").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/absolute/path"));
+        assert_eq!(mount.mount_point, None);
+        assert!(!mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_readwrite() {
+        let mount = Mount::from_spec("/absolute/path:rw").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/absolute/path"));
+        assert_eq!(mount.mount_point, None);
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_custom_mount_point() {
+        let mount = Mount::from_spec("/host/path:/vm/path").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/host/path"));
+        assert_eq!(mount.mount_point, Some(PathBuf::from("/vm/path")));
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_custom_mount_point_readonly() {
+        let mount = Mount::from_spec("/host/path:/vm/path:ro").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/host/path"));
+        assert_eq!(mount.mount_point, Some(PathBuf::from("/vm/path")));
+        assert!(!mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_custom_mount_point_readwrite() {
+        let mount = Mount::from_spec("/host/path:/vm/path:rw").unwrap();
+        assert_eq!(mount.location, PathBuf::from("/host/path"));
+        assert_eq!(mount.mount_point, Some(PathBuf::from("/vm/path")));
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_tilde_expansion() {
+        use std::env;
+        let home = env::var("HOME").unwrap();
+        let mount = Mount::from_spec("~/my-folder").unwrap();
+        assert_eq!(mount.location, PathBuf::from(format!("{}/my-folder", home)));
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_tilde_expansion_both_paths() {
+        use std::env;
+        let home = env::var("HOME").unwrap();
+        let mount = Mount::from_spec("~/host:~/vm").unwrap();
+        assert_eq!(mount.location, PathBuf::from(format!("{}/host", home)));
+        assert_eq!(
+            mount.mount_point,
+            Some(PathBuf::from(format!("{}/vm", home)))
+        );
+        assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_relative_path_error() {
+        let result = Mount::from_spec("relative/path");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be absolute"));
+    }
+
+    #[test]
+    fn test_from_spec_invalid_mode() {
+        let result = Mount::from_spec("/host:/vm:invalid");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("must be 'ro' or 'rw'"));
+    }
+
+    #[test]
+    fn test_from_spec_too_many_colons() {
+        let result = Mount::from_spec("/host:/vm:ro:extra");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too many colons"));
+    }
+
+    #[test]
+    fn test_expand_path_absolute() {
+        let path = expand_path("/absolute/path").unwrap();
+        assert_eq!(path, PathBuf::from("/absolute/path"));
+    }
+
+    #[test]
+    fn test_expand_path_tilde() {
+        use std::env;
+        let home = env::var("HOME").unwrap();
+        let path = expand_path("~/folder").unwrap();
+        assert_eq!(path, PathBuf::from(format!("{}/folder", home)));
+    }
+
+    #[test]
+    fn test_expand_path_relative_error() {
+        let result = expand_path("relative/path");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("must be absolute"));
+    }
+
+    #[test]
+    fn test_expand_path_no_home() {
+        use std::env;
+        let original_home = env::var("HOME").ok();
+        env::remove_var("HOME");
+
+        let result = expand_path("~/folder");
+
+        // Restore HOME
+        if let Some(home) = original_home {
+            env::set_var("HOME", home);
+        }
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("HOME environment variable"));
     }
 }
