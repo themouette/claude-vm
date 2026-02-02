@@ -6,6 +6,17 @@ description = "Headless Chromium for web automation and testing"
 [vm_setup]
 script_file = "vm_setup.sh"
 
+[vm_runtime]
+script = """
+#!/bin/bash
+# Write Chromium context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/chromium.txt <<EOF
+Chromium browser available for headless web automation and testing
+Chromium binary: $(which chromium 2>/dev/null || echo "not found")
+EOF
+"""
+
 [[mcp]]
 id = "chrome-devtools"
 command = "npx"

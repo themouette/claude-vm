@@ -306,6 +306,8 @@ gpg = true        # GPG agent forwarding + key sync
 gh = true         # GitHub CLI + authentication
 ```
 
+Each enabled capability automatically provides context to Claude about its status (version, configuration, availability) via the generated `~/.claude/CLAUDE.md` file.
+
 **Or install everything:**
 
 ```bash
@@ -471,11 +473,116 @@ Scripts run in this order:
 - Use `read` commands for configuration
 - Full terminal support (colors, cursor control)
 
+**Context Contribution**
+
+- Runtime scripts can contribute information to Claude's context
+- Write to `~/.claude-vm/context/<name>.txt` files
+- Content is automatically included in `~/.claude/CLAUDE.md` before Claude starts
+- Useful for providing runtime information (service status, environment details, etc.)
+
 **Security**
 
 - Script paths are properly escaped to prevent shell injection
 - Filenames are sanitized for safe execution
 - Unicode filenames are supported
+
+### Contributing Context to Claude
+
+Runtime scripts can optionally provide information to Claude by writing to `~/.claude-vm/context/<name>.txt` files. This content is automatically merged into `~/.claude/CLAUDE.md` before Claude starts, providing dynamic runtime information.
+
+**Example: Service Status**
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Start services
+docker-compose up -d
+
+# Wait for services to be ready
+sleep 2
+
+# Write context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/services.txt <<EOF
+Development services running:
+- PostgreSQL: localhost:5432 (database: myapp_dev)
+- Redis: localhost:6379
+- API Server: http://localhost:3000
+
+Database seeded with test data.
+Use 'docker-compose logs' to view service logs.
+EOF
+```
+
+**Example: Environment Information**
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+# Detect project configuration
+PROJECT_TYPE="unknown"
+if [ -f "package.json" ]; then
+  PROJECT_TYPE="Node.js"
+elif [ -f "Cargo.toml" ]; then
+  PROJECT_TYPE="Rust"
+elif [ -f "requirements.txt" ]; then
+  PROJECT_TYPE="Python"
+fi
+
+# Write context
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/environment.txt <<EOF
+Project type: $PROJECT_TYPE
+Git branch: $(git branch --show-current 2>/dev/null || echo "none")
+Working directory: $(pwd)
+Available environment: $(env | grep -E '^(API_KEY|DATABASE_URL)=' || echo "No special env vars")
+EOF
+```
+
+**Context File Naming**
+
+- Use descriptive names: `services.txt`, `environment.txt`, `database.txt`
+- File basename (without .txt) becomes the section heading in CLAUDE.md
+- Multiple scripts can write different context files
+- Files are included in alphabetical order
+
+**Result in CLAUDE.md**
+
+The context files appear under "Runtime Script Results" section:
+
+```markdown
+<!-- claude-vm-context-start -->
+# Claude VM Context
+
+## VM Configuration
+- **Disk**: 20 GB
+- **Memory**: 8 GB
+
+## Enabled Capabilities
+- docker: Docker engine for container management
+- node: Node.js runtime and npm package manager
+
+## Runtime Script Results
+
+### services
+Development services running:
+- PostgreSQL: localhost:5432 (database: myapp_dev)
+- Redis: localhost:6379
+- API Server: http://localhost:3000
+
+Database seeded with test data.
+Use 'docker-compose logs' to view service logs.
+
+### environment
+Project type: Node.js
+Git branch: main
+Working directory: /Users/user/project
+Available environment: No special env vars
+
+<!-- claude-vm-context-end -->
+```
 
 ### Example: Database Setup
 

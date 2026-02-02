@@ -35,6 +35,14 @@ fi
 
 # Kill any local gpg-agent (shouldn't exist but just in case)
 gpgconf --kill gpg-agent 2>/dev/null || true
+
+# Write GPG context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/gpg.txt <<EOF
+GPG agent forwarded from host
+Socket: $FORWARDED_SOCKET -> $GPG_SOCKET
+Available keys: $(gpg --list-keys 2>/dev/null | grep -c "^pub" || echo "0")
+EOF
 """
 
 # Forward GPG agent socket from host to VM

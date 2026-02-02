@@ -5,3 +5,15 @@ description = "Node.js runtime and npm package manager"
 
 [vm_setup]
 script_file = "vm_setup.sh"
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Write Node.js context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/node.txt <<EOF
+Node.js version: $(node --version 2>/dev/null || echo "not available")
+npm version: $(npm --version 2>/dev/null || echo "not available")
+Global packages: $(npm list -g --depth=0 2>/dev/null | wc -l || echo "unknown")
+EOF
+"""
