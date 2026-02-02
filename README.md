@@ -293,6 +293,7 @@ node = true       # Node.js (LTS) + npm
 python = true     # Python 3 + pip
 chromium = true   # Chromium + Chrome DevTools MCP
 gpg = true        # GPG agent forwarding + key sync
+gh = true         # GitHub CLI + authentication
 ```
 
 **Or install everything:**
@@ -513,6 +514,7 @@ This shows:
 - `--python` - Install Python
 - `--chromium` - Install Chromium
 - `--gpg` - Enable GPG agent forwarding
+- `--gh` - Install GitHub CLI
 - `--all` - Install all tools
 - `--setup-script <PATH>` - Custom setup script
 

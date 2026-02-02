@@ -58,6 +58,10 @@ pub enum Commands {
         #[arg(long)]
         gpg: bool,
 
+        /// Install GitHub CLI
+        #[arg(long)]
+        gh: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,
