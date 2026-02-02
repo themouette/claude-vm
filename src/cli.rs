@@ -32,6 +32,10 @@ pub struct Cli {
     /// Forward SSH agent to VM
     #[arg(short = 'A', long = "forward-ssh-agent", global = true)]
     pub forward_ssh_agent: bool,
+
+    /// Don't mount Claude conversation folder in VM
+    #[arg(long = "no-conversations", global = true)]
+    pub no_conversations: bool,
 }
 
 #[derive(Subcommand, Debug)]

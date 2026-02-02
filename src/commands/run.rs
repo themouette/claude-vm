@@ -13,7 +13,7 @@ pub fn execute(project: &Project, config: &Config, claude_args: &[String]) -> Re
     }
 
     // Create session
-    let session = VmSession::new(project, config.verbose)?;
+    let session = VmSession::new(project, config.verbose, config.mount_conversations)?;
     let _cleanup = session.ensure_cleanup();
 
     // Build Claude command with arguments

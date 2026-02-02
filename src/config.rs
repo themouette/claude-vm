@@ -27,6 +27,10 @@ pub struct Config {
     /// Forward SSH agent to VM (not stored in config file)
     #[serde(skip)]
     pub forward_ssh_agent: bool,
+
+    /// Mount Claude conversation folder in VM (not stored in config file)
+    #[serde(skip)]
+    pub mount_conversations: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +221,9 @@ impl Config {
 
         // SSH agent forwarding
         self.forward_ssh_agent = cli.forward_ssh_agent;
+
+        // Mount conversations (inverted: --no-conversations means mount_conversations = false)
+        self.mount_conversations = !cli.no_conversations;
 
         // Global CLI overrides
         if let Some(disk) = cli.disk {

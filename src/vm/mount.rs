@@ -60,8 +60,8 @@ pub(crate) fn get_claude_conversation_folder(project_path: &PathBuf) -> Option<P
 
 /// Compute the mounts needed for the VM
 /// Mounts the git repository root (if in a git repo), plus main repo if in a worktree,
-/// plus the Claude conversation folder for the current project
-pub fn compute_mounts() -> Result<Vec<Mount>> {
+/// plus the Claude conversation folder for the current project (if mount_conversations is true)
+pub fn compute_mounts(mount_conversations: bool) -> Result<Vec<Mount>> {
     let mut mounts = Vec::new();
     let mut project_path: Option<PathBuf> = None;
 
@@ -91,23 +91,25 @@ pub fn compute_mounts() -> Result<Vec<Mount>> {
         }
     }
 
-    // Mount the Claude conversation folder for the current project
-    if let Some(project) = project_path {
-        if let Some(conversation_folder) = get_claude_conversation_folder(&project) {
-            // Only add if not already mounted
-            if !mounts.iter().any(|m| m.location == conversation_folder) {
-                // Extract the folder name (encoded project path)
-                if let Some(folder_name) = conversation_folder.file_name() {
-                    // Map to VM home directory
-                    // Host: /Users/user/.claude/projects/... -> VM: /home/lima.linux/.claude/projects/...
-                    let vm_mount_point = PathBuf::from("/home/lima.linux")
-                        .join(".claude")
-                        .join("projects")
-                        .join(folder_name);
+    // Mount the Claude conversation folder for the current project (if enabled)
+    if mount_conversations {
+        if let Some(project) = project_path {
+            if let Some(conversation_folder) = get_claude_conversation_folder(&project) {
+                // Only add if not already mounted
+                if !mounts.iter().any(|m| m.location == conversation_folder) {
+                    // Extract the folder name (encoded project path)
+                    if let Some(folder_name) = conversation_folder.file_name() {
+                        // Map to VM home directory
+                        // Host: /Users/user/.claude/projects/... -> VM: /home/lima.linux/.claude/projects/...
+                        let vm_mount_point = PathBuf::from("/home/lima.linux")
+                            .join(".claude")
+                            .join("projects")
+                            .join(folder_name);
 
-                    mounts.push(
-                        Mount::new(conversation_folder, true).with_mount_point(vm_mount_point),
-                    );
+                        mounts.push(
+                            Mount::new(conversation_folder, true).with_mount_point(vm_mount_point),
+                        );
+                    }
                 }
             }
         }
