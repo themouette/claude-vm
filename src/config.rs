@@ -418,6 +418,7 @@ impl Config {
             gpg,
             gh,
             all,
+            agent,
             disk,
             memory,
             setup_scripts,
@@ -450,6 +451,11 @@ impl Config {
                 if *gh {
                     self.tools.enable("gh");
                 }
+            }
+
+            // Set agent if specified
+            if let Some(a) = agent {
+                self.defaults.agent = a.clone();
             }
 
             if let Some(d) = disk {

@@ -74,6 +74,10 @@ pub enum Commands {
         #[arg(long)]
         all: bool,
 
+        /// Agent to install (claude, opencode, etc.)
+        #[arg(long)]
+        agent: Option<String>,
+
         /// VM disk size in GB
         #[arg(long)]
         disk: Option<u32>,
