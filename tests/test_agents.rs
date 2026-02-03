@@ -93,13 +93,19 @@ fn test_agent_requirements_validation() {
     // Without node capability
     let config = Config::default();
     let result = claude_vm::agents::executor::verify_requirements(&opencode, &config);
-    assert!(result.is_err(), "Should fail when node capability is not enabled");
+    assert!(
+        result.is_err(),
+        "Should fail when node capability is not enabled"
+    );
 
     // With node capability
     let mut config_with_node = Config::default();
     config_with_node.tools.node = true;
     let result = claude_vm::agents::executor::verify_requirements(&opencode, &config_with_node);
-    assert!(result.is_ok(), "Should succeed when node capability is enabled");
+    assert!(
+        result.is_ok(),
+        "Should succeed when node capability is enabled"
+    );
 }
 
 #[test]
@@ -110,7 +116,10 @@ fn test_claude_no_requirements() {
     // Claude should work with default config
     let config = Config::default();
     let result = claude_vm::agents::executor::verify_requirements(&claude, &config);
-    assert!(result.is_ok(), "Claude should work without any capabilities");
+    assert!(
+        result.is_ok(),
+        "Claude should work without any capabilities"
+    );
 }
 
 #[test]
