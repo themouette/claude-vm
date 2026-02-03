@@ -1,7 +1,13 @@
 #!/bin/bash
 set -e
 
-VM_NAME="${1:-claude-vm}"
+# Use LIMA_INSTANCE provided by executor
+VM_NAME="${LIMA_INSTANCE}"
+
+if [ -z "$VM_NAME" ]; then
+    echo "Error: LIMA_INSTANCE environment variable not set"
+    exit 1
+fi
 
 echo "Configuring git in VM..."
 
@@ -26,47 +32,71 @@ GPG_SIGN=$(git config --global commit.gpgsign 2>/dev/null || echo "false")
 GPG_FORMAT=$(git config --global gpg.format 2>/dev/null || echo "openpgp")
 SIGNING_KEY=$(git config --global user.signingkey 2>/dev/null || echo "")
 
-# Create temporary script to run in VM
-TEMP_SCRIPT=$(mktemp)
-trap "rm -f $TEMP_SCRIPT" EXIT
+# Write config values to temp files for safe transfer
+TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT ERR INT TERM
 
-cat > "$TEMP_SCRIPT" <<'EOF'
-#!/bin/bash
+echo -n "$GIT_USER_NAME" > "$TEMP_DIR/user.name"
+echo -n "$GIT_USER_EMAIL" > "$TEMP_DIR/user.email"
+echo -n "$GPG_SIGN" > "$TEMP_DIR/commit.gpgsign"
+echo -n "$GPG_FORMAT" > "$TEMP_DIR/gpg.format"
+echo -n "$SIGNING_KEY" > "$TEMP_DIR/user.signingkey"
+
+# Copy config files to VM
+if ! limactl copy "$TEMP_DIR/user.name" "$VM_NAME:/tmp/git-user-name"; then
+    echo "Error: Failed to copy git config to VM"
+    exit 1
+fi
+
+if ! limactl copy "$TEMP_DIR/user.email" "$VM_NAME:/tmp/git-user-email"; then
+    echo "Error: Failed to copy git config to VM"
+    exit 1
+fi
+
+if ! limactl copy "$TEMP_DIR/commit.gpgsign" "$VM_NAME:/tmp/git-commit-gpgsign"; then
+    echo "Error: Failed to copy git config to VM"
+    exit 1
+fi
+
+if ! limactl copy "$TEMP_DIR/gpg.format" "$VM_NAME:/tmp/git-gpg-format"; then
+    echo "Error: Failed to copy git config to VM"
+    exit 1
+fi
+
+if ! limactl copy "$TEMP_DIR/user.signingkey" "$VM_NAME:/tmp/git-user-signingkey"; then
+    echo "Error: Failed to copy git config to VM"
+    exit 1
+fi
+
+# Execute git config commands in VM, reading from temp files
+if ! limactl shell "$VM_NAME" bash <<'SHELL_EOF'
 set -e
 
 # Configure git user identity
-git config --global user.name "$GIT_USER_NAME"
-git config --global user.email "$GIT_USER_EMAIL"
+git config --global user.name "$(cat /tmp/git-user-name)"
+git config --global user.email "$(cat /tmp/git-user-email)"
 
 # Configure signing if enabled
+GPG_SIGN=$(cat /tmp/git-commit-gpgsign)
 if [ "$GPG_SIGN" = "true" ]; then
     git config --global commit.gpgsign true
-    git config --global gpg.format "$GPG_FORMAT"
+    git config --global gpg.format "$(cat /tmp/git-gpg-format)"
 
+    SIGNING_KEY=$(cat /tmp/git-user-signingkey)
     if [ -n "$SIGNING_KEY" ]; then
         git config --global user.signingkey "$SIGNING_KEY"
     fi
 fi
 
+# Clean up temp files
+rm -f /tmp/git-user-name /tmp/git-user-email /tmp/git-commit-gpgsign /tmp/git-gpg-format /tmp/git-user-signingkey
+
 echo "Git configured successfully"
-EOF
-
-# Copy script to VM
-TEMP_VM_SCRIPT="/tmp/git_setup_$(date +%s).sh"
-limactl copy "$TEMP_SCRIPT" "$VM_NAME:$TEMP_VM_SCRIPT"
-
-# Execute script in VM with environment variables
-limactl shell "$VM_NAME" bash <<SHELL_EOF
-export GIT_USER_NAME='$GIT_USER_NAME'
-export GIT_USER_EMAIL='$GIT_USER_EMAIL'
-export GPG_SIGN='$GPG_SIGN'
-export GPG_FORMAT='$GPG_FORMAT'
-export SIGNING_KEY='$SIGNING_KEY'
-
-chmod +x "$TEMP_VM_SCRIPT"
-"$TEMP_VM_SCRIPT"
-rm -f "$TEMP_VM_SCRIPT"
 SHELL_EOF
+then
+    echo "Error: Failed to configure git in VM"
+    exit 1
+fi
 
 echo "Git user configured: $GIT_USER_NAME <$GIT_USER_EMAIL>"
 
@@ -76,7 +106,7 @@ if [ "$GPG_SIGN" = "true" ]; then
     if [ "$GPG_FORMAT" = "ssh" ]; then
         echo "IMPORTANT: SSH commit signing detected"
         echo "  - SSH signing requires the SSH agent to be forwarded"
-        echo "  - Use: claude-vm run --forward-ssh-agent"
+        echo "  - Use: claude-vm -A \"your command\""
         if [ -n "$SIGNING_KEY" ]; then
             echo "  - Your signing key: $SIGNING_KEY"
         fi
