@@ -1,3 +1,4 @@
+use crate::agents;
 use crate::capabilities;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
@@ -5,6 +6,7 @@ use crate::project::Project;
 use crate::scripts::runner;
 use crate::vm::{limactl::LimaCtl, mount, template};
 use std::path::Path;
+use std::sync::Arc;
 
 pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Check if Lima is installed
@@ -49,17 +51,31 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Install vm_runtime scripts into template
     capabilities::install_vm_runtime_scripts(project, config)?;
 
-    // Install agent (Claude by default)
-    let agent = &config.defaults.agent;
-    install_agent(project, agent)?;
+    // Load agent from registry
+    let registry = agents::AgentRegistry::load()?;
+    let agent = registry
+        .get(&config.defaults.agent)
+        .ok_or_else(|| {
+            ClaudeVmError::InvalidConfig(format!(
+                "Unknown agent: '{}'. Available agents: {}",
+                config.defaults.agent,
+                registry.list_available().join(", ")
+            ))
+        })?;
+
+    // Verify agent requirements
+    agents::executor::verify_requirements(&agent, config)?;
+
+    // Install agent
+    agents::install_agent(project, &agent)?;
 
     // Configure agent infrastructure
-    store_agent_metadata(project, agent)?;
-    create_agent_deployment_script(project)?;
-    create_agent_wrapper(project)?;
+    store_agent_metadata(project, &agent.agent.id)?;
+    create_agent_deployment_script(project, &agent)?;
+    create_agent_wrapper(project, &agent.agent.command)?;
 
     // Authenticate agent
-    authenticate_agent(project, agent)?;
+    agents::authenticate_agent(project, &agent)?;
 
     // Register all MCP servers from capabilities to registry
     capabilities::register_all_mcp_servers(project, config)?;
@@ -177,94 +193,8 @@ fn install_base_packages(project: &Project) -> Result<()> {
 }
 
 // Removed: install_optional_tools - now handled by capability system
-
-fn install_agent(project: &Project, agent: &str) -> Result<()> {
-    match agent {
-        "claude" => {
-            println!("Installing Claude Code...");
-            LimaCtl::shell(
-                project.template_name(),
-                None,
-                "bash",
-                &["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
-                false,
-            )?;
-
-            // Add to PATH
-            let cmd =
-                r#"echo "export PATH=$HOME/.local/bin:$HOME/.claude/local/bin:$PATH" >> ~/.bashrc"#;
-            LimaCtl::shell(project.template_name(), None, "bash", &["-c", cmd], false)?;
-        }
-        "opencode" => {
-            println!("Installing OpenCode...");
-            // OpenCode can be installed via npm
-            let install_script = r#"
-# Install OpenCode via npm
-if ! command -v npm &> /dev/null; then
-    echo "Error: npm is required to install OpenCode"
-    echo "Please enable the 'node' capability: claude-vm setup --node"
-    exit 1
-fi
-
-npm install -g @opencode-ai/opencode
-
-# Verify installation
-if ! command -v opencode &> /dev/null; then
-    echo "Error: OpenCode installation failed"
-    exit 1
-fi
-
-echo "OpenCode installed successfully"
-"#;
-            LimaCtl::shell(
-                project.template_name(),
-                None,
-                "bash",
-                &["-c", install_script],
-                false,
-            )?;
-        }
-        _ => {
-            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
-                "Unsupported agent: {}. Supported agents: claude, opencode",
-                agent
-            )))
-        }
-    }
-
-    Ok(())
-}
-
-fn authenticate_agent(project: &Project, agent: &str) -> Result<()> {
-    match agent {
-        "claude" => {
-            println!("Setting up Claude authentication...");
-            println!("(This will open a browser window for authentication)");
-
-            LimaCtl::shell(
-                project.template_name(),
-                None,
-                "bash",
-                &["-lc", "claude 'Ok I am logged in, I can exit now.'"],
-                false,
-            )?;
-        }
-        "opencode" => {
-            println!("Setting up OpenCode...");
-            println!("Note: OpenCode may require authentication on first use");
-            println!("Run 'opencode login' if needed");
-            // OpenCode doesn't require upfront authentication like Claude
-            // Authentication happens on first use if needed
-        }
-        _ => {
-            // For unknown agents, skip authentication
-            println!("Skipping authentication for agent: {}", agent);
-        }
-    }
-
-    Ok(())
-}
-
+// Removed: install_agent - now handled by agents module
+// Removed: authenticate_agent - now handled by agents module
 // Removed: configure_chrome_mcp - now handled by capability system
 
 fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
@@ -334,75 +264,14 @@ echo "Agent metadata stored: {}"
     Ok(())
 }
 
-fn create_agent_deployment_script(project: &Project) -> Result<()> {
+fn create_agent_deployment_script(
+    project: &Project,
+    agent: &Arc<agents::Agent>,
+) -> Result<()> {
     println!("Creating agent deployment script...");
 
-    let script = r#"#!/bin/bash
-# Agent deployment functions - auto-generated by claude-vm setup
-
-deploy_context() {
-    local context_file="$1"
-
-    case "$CLAUDE_VM_AGENT" in
-        claude)
-            echo "Deploying context for Claude..."
-            mkdir -p ~/.claude
-            mv "$context_file" ~/.claude/CLAUDE.md
-            ;;
-        opencode)
-            echo "Deploying context for Opencode..."
-            mkdir -p ~/.config/opencode
-            mv "$context_file" ~/.config/opencode/AGENTS.md
-            ;;
-        *)
-            echo "ERROR: Unknown agent: $CLAUDE_VM_AGENT"
-            return 1
-            ;;
-    esac
-}
-
-deploy_mcp() {
-    local mcp_file="$1"
-
-    # Skip if no MCP config provided
-    if [ ! -f "$mcp_file" ]; then
-        echo "No MCP configuration to deploy"
-        return 0
-    fi
-
-    case "$CLAUDE_VM_AGENT" in
-        claude)
-            echo "Deploying MCP config for Claude..."
-            mkdir -p ~/.claude
-            mv "$mcp_file" ~/.claude.json
-            ;;
-        opencode)
-            echo "Deploying MCP config for Opencode..."
-            mkdir -p ~/.config/opencode
-
-            # OpenCode uses opencode.json with mcpServers section
-            if [ -f ~/.config/opencode/opencode.json ]; then
-                # Merge MCP servers into existing config
-                jq -s '.[0] * {mcpServers: .[1].mcpServers}' \
-                    ~/.config/opencode/opencode.json "$mcp_file" \
-                    > ~/.config/opencode/opencode.json.tmp
-                mv ~/.config/opencode/opencode.json.tmp ~/.config/opencode/opencode.json
-                rm "$mcp_file"
-            else
-                # Create new config with MCP servers
-                echo '{}' | jq --slurpfile mcp "$mcp_file" \
-                    '. + {mcpServers: $mcp[0].mcpServers}' \
-                    > ~/.config/opencode/opencode.json
-                rm "$mcp_file"
-            fi
-            ;;
-        *)
-            echo "ERROR: Unknown agent for MCP deployment: $CLAUDE_VM_AGENT"
-            return 1
-            ;;
-    esac
-}
-"#;
+    // Get deployment script content from agent
+    let deploy_content = agents::executor::get_deploy_script_content(agent)?;
 
     let install_script = format!(
         r#"
@@ -414,7 +283,7 @@ sudo mv /tmp/agent-deploy.sh /usr/local/share/claude-vm/agent-deploy.sh
 sudo chmod +rx /usr/local/share/claude-vm/agent-deploy.sh
 echo "Agent deployment script installed"
 "#,
-        script
+        deploy_content
     );
 
     LimaCtl::shell(
@@ -428,23 +297,18 @@ echo "Agent deployment script installed"
     Ok(())
 }
 
-fn create_agent_wrapper(project: &Project) -> Result<()> {
+fn create_agent_wrapper(project: &Project, command: &str) -> Result<()> {
     println!("Creating agent wrapper...");
 
-    let wrapper = r#"#!/bin/bash
+    let wrapper = format!(
+        r#"#!/bin/bash
 # Agent wrapper - auto-generated by claude-vm setup
 
-# Load agent metadata
-if [ -f /usr/local/share/claude-vm/agent ]; then
-    source /usr/local/share/claude-vm/agent
-else
-    echo "ERROR: Agent metadata not found"
-    exit 1
-fi
-
 # Execute the configured agent
-exec "$CLAUDE_VM_AGENT" "$@"
-"#;
+exec {} "$@"
+"#,
+        command
+    );
 
     let install_script = format!(
         r#"
