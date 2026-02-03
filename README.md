@@ -1063,3 +1063,8 @@ For development setup, architecture details, testing instructions, and contribut
 ## License
 
 MIT OR Apache-2.0
+
+## Inspiration
+
+This tool is based on an [idea](https://github.com/sylvinus/agent-vm/) from
+[@sylvinus](https://github.com/sylvinus)
