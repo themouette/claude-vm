@@ -11,26 +11,57 @@ fi
 
 echo "Configuring git in VM..."
 
-# Read git config from host
-GIT_USER_NAME=$(git config --global user.name 2>/dev/null || echo "")
-GIT_USER_EMAIL=$(git config --global user.email 2>/dev/null || echo "")
+# Read git config from host (local config first, then global - matches git behavior)
+# Run in PROJECT_ROOT if available to pick up local config
+if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT" ]; then
+    cd "$PROJECT_ROOT"
+fi
+
+GIT_USER_NAME=$(git config user.name 2>/dev/null || echo "")
+GIT_USER_EMAIL=$(git config user.email 2>/dev/null || echo "")
 
 # Check if git is configured on host
 if [ -z "$GIT_USER_NAME" ] || [ -z "$GIT_USER_EMAIL" ]; then
     echo ""
+    echo "========================================================================="
     echo "WARNING: Git user configuration not found on host"
+    echo "========================================================================="
+    echo ""
     echo "Please configure git identity on your host machine:"
     echo "  git config --global user.name \"Your Name\""
     echo "  git config --global user.email \"your.email@example.com\""
     echo ""
+    echo "Or configure it locally in this repository:"
+    echo "  cd $PROJECT_ROOT"
+    echo "  git config user.name \"Your Name\""
+    echo "  git config user.email \"your.email@example.com\""
+    echo ""
+    echo "========================================================================="
     echo "Skipping git configuration..."
+    echo "========================================================================="
+    echo ""
     exit 0
 fi
 
 # Check for commit signing
-GPG_SIGN=$(git config --global commit.gpgsign 2>/dev/null || echo "false")
-GPG_FORMAT=$(git config --global gpg.format 2>/dev/null || echo "openpgp")
-SIGNING_KEY=$(git config --global user.signingkey 2>/dev/null || echo "")
+GPG_SIGN=$(git config commit.gpgsign 2>/dev/null || echo "false")
+GPG_FORMAT=$(git config gpg.format 2>/dev/null || echo "openpgp")
+SIGNING_KEY=$(git config user.signingkey 2>/dev/null || echo "")
+
+# Show which config is being used
+CONFIG_SCOPE="global"
+if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+    # Check if local config exists and overrides global
+    LOCAL_NAME=$(cd "$PROJECT_ROOT" && git config --local user.name 2>/dev/null || echo "")
+    LOCAL_EMAIL=$(cd "$PROJECT_ROOT" && git config --local user.email 2>/dev/null || echo "")
+    if [ -n "$LOCAL_NAME" ] || [ -n "$LOCAL_EMAIL" ]; then
+        CONFIG_SCOPE="local (project-specific)"
+    fi
+fi
+
+echo "Using git config from: $CONFIG_SCOPE"
+echo "  User: $GIT_USER_NAME"
+echo "  Email: $GIT_USER_EMAIL"
 
 # Write config values to temp files for safe transfer
 TEMP_DIR=$(mktemp -d)
