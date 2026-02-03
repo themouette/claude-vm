@@ -51,7 +51,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Install agent (Claude by default)
     let agent = &config.defaults.agent;
-    install_claude(project)?; // TODO: Make this agent-agnostic
+    install_agent(project, agent)?;
 
     // Configure agent infrastructure
     store_agent_metadata(project, agent)?;
@@ -59,7 +59,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     create_agent_wrapper(project)?;
 
     // Authenticate agent
-    authenticate_claude(project)?; // TODO: Make this agent-agnostic
+    authenticate_agent(project, agent)?;
 
     // Register all MCP servers from capabilities to registry
     capabilities::register_all_mcp_servers(project, config)?;
@@ -178,35 +178,89 @@ fn install_base_packages(project: &Project) -> Result<()> {
 
 // Removed: install_optional_tools - now handled by capability system
 
-fn install_claude(project: &Project) -> Result<()> {
-    println!("Installing Claude Code...");
+fn install_agent(project: &Project, agent: &str) -> Result<()> {
+    match agent {
+        "claude" => {
+            println!("Installing Claude Code...");
+            LimaCtl::shell(
+                project.template_name(),
+                None,
+                "bash",
+                &["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+                false,
+            )?;
 
-    LimaCtl::shell(
-        project.template_name(),
-        None,
-        "bash",
-        &["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
-        false,
-    )?;
+            // Add to PATH
+            let cmd =
+                r#"echo "export PATH=$HOME/.local/bin:$HOME/.claude/local/bin:$PATH" >> ~/.bashrc"#;
+            LimaCtl::shell(project.template_name(), None, "bash", &["-c", cmd], false)?;
+        }
+        "opencode" => {
+            println!("Installing OpenCode...");
+            // OpenCode can be installed via npm
+            let install_script = r#"
+# Install OpenCode via npm
+if ! command -v npm &> /dev/null; then
+    echo "Error: npm is required to install OpenCode"
+    echo "Please enable the 'node' capability: claude-vm setup --node"
+    exit 1
+fi
 
-    // Add to PATH
-    let cmd = r#"echo "export PATH=$HOME/.local/bin:$HOME/.claude/local/bin:$PATH" >> ~/.bashrc"#;
-    LimaCtl::shell(project.template_name(), None, "bash", &["-c", cmd], false)?;
+npm install -g @opencode-ai/opencode
+
+# Verify installation
+if ! command -v opencode &> /dev/null; then
+    echo "Error: OpenCode installation failed"
+    exit 1
+fi
+
+echo "OpenCode installed successfully"
+"#;
+            LimaCtl::shell(
+                project.template_name(),
+                None,
+                "bash",
+                &["-c", install_script],
+                false,
+            )?;
+        }
+        _ => {
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "Unsupported agent: {}. Supported agents: claude, opencode",
+                agent
+            )))
+        }
+    }
 
     Ok(())
 }
 
-fn authenticate_claude(project: &Project) -> Result<()> {
-    println!("Setting up Claude authentication...");
-    println!("(This will open a browser window for authentication)");
+fn authenticate_agent(project: &Project, agent: &str) -> Result<()> {
+    match agent {
+        "claude" => {
+            println!("Setting up Claude authentication...");
+            println!("(This will open a browser window for authentication)");
 
-    LimaCtl::shell(
-        project.template_name(),
-        None,
-        "bash",
-        &["-lc", "claude 'Ok I am logged in, I can exit now.'"],
-        false,
-    )?;
+            LimaCtl::shell(
+                project.template_name(),
+                None,
+                "bash",
+                &["-lc", "claude 'Ok I am logged in, I can exit now.'"],
+                false,
+            )?;
+        }
+        "opencode" => {
+            println!("Setting up OpenCode...");
+            println!("Note: OpenCode may require authentication on first use");
+            println!("Run 'opencode login' if needed");
+            // OpenCode doesn't require upfront authentication like Claude
+            // Authentication happens on first use if needed
+        }
+        _ => {
+            // For unknown agents, skip authentication
+            println!("Skipping authentication for agent: {}", agent);
+        }
+    }
 
     Ok(())
 }
