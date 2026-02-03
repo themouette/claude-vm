@@ -73,7 +73,7 @@ export SOME_VAR=value
 id = "server-name"
 command = "npx"
 args = ["-y", "package@latest"]
-enabled_when = "node"  # Only if another capability is enabled
+enabled_when = "other-capability"  # Optional: Only if another capability is enabled
 
 # Optional: Declare forwarding requirements
 [[forwards]]
@@ -95,7 +95,7 @@ Installs Python 3 with pip and development tools.
 
 ### chromium
 Installs Chromium browser for headless automation and testing.
-Registers the Chrome DevTools MCP server when Node.js is also enabled.
+Registers the Chrome DevTools MCP server (requires Node.js/npm to be available).
 
 ### gpg
 Enables GPG agent forwarding from host to VM (experimental).

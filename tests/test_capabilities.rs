@@ -55,7 +55,7 @@ fn test_mcp_servers() {
 fn test_mcp_conditional_enable() {
     let registry = CapabilityRegistry::load().expect("Failed to load registry");
 
-    // Enable chromium but NOT node
+    // Enable chromium but NOT node capability (user may install node manually)
     let mut config = Config::default();
     config.tools.chromium = true;
     config.tools.node = false;
@@ -64,11 +64,12 @@ fn test_mcp_conditional_enable() {
         .get_mcp_servers(&config)
         .expect("Failed to get MCP servers");
 
-    // Chrome DevTools MCP should NOT be registered (requires node)
+    // Chrome DevTools MCP should be registered even without node capability
+    // (user may install node manually in setup scripts)
     let has_chrome_devtools = mcp_servers.iter().any(|s| s.id == "chrome-devtools");
     assert!(
-        !has_chrome_devtools,
-        "Chrome DevTools MCP should NOT be registered when node is disabled"
+        has_chrome_devtools,
+        "Chrome DevTools MCP should be registered when chromium is enabled (node installed manually)"
     );
 }
 
