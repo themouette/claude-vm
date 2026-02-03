@@ -146,19 +146,51 @@ pub struct ContextConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultsConfig {
-    #[serde(default = "default_claude_args")]
+    /// Agent to install and use (claude, opencode, etc.)
+    #[serde(default = "default_agent")]
+    pub agent: String,
+
+    /// Arguments to pass to the agent
+    #[serde(default = "default_agent_args")]
+    pub agent_args: Vec<String>,
+
+    /// DEPRECATED: Use agent_args instead
+    /// Kept for backward compatibility, will be migrated automatically
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub claude_args: Vec<String>,
 }
 
 impl Default for DefaultsConfig {
     fn default() -> Self {
         Self {
-            claude_args: default_claude_args(),
+            agent: default_agent(),
+            agent_args: default_agent_args(),
+            claude_args: Vec::new(),
         }
     }
 }
 
-fn default_claude_args() -> Vec<String> {
+impl DefaultsConfig {
+    /// Migrate old claude_args to agent_args if needed
+    pub fn migrate(&mut self) {
+        if !self.claude_args.is_empty() && self.agent == "claude" {
+            if self.agent_args == default_agent_args() {
+                // Only default args, replace with claude_args
+                self.agent_args = self.claude_args.clone();
+            } else {
+                // Custom args already set, append claude_args
+                self.agent_args.extend(self.claude_args.iter().cloned());
+            }
+            self.claude_args.clear();
+        }
+    }
+}
+
+fn default_agent() -> String {
+    "claude".to_string()
+}
+
+fn default_agent_args() -> Vec<String> {
     vec!["--dangerously-skip-permissions".to_string()]
 }
 
@@ -205,6 +237,9 @@ impl Config {
         // 4. Resolve context file if needed
         config = config.resolve_context_file()?;
 
+        // 5. Migrate deprecated config fields
+        config.defaults.migrate();
+
         Ok(config)
     }
 
@@ -237,7 +272,15 @@ impl Config {
         self.setup.scripts.extend(other.setup.scripts);
         self.runtime.scripts.extend(other.runtime.scripts);
 
-        // Default Claude args (append)
+        // Agent (replace if not default)
+        if other.defaults.agent != default_agent() {
+            self.defaults.agent = other.defaults.agent;
+        }
+
+        // Agent args (append)
+        self.defaults.agent_args.extend(other.defaults.agent_args);
+
+        // Claude args (append - deprecated)
         self.defaults.claude_args.extend(other.defaults.claude_args);
 
         // Context (replace if not empty)
