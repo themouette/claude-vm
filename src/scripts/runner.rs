@@ -139,8 +139,8 @@ fn generate_base_context(config: &Config) -> Result<String> {
     let mut context = String::new();
 
     // Header
-    context.push_str("<!-- claude-vm-context-start -->\n");
-    context.push_str("# Claude VM Context\n\n");
+    context.push_str("<!-- vm-context-start -->\n");
+    context.push_str("# VM Context\n\n");
     context
         .push_str("You are running in an isolated Lima VM with the following configuration.\n\n");
 
@@ -191,8 +191,8 @@ fn generate_base_context(config: &Config) -> Result<String> {
     }
 
     // Placeholder for runtime context
-    context.push_str("<!-- claude-vm-context-runtime-placeholder -->\n");
-    context.push_str("<!-- claude-vm-context-end -->\n");
+    context.push_str("<!-- vm-context-runtime-placeholder -->\n");
+    context.push_str("<!-- vm-context-end -->\n");
 
     Ok(context)
 }
@@ -319,9 +319,24 @@ pub fn execute_command_with_runtime_scripts(
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
 
+    // Load agent metadata
+    entrypoint.push_str("# Load agent metadata\n");
+    entrypoint.push_str("if [ -f /usr/local/share/claude-vm/agent ]; then\n");
+    entrypoint.push_str("    source /usr/local/share/claude-vm/agent\n");
+    entrypoint.push_str("else\n");
+    entrypoint.push_str("    echo 'ERROR: Agent metadata not found'\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("AGENT=\"${CLAUDE_VM_AGENT:-claude}\"\n");
+    entrypoint.push_str("echo \"Using agent: $AGENT\"\n\n");
+
+    // Source agent deployment functions
+    entrypoint.push_str("# Load agent deployment functions\n");
+    entrypoint.push_str("source /usr/local/share/claude-vm/agent-deploy.sh\n\n");
+
     // Create context directory for runtime scripts
     entrypoint.push_str("# Create context directory for runtime scripts\n");
-    entrypoint.push_str("mkdir -p ~/.claude-vm/context ~/.claude\n\n");
+    entrypoint.push_str("mkdir -p ~/.claude-vm/context\n\n");
 
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
@@ -348,66 +363,43 @@ pub fn execute_command_with_runtime_scripts(
         entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
     }
 
-    // Generate final CLAUDE.md with runtime context
-    entrypoint.push_str("# Generate final CLAUDE.md with runtime context\n");
-    entrypoint.push_str(&format!(
-        "cp {} ~/.claude/CLAUDE.md.new\n\n",
-        vm_context_path
-    ));
+    // Build final context with runtime outputs
+    entrypoint.push_str("# Build final context with runtime outputs\n");
+    entrypoint.push_str(&format!("cp {} /tmp/context.md\n\n", vm_context_path));
 
+    // Merge runtime script outputs
     entrypoint.push_str("# Add runtime script results if any exist\n");
-    entrypoint.push_str("if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
-    entrypoint.push_str("  # Insert runtime context section header\n");
-    entrypoint.push_str("  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
-
-    entrypoint.push_str("  # Add each context file\n");
+    entrypoint.push_str("if [ -d ~/.claude-vm/context ] && [ -n \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
+    entrypoint.push_str("  sed -i '/<!-- vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' /tmp/context.md\n");
     entrypoint.push_str("  for context_file in ~/.claude-vm/context/*.txt; do\n");
-    entrypoint.push_str("    if [ -f \"$context_file\" ]; then\n");
-    entrypoint.push_str("      name=$(basename \"$context_file\" .txt)\n");
-    entrypoint.push_str("      # Insert subsection header\n");
-    entrypoint.push_str("      sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      # Insert file contents\n");
-    entrypoint.push_str("      sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      # Add blank line after content\n");
-    entrypoint.push_str("      sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("    fi\n");
+    entrypoint.push_str("    [ -f \"$context_file\" ] || continue\n");
+    entrypoint.push_str("    name=$(basename \"$context_file\" .txt)\n");
+    entrypoint.push_str(
+        "    sed -i \"/<!-- vm-context-runtime-placeholder -->/i ### $name\\n\" /tmp/context.md\n",
+    );
+    entrypoint.push_str("    sed -i \"/### $name/r $context_file\" /tmp/context.md\n");
+    entrypoint.push_str("    sed -i \"/### $name/a \\\\\" /tmp/context.md\n");
     entrypoint.push_str("  done\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("sed -i '/<!-- vm-context-runtime-placeholder -->/d' /tmp/context.md\n\n");
+
+    // Deploy context to agent-specific location
+    entrypoint.push_str("# Deploy context to agent-specific location\n");
+    entrypoint.push_str("deploy_context /tmp/context.md || exit 1\n\n");
+
+    // Collect and deploy MCP configuration
+    entrypoint.push_str("# Collect and deploy MCP configuration\n");
+    entrypoint.push_str("if [ -d /usr/local/share/claude-vm/mcp.d ] && [ -n \"$(ls -A /usr/local/share/claude-vm/mcp.d/*.json 2>/dev/null)\" ]; then\n");
+    entrypoint.push_str("  echo 'Deploying MCP configuration...'\n");
+    entrypoint.push_str("  jq -s 'reduce .[] as $item ({}; .mcpServers += $item.mcpServers)' \\\n");
+    entrypoint.push_str("    /usr/local/share/claude-vm/mcp.d/*.json > /tmp/mcp.json\n");
+    entrypoint.push_str("  deploy_mcp /tmp/mcp.json || exit 1\n");
     entrypoint.push_str("fi\n\n");
 
-    entrypoint.push_str("# Remove the placeholder marker\n");
-    entrypoint.push_str(
-        "sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
-    );
-
-    entrypoint.push_str("# Merge with existing CLAUDE.md if present\n");
-    entrypoint.push_str("if [ -f ~/.claude/CLAUDE.md ]; then\n");
-    entrypoint
-        .push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
-    entrypoint
-        .push_str("    # Replace content between markers, preserving user content position\n");
-    entrypoint.push_str("    awk '\n");
-    entrypoint.push_str("      /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
-    entrypoint.push_str("      /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
-    entrypoint.push_str("      !skip\n");
-    entrypoint.push_str("    ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
-    entrypoint.push_str(
-        "    cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md\n",
-    );
-    entrypoint.push_str("  else\n");
-    entrypoint.push_str("    # Append our context to existing content\n");
-    entrypoint.push_str(
-        "    cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
-    );
-    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("  fi\n");
-    entrypoint.push_str("else\n");
-    entrypoint.push_str("  # No existing file, use our generated context\n");
-    entrypoint.push_str("  mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("fi\n\n");
-
+    // Cleanup temp files
     entrypoint.push_str("# Cleanup temporary files\n");
     entrypoint.push_str(&format!(
-        "rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old {}\n\n",
+        "rm -f {} /tmp/context.md /tmp/mcp.json\n\n",
         vm_context_path
     ));
 
@@ -625,12 +617,12 @@ mod tests {
         let context = generate_base_context(&config).unwrap();
 
         // Verify HTML markers
-        assert!(context.contains("<!-- claude-vm-context-start -->"));
-        assert!(context.contains("<!-- claude-vm-context-end -->"));
-        assert!(context.contains("<!-- claude-vm-context-runtime-placeholder -->"));
+        assert!(context.contains("<!-- vm-context-start -->"));
+        assert!(context.contains("<!-- vm-context-end -->"));
+        assert!(context.contains("<!-- vm-context-runtime-placeholder -->"));
 
         // Verify sections
-        assert!(context.contains("# Claude VM Context"));
+        assert!(context.contains("# VM Context"));
         assert!(context.contains("## VM Configuration"));
         assert!(context.contains("## Enabled Capabilities"));
         assert!(context.contains("## Mounted Directories"));

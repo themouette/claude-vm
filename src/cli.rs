@@ -9,9 +9,9 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
 
-    /// Arguments to pass to Claude (when no subcommand)
+    /// Arguments to pass to the agent (when no subcommand)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-    pub claude_args: Vec<String>,
+    pub agent_args: Vec<String>,
 
     /// Runtime script to execute before starting
     #[arg(long = "runtime-script", global = true)]
