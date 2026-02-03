@@ -1068,3 +1068,5 @@ MIT OR Apache-2.0
 
 This tool is based on an [idea](https://github.com/sylvinus/agent-vm/) from
 [@sylvinus](https://github.com/sylvinus)
+
+Thanks to [@babbins](https://github.com/babbins) for the catch-phrase
