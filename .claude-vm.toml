@@ -11,7 +11,7 @@ ssh = false
 # Standard scripts are auto-detected, no config needed:
 #   - ~/.claude-vm.setup.sh (global)
 #   - ./.claude-vm.setup.sh (project root)
-scripts = ["./bin/setup"]
+scripts = []
 
 [context]
 # Load context
