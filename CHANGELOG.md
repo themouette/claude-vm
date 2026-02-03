@@ -4,6 +4,17 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+#### Capabilities
+
+- **Git configuration**: New capability that configures git identity (user.name, user.email) and commit signing from host configuration
+  - Automatically copies git user configuration from host to VM
+  - Detects and configures GPG or SSH commit signing
+  - Shows contextual warnings for signing requirements (GPG capability or SSH agent forwarding)
+  - Generates runtime context for Claude about git configuration
+  - Gracefully handles missing git configuration on host
+
 ### Fixed
 
 - **Tilde expansion with usernames**: Fixed limitation in path expansion to support `~username/path` syntax in addition to `~/path`. Mount specifications and config file paths can now reference other users' home directories (e.g., `~root/.ssh`)

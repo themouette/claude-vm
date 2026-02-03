@@ -84,6 +84,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub gh: bool,
+
+    #[serde(default)]
+    pub git: bool,
 }
 
 impl ToolsConfig {
@@ -96,6 +99,7 @@ impl ToolsConfig {
             "chromium" => self.chromium,
             "gpg" => self.gpg,
             "gh" => self.gh,
+            "git" => self.git,
             _ => false,
         }
     }
@@ -109,6 +113,7 @@ impl ToolsConfig {
             "chromium" => self.chromium = true,
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
+            "git" => self.git = true,
             _ => {}
         }
     }

@@ -37,6 +37,7 @@ impl CapabilityRegistry {
                 include_str!("../../capabilities/gpg/capability.toml"),
             ),
             ("gh", include_str!("../../capabilities/gh/capability.toml")),
+            ("git", include_str!("../../capabilities/git/capability.toml")),
         ];
 
         for (id, content) in CAPABILITY_FILES {
