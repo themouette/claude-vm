@@ -75,7 +75,7 @@ EXAMPLES:
 
 WHAT IT DOES:
     1. Validates version format (semantic versioning)
-    2. Checks git working tree is clean
+    2. Checks release-critical files are clean (Cargo.toml, Cargo.lock, CHANGELOG.md)
     3. Verifies you're on the main branch
     4. Runs all tests (cargo test --all)
     5. Runs clippy (cargo clippy -- -D warnings)
@@ -85,7 +85,7 @@ WHAT IT DOES:
     9. Pushes to remote (triggers GitHub Actions release)
 
 REQUIREMENTS:
-    - Clean git working tree (no uncommitted changes)
+    - No uncommitted changes to Cargo.toml, Cargo.lock, or CHANGELOG.md
     - All tests passing
     - No clippy warnings
     - Git remote configured
@@ -204,15 +204,32 @@ bump_version() {
 
 # Check if working directory is clean
 check_working_tree() {
-  log_info "Checking git working tree..."
+  log_info "Checking release-critical files..."
 
-  if ! git diff-index --quiet HEAD --; then
-    log_error "Working tree is not clean. Please commit or stash your changes."
-    git status --short
+  # Only check files that the release script will modify
+  local critical_files=(
+    "Cargo.toml"
+    "Cargo.lock"
+    "CHANGELOG.md"
+  )
+
+  local has_changes=false
+  for file in "${critical_files[@]}"; do
+    if [ -f "$PROJECT_ROOT/$file" ]; then
+      if ! git diff-index --quiet HEAD -- "$PROJECT_ROOT/$file"; then
+        log_error "File has uncommitted changes: $file"
+        has_changes=true
+      fi
+    fi
+  done
+
+  if [ "$has_changes" = true ]; then
+    log_error "Release-critical files have uncommitted changes. Please commit or stash them."
+    git status --short -- "${critical_files[@]}"
     exit 1
   fi
 
-  log_success "Working tree is clean"
+  log_success "Release-critical files are clean"
 }
 
 # Check if we're on main branch
