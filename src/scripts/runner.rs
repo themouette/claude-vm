@@ -330,7 +330,9 @@ pub fn execute_command_with_runtime_scripts(
     // Load agent metadata
     entrypoint.push_str("# Load agent metadata\n");
     entrypoint.push_str("if [ ! -f /usr/local/share/claude-vm/agent ]; then\n");
-    entrypoint.push_str("    echo 'ERROR: Agent metadata file not found at /usr/local/share/claude-vm/agent' >&2\n");
+    entrypoint.push_str(
+        "    echo 'ERROR: Agent metadata file not found at /usr/local/share/claude-vm/agent' >&2\n",
+    );
     entrypoint.push_str("    exit 1\n");
     entrypoint.push_str("fi\n");
     entrypoint.push_str("if ! source /usr/local/share/claude-vm/agent; then\n");
@@ -353,7 +355,9 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("    echo 'ERROR: Failed to source agent deployment script' >&2\n");
     entrypoint.push_str("    exit 1\n");
     entrypoint.push_str("fi\n");
-    entrypoint.push_str("if ! declare -f deploy_context >/dev/null || ! declare -f deploy_mcp >/dev/null; then\n");
+    entrypoint.push_str(
+        "if ! declare -f deploy_context >/dev/null || ! declare -f deploy_mcp >/dev/null; then\n",
+    );
     entrypoint.push_str("    echo 'ERROR: Agent deployment script must define deploy_context and deploy_mcp functions' >&2\n");
     entrypoint.push_str("    exit 1\n");
     entrypoint.push_str("fi\n\n");
@@ -365,15 +369,14 @@ pub fn execute_command_with_runtime_scripts(
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
-    entrypoint.push_str(&format!(
-        "  shopt -s nullglob  # Make glob expand to nothing if no matches\n"
-    ));
+    entrypoint.push_str("  shopt -s nullglob  # Make glob expand to nothing if no matches\n");
     entrypoint.push_str(&format!(
         "  for script in {}/*.sh; do\n",
         RUNTIME_SCRIPT_DIR
     ));
     entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
-    entrypoint.push_str("      . \"$script\" 2>&1 || echo \"⚠ Warning: Failed to source $script\" >&2\n");
+    entrypoint
+        .push_str("      . \"$script\" 2>&1 || echo \"⚠ Warning: Failed to source $script\" >&2\n");
     entrypoint.push_str("    fi\n");
     entrypoint.push_str("  done\n");
     entrypoint.push_str("  shopt -u nullglob  # Restore default behavior\n");

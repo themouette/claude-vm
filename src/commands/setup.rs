@@ -59,15 +59,13 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Load agent from registry
     let registry = agents::AgentRegistry::load()?;
-    let agent = registry
-        .get(&config.defaults.agent)
-        .ok_or_else(|| {
-            ClaudeVmError::InvalidConfig(format!(
-                "Unknown agent: '{}'. Available agents: {}",
-                config.defaults.agent,
-                registry.list_available().join(", ")
-            ))
-        })?;
+    let agent = registry.get(&config.defaults.agent).ok_or_else(|| {
+        ClaudeVmError::InvalidConfig(format!(
+            "Unknown agent: '{}'. Available agents: {}",
+            config.defaults.agent,
+            registry.list_available().join(", ")
+        ))
+    })?;
 
     // Verify agent requirements
     agents::executor::verify_requirements(&agent, config)?;
@@ -270,10 +268,7 @@ echo "Agent metadata stored: {}"
     Ok(())
 }
 
-fn create_agent_deployment_script(
-    project: &Project,
-    agent: &Arc<agents::Agent>,
-) -> Result<()> {
+fn create_agent_deployment_script(project: &Project, agent: &Arc<agents::Agent>) -> Result<()> {
     println!("Creating agent deployment script...");
 
     // Get deployment script content from agent
@@ -307,7 +302,11 @@ fn create_agent_wrapper(project: &Project, command: &str) -> Result<()> {
     println!("Creating agent wrapper...");
 
     // Validate command contains no dangerous characters
-    if command.contains(';') || command.contains('&') || command.contains('|') || command.contains('\n') {
+    if command.contains(';')
+        || command.contains('&')
+        || command.contains('|')
+        || command.contains('\n')
+    {
         return Err(ClaudeVmError::InvalidConfig(format!(
             "Agent command contains unsafe characters: '{}'",
             command

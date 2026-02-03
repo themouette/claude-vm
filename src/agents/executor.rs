@@ -5,7 +5,6 @@ use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
-use crate::vm::limactl::LimaCtl;
 use std::sync::Arc;
 
 /// Execute an agent's installation script
