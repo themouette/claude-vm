@@ -110,6 +110,25 @@ Install all tools:
 claude-vm setup --all
 ```
 
+### Choose Your Agent
+
+Claude VM supports multiple AI coding agents. By default, it uses Claude Code, but you can choose alternatives:
+
+```bash
+# Use Claude Code (default)
+claude-vm setup --git
+
+# Use OpenCode (requires Node.js)
+claude-vm setup --agent opencode --node --git
+```
+
+**Available agents:**
+
+- **claude** (default): Official Claude Code agent with MCP support
+- **opencode**: Open-source alternative (requires `--node` capability)
+
+The agent choice is stored in the template and used automatically at runtime. Each agent has its own configuration paths and context files, ensuring proper isolation.
+
 ### Run Claude
 
 Run Claude in an ephemeral VM:
@@ -329,32 +348,51 @@ Each enabled capability automatically provides context to Claude about its statu
 claude-vm setup --all  # Installs all tools
 ```
 
-### Default Claude Arguments
+### Agent Selection
 
-Claude VM automatically passes `--dangerously-skip-permissions` to Claude by default, since the VM provides a safe isolation boundary.
+Choose which AI coding agent to use:
+
+```toml
+[defaults]
+agent = "claude"  # Options: "claude" (default), "opencode"
+```
+
+The agent must be set during setup and cannot be changed at runtime. To switch agents, run `claude-vm clean` and then `claude-vm setup --agent <name>` again.
+
+**Agent-specific requirements:**
+
+- **claude**: No additional requirements (works out of the box)
+- **opencode**: Requires Node.js (enable with `--node` flag or `tools.node = true`)
+
+### Default Agent Arguments
+
+Claude VM automatically passes `--dangerously-skip-permissions` to the agent by default, since the VM provides a safe isolation boundary.
 
 You can add additional arguments or override the defaults:
 
 ```toml
 [defaults]
-claude_args = [
+agent_args = [
     "--dangerously-skip-permissions",  # Enabled by default
     "--max-tokens", "4096"              # Add custom args
 ]
+
+# Legacy option (deprecated but still supported):
+# claude_args = ["--dangerously-skip-permissions"]
 ```
 
 These are added to every `claude-vm` invocation:
 
 ```bash
 claude-vm "help me"
-# Equivalent to: claude "help me" --dangerously-skip-permissions --max-tokens 4096
+# Equivalent to: <agent> "help me" --dangerously-skip-permissions --max-tokens 4096
 ```
 
 To disable permission bypass (not recommended), set an empty array:
 
 ```toml
 [defaults]
-claude_args = []
+agent_args = []
 ```
 
 ### Claude Context Instructions
@@ -711,6 +749,7 @@ This shows:
 
 ### Setup Options
 
+- `--agent <NAME>` - Choose which AI agent to use (default: claude, options: claude, opencode)
 - `--docker` - Install Docker
 - `--node` - Install Node.js
 - `--python` - Install Python

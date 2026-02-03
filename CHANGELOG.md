@@ -4,9 +4,32 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+#### Agent System
+
+- **Multi-agent support**: Claude VM now supports multiple AI coding agents beyond Claude Code. You can select which agent to use during setup with the `--agent` flag.
+- **Supported agents**:
+  - **Claude Code** (default): The official Claude coding agent with MCP support
+  - **OpenCode**: Open-source alternative agent (requires Node.js)
+- **Modular agent architecture**: New TOML-based agent definition system makes it easy to add support for additional agents. Each agent can specify:
+  - Installation scripts and requirements
+  - Authentication flows
+  - Deployment functions for agent-specific paths (e.g., `~/.claude/CLAUDE.md` vs `~/.config/opencode/AGENTS.md`)
+  - MCP configuration locations
+  - Required capabilities
+- **Agent selection**: Use `--agent <name>` flag during setup to choose your preferred agent. The choice is stored in the template and used consistently at runtime.
+- **Agent registry**: Agents are loaded from embedded definitions in the `agents/` directory, with compile-time validation
+- **Agent-specific context**: VM context and MCP configuration are automatically deployed to agent-specific locations using deployment functions
+- **Agent validation**: Comprehensive validation ensures agent definitions are complete and all required scripts exist
+- **Security improvements**: Added validation and shell-escaping for agent commands, proper error handling throughout the agent lifecycle
+
 ### Fixed
 
 - **Chromium MCP server**: Removed `enabled_when = "node"` condition from chromium capability's MCP server configuration. The chrome-devtools MCP server now registers whenever chromium is enabled, allowing users who install Node.js manually in setup scripts to use the MCP functionality without enabling the node capability.
+- **Resource management**: Fixed context file resource leak where temporary files on the host were not cleaned up after copying to VM
+- **Error handling**: Improved error handling for agent metadata loading, deployment script sourcing, and capability runtime scripts with proper exit codes and stderr output
+- **Configuration migration**: Deprecated `claude_args` config option migrated to `agent_args` with automatic migration for backward compatibility
 
 ## [0.2.2] - 2026-02-03
 
