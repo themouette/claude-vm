@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
 
 permissions:
   contents: write
@@ -95,25 +95,35 @@ jobs:
           body: |
             ## Installation
 
-            ### macOS
+            ### All in one script
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
+            ```
+
+            ### Update From Existing Installation
+            ```bash
+            claude-vm update
+            ```
+
+            ### macOS (manual)
             ```bash
             # Apple Silicon (M1/M2)
-            curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-aarch64.tar.gz | tar xz
+            curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-aarch64.tar.gz | tar xz
             sudo mv claude-vm /usr/local/bin/
 
             # Intel
-            curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-x86_64.tar.gz | tar xz
+            curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-x86_64.tar.gz | tar xz
             sudo mv claude-vm /usr/local/bin/
             ```
 
-            ### Linux
+            ### Linux (manual)
             ```bash
             # x86_64
-            curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-x86_64.tar.gz | tar xz
+            curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-x86_64.tar.gz | tar xz
             sudo mv claude-vm /usr/local/bin/
 
             # ARM64
-            curl -L https://github.com/YOUR_USERNAME/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-aarch64.tar.gz | tar xz
+            curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-aarch64.tar.gz | tar xz
             sudo mv claude-vm /usr/local/bin/
             ```
 
