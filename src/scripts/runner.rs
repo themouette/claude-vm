@@ -276,7 +276,15 @@ pub fn execute_command_with_runtime_scripts(
 
     // Copy context to VM with unique name to avoid race conditions
     let vm_context_path = format!("/tmp/claude-vm-context-base-{}.md", pid);
-    LimaCtl::copy(&context_file, vm_name, &vm_context_path)?;
+    let copy_result = LimaCtl::copy(&context_file, vm_name, &vm_context_path);
+
+    // Cleanup host temp file immediately after copy attempt
+    if let Err(e) = std::fs::remove_file(&context_file) {
+        eprintln!("⚠ Warning: Failed to cleanup context file: {}", e);
+    }
+
+    // Propagate copy error after cleanup
+    copy_result?;
 
     // Copy all scripts to VM with unique names
     let mut vm_script_paths = Vec::new();
@@ -321,18 +329,34 @@ pub fn execute_command_with_runtime_scripts(
 
     // Load agent metadata
     entrypoint.push_str("# Load agent metadata\n");
-    entrypoint.push_str("if [ -f /usr/local/share/claude-vm/agent ]; then\n");
-    entrypoint.push_str("    source /usr/local/share/claude-vm/agent\n");
-    entrypoint.push_str("else\n");
-    entrypoint.push_str("    echo 'ERROR: Agent metadata not found'\n");
+    entrypoint.push_str("if [ ! -f /usr/local/share/claude-vm/agent ]; then\n");
+    entrypoint.push_str("    echo 'ERROR: Agent metadata file not found at /usr/local/share/claude-vm/agent' >&2\n");
     entrypoint.push_str("    exit 1\n");
     entrypoint.push_str("fi\n");
-    entrypoint.push_str("AGENT=\"${CLAUDE_VM_AGENT:-claude}\"\n");
-    entrypoint.push_str("echo \"Using agent: $AGENT\"\n\n");
+    entrypoint.push_str("if ! source /usr/local/share/claude-vm/agent; then\n");
+    entrypoint.push_str("    echo 'ERROR: Failed to source agent metadata' >&2\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("if [ -z \"${CLAUDE_VM_AGENT:-}\" ]; then\n");
+    entrypoint.push_str("    echo 'ERROR: CLAUDE_VM_AGENT not set in metadata file' >&2\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("echo \"Using agent: $CLAUDE_VM_AGENT\"\n\n");
 
     // Source agent deployment functions
     entrypoint.push_str("# Load agent deployment functions\n");
-    entrypoint.push_str("source /usr/local/share/claude-vm/agent-deploy.sh\n\n");
+    entrypoint.push_str("if [ ! -f /usr/local/share/claude-vm/agent-deploy.sh ]; then\n");
+    entrypoint.push_str("    echo 'ERROR: Agent deployment script not found at /usr/local/share/claude-vm/agent-deploy.sh' >&2\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("if ! source /usr/local/share/claude-vm/agent-deploy.sh; then\n");
+    entrypoint.push_str("    echo 'ERROR: Failed to source agent deployment script' >&2\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n");
+    entrypoint.push_str("if ! declare -f deploy_context >/dev/null || ! declare -f deploy_mcp >/dev/null; then\n");
+    entrypoint.push_str("    echo 'ERROR: Agent deployment script must define deploy_context and deploy_mcp functions' >&2\n");
+    entrypoint.push_str("    exit 1\n");
+    entrypoint.push_str("fi\n\n");
 
     // Create context directory for runtime scripts
     entrypoint.push_str("# Create context directory for runtime scripts\n");
@@ -342,13 +366,17 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
     entrypoint.push_str(&format!(
+        "  shopt -s nullglob  # Make glob expand to nothing if no matches\n"
+    ));
+    entrypoint.push_str(&format!(
         "  for script in {}/*.sh; do\n",
         RUNTIME_SCRIPT_DIR
     ));
     entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
-    entrypoint.push_str("      . \"$script\" 2>&1 || echo \"Warning: Failed to source $script\"\n");
+    entrypoint.push_str("      . \"$script\" 2>&1 || echo \"⚠ Warning: Failed to source $script\" >&2\n");
     entrypoint.push_str("    fi\n");
     entrypoint.push_str("  done\n");
+    entrypoint.push_str("  shopt -u nullglob  # Restore default behavior\n");
     entrypoint.push_str("fi\n\n");
 
     // Then run user runtime scripts
