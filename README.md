@@ -1,13 +1,13 @@
 # Claude VM
 
-**Run Claude Code in isolated, reproducible Linux environments on macOS and Linux.**
+**Run claude in --dangerously-skip-permissions without worrying**
 
 Claude VM gives you:
 
 - **Safety**: Each Claude session runs in a fresh, sandboxed VM that's destroyed after use
 - **Reproducibility**: Template VMs ensure consistent environments across runs
 - **Flexibility**: Pre-configure tools (Docker, Node.js, Python, Chromium) once, use everywhere
-- **Simplicity**: One command to set up, one command to run
+- **Simplicity**: One command to set up, one command to run isolated, reproducible Linux environments on macOS and Linux
 
 ## Quick Start
 
