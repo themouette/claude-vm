@@ -1,6 +1,6 @@
 [package]
 name = "claude-vm"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Claude VM Contributors"]
 description = "Run Claude Code inside sandboxed Lima VMs"
