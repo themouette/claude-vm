@@ -80,8 +80,9 @@ WHAT IT DOES:
     4. Runs all tests (cargo test --all)
     5. Runs clippy (cargo clippy -- -D warnings)
     6. Updates version in Cargo.toml and Cargo.lock
-    7. Creates git commit and annotated tag
-    8. Pushes to remote (triggers GitHub Actions release)
+    7. Updates CHANGELOG.md with new version and release date
+    8. Creates git commit and annotated tag
+    9. Pushes to remote (triggers GitHub Actions release)
 
 REQUIREMENTS:
     - Clean git working tree (no uncommitted changes)
@@ -288,6 +289,70 @@ update_version() {
   log_success "Version updated to $new_version"
 }
 
+# Update CHANGELOG.md with new version
+update_changelog() {
+  local new_version=$1
+  local changelog="$PROJECT_ROOT/CHANGELOG.md"
+
+  log_info "Updating CHANGELOG.md to version $new_version..."
+
+  if [ ! -f "$changelog" ]; then
+    log_warning "CHANGELOG.md not found, skipping changelog update"
+    return
+  fi
+
+  # Get current date in YYYY-MM-DD format
+  local release_date=$(date +%Y-%m-%d)
+
+  # Get the current latest version from the changelog
+  local prev_version=$(grep -m1 '^\[[0-9]' "$changelog" | sed 's/^\[\([0-9.]*\)\]:.*/\1/')
+
+  if [ -z "$prev_version" ]; then
+    log_warning "Could not determine previous version from changelog"
+    return
+  fi
+
+  # Create temporary file
+  local temp_file=$(mktemp)
+
+  # Process the changelog
+  awk -v version="$new_version" -v prev="$prev_version" -v date="$release_date" '
+    BEGIN {
+      unreleased_replaced = 0
+      unreleased_link_updated = 0
+    }
+
+    # Replace first [Unreleased] header with both Unreleased and new version
+    /^## \[Unreleased\]$/ {
+      if (unreleased_replaced == 0) {
+        print "## [Unreleased]"
+        print ""
+        print "## [" version "] - " date
+        unreleased_replaced = 1
+        next
+      }
+    }
+
+    # Update [Unreleased] comparison link and add new version link
+    /^\[Unreleased\]:/ {
+      if (unreleased_link_updated == 0) {
+        print "[Unreleased]: https://github.com/themouette/claude-vm/compare/v" version "...HEAD"
+        print "[" version "]: https://github.com/themouette/claude-vm/compare/v" prev "...v" version
+        unreleased_link_updated = 1
+        next
+      }
+    }
+
+    # Print all other lines as-is
+    { print }
+  ' "$changelog" > "$temp_file"
+
+  # Replace the original file
+  mv "$temp_file" "$changelog"
+
+  log_success "CHANGELOG.md updated with version $new_version (previous: $prev_version)"
+}
+
 # Create git commit and tag
 create_release() {
   local version=$1
@@ -295,8 +360,11 @@ create_release() {
 
   log_info "Creating release commit and tag..."
 
-  # Commit version bump
+  # Commit version bump (include CHANGELOG.md if it exists and was modified)
   git add "$PROJECT_ROOT/Cargo.toml" "$PROJECT_ROOT/Cargo.lock"
+  if [ -f "$PROJECT_ROOT/CHANGELOG.md" ]; then
+    git add "$PROJECT_ROOT/CHANGELOG.md"
+  fi
   git commit -m "Release version $version"
 
   # Create annotated tag
@@ -444,8 +512,11 @@ main() {
   run_tests
   run_clippy
 
-  # Update version and create release
+  # Update version and changelog
   update_version "$new_version"
+  update_changelog "$new_version"
+
+  # Create release
   create_release "$new_version"
 
   # Push to remote
