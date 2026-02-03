@@ -85,16 +85,35 @@ pub fn get_mcp_servers(config: &Config) -> Result<Vec<definition::McpServer>> {
     registry.get_mcp_servers(config)
 }
 
-/// Configure all MCP servers in the VM's .claude.json
-pub fn configure_mcp_servers(project: &Project, config: &Config) -> Result<()> {
-    let servers = get_mcp_servers(config)?;
+/// Register all MCP servers from enabled capabilities to the MCP registry
+pub fn register_all_mcp_servers(project: &Project, config: &Config) -> Result<()> {
+    let registry = registry::CapabilityRegistry::load()?;
+    let enabled = registry.get_enabled_capabilities(config)?;
 
-    if servers.is_empty() {
-        return Ok(());
+    let mut has_servers = false;
+
+    for capability in enabled {
+        let servers: Vec<_> = capability
+            .mcp
+            .iter()
+            .filter(|mcp| {
+                if let Some(required_cap) = &mcp.enabled_when {
+                    registry.is_enabled(required_cap, config)
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect();
+
+        if !servers.is_empty() {
+            if !has_servers {
+                println!("Registering MCP servers...");
+                has_servers = true;
+            }
+            executor::register_mcp_servers(project, &capability.capability.id, &servers)?;
+        }
     }
-
-    println!("Configuring MCP servers...");
-    executor::configure_mcp_in_vm(project, &servers)?;
 
     Ok(())
 }

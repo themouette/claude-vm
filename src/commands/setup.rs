@@ -55,8 +55,8 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Authenticate Claude
     authenticate_claude(project)?;
 
-    // Configure all MCP servers from capabilities
-    capabilities::configure_mcp_servers(project, config)?;
+    // Register all MCP servers from capabilities to registry
+    capabilities::register_all_mcp_servers(project, config)?;
 
     // Run user-defined setup scripts
     run_setup_scripts(project, config)?;
