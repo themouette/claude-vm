@@ -1,0 +1,21 @@
+[capability]
+id = "git"
+name = "Git Configuration"
+description = "Configure git identity and signing from host configuration"
+
+[host_setup]
+script_file = "host_setup.sh"
+
+[vm_runtime]
+script = """#!/bin/bash
+# Write git context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/git.txt <<EOF
+Git version: $(git --version 2>/dev/null || echo "not available")
+User: $(git config user.name 2>/dev/null || echo "not configured")
+Email: $(git config user.email 2>/dev/null || echo "not configured")
+Signing: $(git config commit.gpgsign 2>/dev/null || echo "disabled")
+Signing format: $(git config gpg.format 2>/dev/null || echo "default")
+Signing key: $(git config user.signingkey 2>/dev/null || echo "none")
+EOF
+"""

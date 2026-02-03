@@ -228,6 +228,7 @@ fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String>
         ("chromium", "vm_setup.sh") => include_str!("../../capabilities/chromium/vm_setup.sh"),
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
+        ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
         _ => {
             return Err(ClaudeVmError::InvalidConfig(format!(
                 "Embedded script '{}' not found for capability '{}'",

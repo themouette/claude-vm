@@ -304,6 +304,7 @@ python = true     # Python 3 + pip
 chromium = true   # Chromium + Chrome DevTools MCP
 gpg = true        # GPG agent forwarding + key sync
 gh = true         # GitHub CLI + authentication
+git = true        # Git identity and signing configuration
 ```
 
 Each enabled capability automatically provides context to Claude about its status (version, configuration, availability) via the generated `~/.claude/CLAUDE.md` file.
@@ -693,6 +694,7 @@ This shows:
 - `--chromium` - Install Chromium
 - `--gpg` - Enable GPG agent forwarding
 - `--gh` - Install GitHub CLI
+- `--git` - Configure git identity and signing
 - `--all` - Install all tools
 - `--setup-script <PATH>` - Custom setup script
 - `--mount <SPEC>` - Setup-only mount (available during template creation only)
@@ -745,6 +747,55 @@ claude-vm -A "git push"
 - Any operation requiring SSH authentication
 
 **Security note:** SSH agent forwarding uses native SSH agent forwarding (`ssh -A`). Your keys never leave the host machine - the VM can only use them for authentication.
+
+### Git Configuration
+
+Configure git identity and commit signing in the VM from your host configuration:
+
+```bash
+# Setup with git support
+claude-vm setup --git
+
+# Or enable in config
+[tools]
+git = true
+```
+
+**What it does:**
+- Copies your git user.name and user.email from host to VM
+- Automatically configures commit signing if enabled on host
+- Detects GPG or SSH signing configuration
+- Provides contextual warnings about signing requirements
+
+**Commit Signing:**
+
+If you have commit signing enabled on your host:
+
+- **GPG signing**: Enable both `git` and `gpg` capabilities
+  ```bash
+  claude-vm setup --git --gpg
+  ```
+
+- **SSH signing**: Enable `git` capability and forward SSH agent
+  ```bash
+  claude-vm setup --git
+  claude-vm -A "make a commit"  # Forward SSH agent at runtime
+  ```
+
+**Usage in VM:**
+```bash
+# Your git identity is automatically configured
+git config user.name    # Shows your host name
+git config user.email   # Shows your host email
+
+# Signed commits work with proper agent forwarding
+git commit -m "My commit"  # Automatically signed if configured
+```
+
+**Requirements:**
+- Git configured on host: `git config --global user.name` and `user.email`
+- For GPG signing: Enable `gpg` capability
+- For SSH signing: Use `-A` flag to forward SSH agent
 
 ## Git Worktree Support
 
