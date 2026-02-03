@@ -3,6 +3,7 @@
 **Run Claude Code in isolated, reproducible Linux environments on macOS and Linux.**
 
 Claude VM gives you:
+
 - **Safety**: Each Claude session runs in a fresh, sandboxed VM that's destroyed after use
 - **Reproducibility**: Template VMs ensure consistent environments across runs
 - **Flexibility**: Pre-configure tools (Docker, Node.js, Python, Chromium) once, use everywhere
@@ -11,11 +12,19 @@ Claude VM gives you:
 ## Quick Start
 
 ```bash
-# One-time setup: create a template VM for your project
-claude-vm setup --node --chromium
+# One-time setup per project: create a template VM with git configuration
+claude-vm setup --git
+
+# Or customize for your tech stack
+claude-vm setup --git --node      # JavaScript/TypeScript projects
+claude-vm setup --git --python    # Python projects
+claude-vm setup --git --docker    # Docker-based development
 
 # Run Claude in a clean, isolated VM
-claude-vm "help me refactor this code"
+claude-vm
+
+# Spin up a VM for a single task
+claude-vm "help me code"
 
 # Open a shell in the VM
 claude-vm shell
@@ -28,6 +37,7 @@ Each run starts from the same clean template and automatically cleans up when do
 **Problem**: Running AI coding assistants directly on your host machine can be risky. They have access to your entire filesystem, credentials, and running services. Using `--dangerously-skip-permissions` on your host machine is particularly dangerous.
 
 **Solution**: Claude VM runs each session in an isolated Linux VM that:
+
 - Only mounts the current project directory
 - Has its own filesystem, network stack, and process space
 - Is automatically destroyed after each session
@@ -40,21 +50,25 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 ## Key Features
 
 **Template VMs per Repository**
+
 - Create a template VM once per project with all required tools
 - Each session clones from this template for fast startup
 - Customize with global (`~/.claude-vm.setup.sh`) or project-specific (`./.claude-vm.setup.sh`) scripts
 
 **Runtime Scripts**
+
 - Automatically run setup scripts before each session
 - Start services, set environment variables, seed databases
 - Just create `.claude-vm.runtime.sh` in your project root
 
 **Configuration File Support**
+
 - Define VM resources, tools, and settings in `.claude-vm.toml`
 - Precedence system: CLI > Env > Project > Global > Defaults
 - No need to remember complex command-line flags
 
 **Git Worktree Support**
+
 - Automatically detects and mounts both worktree and main repository
 - Full git functionality in isolated VMs
 
@@ -380,11 +394,13 @@ Then create `.claude-context.md`:
 This is a Rust project for building CLI tools.
 
 ## Architecture
+
 - Uses clap for command-line parsing
 - TOML for configuration
 - Modular capability system
 
 ## Coding Standards
+
 - Include examples in responses
 - Follow Rust best practices
 - Use proper error handling with Result types
@@ -393,6 +409,7 @@ This is a Rust project for building CLI tools.
 **Precedence:** If both `instructions` and `instructions_file` are set, `instructions` takes precedence. The file is only loaded if `instructions` is empty.
 
 The context is automatically generated and includes:
+
 - VM configuration (disk, memory)
 - Enabled capabilities (docker, node, etc.)
 - Mounted directories
@@ -587,20 +604,25 @@ The context files appear under "Runtime Script Results" section:
 
 ```markdown
 <!-- claude-vm-context-start -->
+
 # Claude VM Context
 
 ## VM Configuration
+
 - **Disk**: 20 GB
 - **Memory**: 8 GB
 
 ## Enabled Capabilities
+
 - docker: Docker engine for container management
 - node: Node.js runtime and npm package manager
 
 ## Runtime Script Results
 
 ### services
+
 Development services running:
+
 - PostgreSQL: localhost:5432 (database: myapp_dev)
 - Redis: localhost:6379
 - API Server: http://localhost:3000
@@ -609,6 +631,7 @@ Database seeded with test data.
 Use 'docker-compose logs' to view service logs.
 
 ### environment
+
 Project type: Node.js
 Git branch: main
 Working directory: /Users/user/project
@@ -715,12 +738,14 @@ gpg = true
 ```
 
 **What it does:**
+
 - Forwards your GPG agent socket to the VM
 - Syncs your public keys to the VM
 - Enables git commit signing inside the VM
 - Works automatically on every session
 
 **Usage in VM:**
+
 ```bash
 # Sign commits (uses your host GPG key)
 git commit -S -m "Signed commit"
@@ -742,6 +767,7 @@ claude-vm -A "git push"
 ```
 
 **Use cases:**
+
 - Push/pull from private repositories
 - SSH to remote servers
 - Any operation requiring SSH authentication
@@ -762,6 +788,7 @@ git = true
 ```
 
 **What it does:**
+
 - Copies your git user.name and user.email from host to VM
 - Automatically configures commit signing if enabled on host
 - Detects GPG or SSH signing configuration
@@ -772,6 +799,7 @@ git = true
 If you have commit signing enabled on your host:
 
 - **GPG signing**: Enable both `git` and `gpg` capabilities
+
   ```bash
   claude-vm setup --git --gpg
   ```
@@ -783,6 +811,7 @@ If you have commit signing enabled on your host:
   ```
 
 **Usage in VM:**
+
 ```bash
 # Your git identity is automatically configured
 git config user.name    # Shows your host name
@@ -793,6 +822,7 @@ git commit -m "My commit"  # Automatically signed if configured
 ```
 
 **Requirements:**
+
 - Git configured on host: `git config --global user.name` and `user.email`
 - For GPG signing: Enable `gpg` capability
 - For SSH signing: Use `-A` flag to forward SSH agent
@@ -835,6 +865,7 @@ claude-vm --no-conversations "help me code"
 ```
 
 This is useful when:
+
 - You want a completely isolated testing environment
 - You're debugging conversation-related issues
 - You need to ensure no historical context influences Claude's behavior
@@ -897,12 +928,14 @@ writable = true
 ### Examples
 
 **Share a dataset with the VM:**
+
 ```bash
 claude-vm --mount ~/datasets:/data:ro shell
 # Dataset accessible at /data in VM (read-only)
 ```
 
 **Mount multiple data sources:**
+
 ```toml
 # .claude-vm.toml
 [[mounts]]
@@ -917,6 +950,7 @@ writable = true
 ```
 
 **Temporary mount for a single session:**
+
 ```bash
 claude-vm --mount /tmp/experiment:/experiment "analyze this data"
 ```
@@ -928,6 +962,7 @@ Setup-specific mounts are directories that are available **only during template 
 ### Why Use Setup Mounts?
 
 Setup mounts are useful when you need to:
+
 - Transfer pre-built binaries or compiled assets to the template
 - Copy configuration files or credentials (that won't be in git)
 - Install local packages or dependencies from your host machine
@@ -971,6 +1006,7 @@ These mounts will be automatically applied every time you run `claude-vm setup`.
 Suppose you have a pre-compiled binary you want available in all VM sessions:
 
 **1. Setup mount configuration:**
+
 ```toml
 # .claude-vm.toml
 [[setup.mounts]]
@@ -980,6 +1016,7 @@ writable = false
 ```
 
 **2. Setup script to copy binary:**
+
 ```bash
 #!/bin/bash
 # .claude-vm.setup.sh
@@ -990,6 +1027,7 @@ sudo chmod +x /usr/local/bin/my-tool
 ```
 
 **3. Run setup:**
+
 ```bash
 claude-vm setup --node
 ```
