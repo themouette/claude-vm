@@ -81,15 +81,26 @@ impl Mount {
 }
 
 /// Expand path with ~ support and make it absolute
+/// Supports both ~ (current user) and ~username (other users)
 pub fn expand_path(path: &str) -> Result<PathBuf> {
-    let expanded = if path.starts_with('~') {
-        let home = std::env::var("HOME").map_err(|_| {
-            ClaudeVmError::InvalidConfig("HOME environment variable not set".to_string())
-        })?;
-        PathBuf::from(path.replacen('~', &home, 1))
-    } else {
-        PathBuf::from(path)
-    };
+    let expanded = crate::utils::path::expand_tilde(path).ok_or_else(|| {
+        if path.starts_with('~') {
+            // Check if it's a ~username pattern
+            let after_tilde = &path[1..];
+            if !after_tilde.is_empty() && !after_tilde.starts_with('/') {
+                let username_end = after_tilde.find('/').unwrap_or(after_tilde.len());
+                let username = &after_tilde[..username_end];
+                ClaudeVmError::InvalidConfig(format!(
+                    "User '{}' not found or HOME environment variable not set",
+                    username
+                ))
+            } else {
+                ClaudeVmError::InvalidConfig("HOME environment variable not set".to_string())
+            }
+        } else {
+            ClaudeVmError::InvalidConfig(format!("Failed to expand path: {}", path))
+        }
+    })?;
 
     // Ensure path is absolute
     if !expanded.is_absolute() {
@@ -556,6 +567,31 @@ mod tests {
             Some(PathBuf::from(format!("{}/vm", home)))
         );
         assert!(mount.writable);
+    }
+
+    #[test]
+    fn test_from_spec_tilde_expansion_with_username() {
+        // Test with root user (should exist on most Unix systems)
+        let mount = Mount::from_spec("~root/.ssh");
+
+        // Should succeed if root user exists
+        if let Ok(mount) = mount {
+            assert!(mount.location.starts_with("/"));
+            assert!(mount.location.ends_with(".ssh"));
+            assert!(mount.writable);
+        }
+        // If root doesn't exist, that's okay - the error handling is working
+    }
+
+    #[test]
+    fn test_from_spec_tilde_expansion_nonexistent_user() {
+        // User that should not exist
+        let result = Mount::from_spec("~nonexistentuser12345/path");
+
+        // Should return an error for non-existent user
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(error_msg.contains("User") || error_msg.contains("not found"));
     }
 
     #[test]

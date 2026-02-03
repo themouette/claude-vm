@@ -255,17 +255,9 @@ impl Config {
 
         // If instructions_file is set, load from file
         if !self.context.instructions_file.is_empty() {
-            let file_path = if self.context.instructions_file.starts_with('~') {
-                // Expand ~ to home directory
-                if let Some(home) = home_dir() {
-                    let path_without_tilde = self.context.instructions_file.trim_start_matches('~');
-                    home.join(path_without_tilde.trim_start_matches('/'))
-                } else {
-                    PathBuf::from(&self.context.instructions_file)
-                }
-            } else {
-                PathBuf::from(&self.context.instructions_file)
-            };
+            // Expand ~ in the path (supports both ~ and ~user syntax)
+            let file_path = crate::utils::path::expand_tilde(&self.context.instructions_file)
+                .unwrap_or_else(|| PathBuf::from(&self.context.instructions_file));
 
             // Read file content
             match std::fs::read_to_string(&file_path) {
