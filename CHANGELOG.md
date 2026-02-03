@@ -6,6 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **Git capability CLI flag**: Added missing `--git` flag to `claude-vm setup` command. The git capability was added in v0.2.2 but the CLI flag was not included, preventing users from enabling git configuration via command line and causing it to be excluded from `--all`. Users can now use `claude-vm setup --git` or `claude-vm setup --all` to enable git configuration.
 - **Chromium MCP server**: Removed `enabled_when = "node"` condition from chromium capability's MCP server configuration. The chrome-devtools MCP server now registers whenever chromium is enabled, allowing users who install Node.js manually in setup scripts to use the MCP functionality without enabling the node capability.
 
 ## [0.2.2] - 2026-02-03

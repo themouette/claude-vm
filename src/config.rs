@@ -374,6 +374,7 @@ impl Config {
             chromium,
             gpg,
             gh,
+            git,
             all,
             disk,
             memory,
@@ -388,6 +389,7 @@ impl Config {
                 self.tools.enable("chromium");
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
+                self.tools.enable("git");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -406,6 +408,9 @@ impl Config {
                 }
                 if *gh {
                     self.tools.enable("gh");
+                }
+                if *git {
+                    self.tools.enable("git");
                 }
             }
 
