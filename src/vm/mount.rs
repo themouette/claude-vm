@@ -84,9 +84,8 @@ impl Mount {
 /// Supports both ~ (current user) and ~username (other users)
 pub fn expand_path(path: &str) -> Result<PathBuf> {
     let expanded = crate::utils::path::expand_tilde(path).ok_or_else(|| {
-        if path.starts_with('~') {
+        if let Some(after_tilde) = path.strip_prefix('~') {
             // Check if it's a ~username pattern
-            let after_tilde = &path[1..];
             if !after_tilde.is_empty() && !after_tilde.starts_with('/') {
                 let username_end = after_tilde.find('/').unwrap_or(after_tilde.len());
                 let username = &after_tilde[..username_end];

@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use users::os::unix::UserExt;
 
 /// Expand tilde (~) in paths to actual home directories.
 ///
@@ -68,7 +69,10 @@ mod tests {
 
         // ~/path/to/file
         let expanded = expand_tilde("~/path/to/file.txt").unwrap();
-        assert_eq!(expanded, PathBuf::from(format!("{}/path/to/file.txt", home)));
+        assert_eq!(
+            expanded,
+            PathBuf::from(format!("{}/path/to/file.txt", home))
+        );
     }
 
     #[test]
