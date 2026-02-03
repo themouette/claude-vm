@@ -226,6 +226,7 @@ fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String>
         ("node", "vm_setup.sh") => include_str!("../../capabilities/node/vm_setup.sh"),
         ("python", "vm_setup.sh") => include_str!("../../capabilities/python/vm_setup.sh"),
         ("chromium", "vm_setup.sh") => include_str!("../../capabilities/chromium/vm_setup.sh"),
+        ("gh", "vm_setup.sh") => include_str!("../../capabilities/gh/vm_setup.sh"),
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
         ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),

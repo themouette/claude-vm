@@ -16,8 +16,18 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y gh
 echo "GitHub CLI installed successfully."
 gh --version
 
-# Authenticate with GitHub
+# Authenticate with GitHub using device flow
 echo ""
-echo "Authenticating with GitHub..."
-echo "(This will open a browser window for authentication)"
-gh auth login
+echo "========================================================================="
+echo "Authenticating with GitHub using device flow"
+echo "========================================================================="
+echo ""
+echo "A code and URL will be displayed below."
+echo "Copy the code, open the URL in your browser, and paste the code to authenticate."
+echo ""
+
+# Use device flow by providing empty input and setting git protocol to avoid prompts
+gh auth login --git-protocol https --hostname github.com <<EOF
+
+
+EOF
