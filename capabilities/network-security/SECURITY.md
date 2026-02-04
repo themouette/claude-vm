@@ -76,6 +76,127 @@ echo "pass" > /tmp/mitmproxy_filter.py   # Disable filtering
 5. They can change network configuration
 6. **They can disable all in-VM security controls**
 
+## Domain Matching Behavior
+
+Understanding how domain patterns work is crucial for configuring effective policies.
+
+### Exact Domain Matching
+
+```toml
+allowed_domains = ["api.github.com"]
+```
+
+- ✅ Matches: `api.github.com` only
+- ❌ Does NOT match: `gist.github.com`, `github.com`, `api.github.com.evil.org`
+
+### Wildcard Prefix Matching
+
+```toml
+allowed_domains = ["*.github.com"]
+```
+
+**What it matches:**
+- ✅ `api.github.com` - single subdomain
+- ✅ `gist.github.com` - different subdomain
+- ✅ `raw.githubusercontent.github.com` - nested subdomains
+- ✅ `github.com` - the domain itself (implementation detail)
+
+**What it does NOT match:**
+- ❌ `notgithub.com` - different domain
+- ❌ `github.com.evil.org` - suffix match attempt
+- ❌ `api.githubexample.com` - partial string match
+
+### Wildcard Rules and Limitations
+
+**Valid patterns:**
+- `*.example.com` ✅ - prefix wildcard
+- `*.api.example.com` ✅ - prefix wildcard on subdomain
+- `example.com` ✅ - exact match
+
+**Invalid patterns:**
+- `example.*.com` ❌ - wildcard in middle
+- `example.*` ❌ - wildcard at end
+- `*.*.example.com` ❌ - multiple wildcards
+- `*example.com` ❌ - wildcard without dot separator
+- `*.` ❌ - wildcard without domain
+
+**Validation:** Invalid patterns are automatically detected during configuration loading with helpful error messages.
+
+### Practical Examples
+
+**Allow all GitHub services:**
+```toml
+[security.network]
+mode = "allowlist"
+allowed_domains = [
+    "*.github.com",      # api.github.com, gist.github.com, etc.
+    "*.githubusercontent.com"  # raw.githubusercontent.com, etc.
+]
+```
+
+**Block all analytics:**
+```toml
+[security.network]
+mode = "denylist"
+blocked_domains = [
+    "*.google-analytics.com",
+    "*.mixpanel.com",
+    "*.segment.com"
+]
+```
+
+**Allow specific API with subdomains:**
+```toml
+[security.network]
+mode = "allowlist"
+allowed_domains = [
+    "api.example.com",     # Main API
+    "*.api.example.com"    # Regional endpoints: us-west.api.example.com
+]
+```
+
+### Common Mistakes
+
+❌ **Trying to match all domains:**
+```toml
+allowed_domains = ["*"]  # Invalid - use denylist mode instead
+```
+
+❌ **Path-based filtering:**
+```toml
+allowed_domains = ["api.github.com/repos"]  # Invalid - domain only, no paths
+```
+
+❌ **Port-based filtering:**
+```toml
+allowed_domains = ["api.example.com:443"]  # Invalid - domain only, no ports
+```
+
+✅ **Correct approach:**
+```toml
+# For unrestricted access, use denylist mode with specific blocks
+[security.network]
+mode = "denylist"
+blocked_domains = ["evil.com"]
+```
+
+### Testing Your Configuration
+
+After enabling network security, test your domain patterns:
+
+```bash
+# View filtering logs
+claude-vm network logs
+
+# Filter by specific domain
+claude-vm network logs -f "github.com"
+
+# Check for blocked requests
+claude-vm network logs -f "blocked"
+```
+
+The logs will show which requests are allowed or blocked, helping you refine your configuration.
+
 ## When to Use This Capability
 
 ### ✅ Good Use Cases

@@ -438,9 +438,20 @@ block_tcp_udp = false  # Allow raw TCP for development
 
 **Domain matching:**
 
-- Exact match: `api.github.com`
-- Wildcard subdomain: `*.github.com` (matches `api.github.com`, `gist.github.com`)
-- Wildcard at beginning only: `*.example.com` not `example.*.com`
+Domain patterns support exact matches and wildcard prefixes:
+
+- **Exact match**: `api.github.com` - only matches `api.github.com`
+- **Wildcard prefix**: `*.github.com` - matches any subdomain
+  - ✓ Matches: `api.github.com`, `gist.github.com`, `raw.githubusercontent.github.com`
+  - ✓ Also matches: `github.com` (the domain itself)
+  - ✗ Does NOT match: `notgithub.com`, `github.com.evil.org`
+
+**Wildcard rules:**
+- Only prefix wildcards allowed: `*.example.com` ✓, `example.*.com` ✗, `example.*` ✗
+- Only one wildcard per domain: `*.*.example.com` ✗
+- Must be followed by a domain: `*.` ✗
+
+**Validation:** Invalid domain patterns are detected during config loading with helpful warnings. See validation output for specific issues.
 
 **Security features:**
 
