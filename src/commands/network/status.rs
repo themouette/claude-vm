@@ -181,6 +181,31 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     );
 
     println!();
+
+    // Try to read statistics if available
+    let stats_output = Command::new("limactl")
+        .args(["shell", instance_name, "cat", "/tmp/mitmproxy_stats.json"])
+        .output();
+
+    if let Ok(output) = stats_output {
+        if output.status.success() {
+            let stats_json = String::from_utf8_lossy(&output.stdout);
+            if let Ok(stats) = serde_json::from_str::<serde_json::Value>(&stats_json) {
+                println!("Statistics:");
+                if let Some(total) = stats["requests_total"].as_u64() {
+                    println!("  Requests seen: {}", total);
+                }
+                if let Some(allowed) = stats["requests_allowed"].as_u64() {
+                    println!("  Requests allowed: {}", allowed);
+                }
+                if let Some(blocked) = stats["requests_blocked"].as_u64() {
+                    println!("  Requests blocked: {}", blocked);
+                }
+                println!();
+            }
+        }
+    }
+
     println!("View logs: claude-vm network logs");
 
     Ok(())

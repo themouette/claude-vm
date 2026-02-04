@@ -28,12 +28,42 @@ trap cleanup EXIT ERR
 cat > /tmp/mitmproxy_filter.py << 'FILTER_SCRIPT_EOF'
 from mitmproxy import http
 import os
+import json
+import time
+from pathlib import Path
 
 # Read configuration from environment variables
 MODE = os.environ.get("POLICY_MODE", "denylist")
 ALLOWED_DOMAINS = [d.strip() for d in os.environ.get("ALLOWED_DOMAINS", "").split(",") if d.strip()]
 BLOCKED_DOMAINS = [d.strip() for d in os.environ.get("BLOCKED_DOMAINS", "").split(",") if d.strip()]
 BYPASS_DOMAINS = [d.strip() for d in os.environ.get("BYPASS_DOMAINS", "").split(",") if d.strip()]
+
+# Statistics tracking
+STATS_FILE = Path("/tmp/mitmproxy_stats.json")
+stats = {
+    "requests_total": 0,
+    "requests_allowed": 0,
+    "requests_blocked": 0,
+    "last_update": None
+}
+
+# Load existing stats if available
+if STATS_FILE.exists():
+    try:
+        stats = json.loads(STATS_FILE.read_text())
+    except:
+        pass  # Use default stats if file is corrupted
+
+def update_stats():
+    """Write stats to file atomically"""
+    try:
+        stats["last_update"] = int(time.time())
+        # Write to temp file first, then rename for atomicity
+        temp_file = Path("/tmp/mitmproxy_stats.json.tmp")
+        temp_file.write_text(json.dumps(stats))
+        temp_file.rename(STATS_FILE)
+    except:
+        pass  # Ignore write errors
 
 def matches_pattern(host, pattern):
     """Match domain with wildcard support (*.example.com)"""
@@ -51,15 +81,21 @@ def matches_any(host, patterns):
 
 def request(flow: http.HTTPFlow) -> None:
     """Filter requests based on domain policy"""
+    stats["requests_total"] += 1
+
     host = flow.request.pretty_host
 
     # Bypass domains always allowed
     if matches_any(host, BYPASS_DOMAINS):
+        stats["requests_allowed"] += 1
+        update_stats()
         return
 
     if MODE == "allowlist":
         # Block unless explicitly allowed
         if not matches_any(host, ALLOWED_DOMAINS):
+            stats["requests_blocked"] += 1
+            update_stats()
             flow.response = http.Response.make(
                 403,
                 f"Domain blocked by allowlist policy: {host}\n".encode(),
@@ -69,12 +105,18 @@ def request(flow: http.HTTPFlow) -> None:
     elif MODE == "denylist":
         # Allow unless explicitly blocked
         if matches_any(host, BLOCKED_DOMAINS):
+            stats["requests_blocked"] += 1
+            update_stats()
             flow.response = http.Response.make(
                 403,
                 f"Domain blocked by denylist policy: {host}\n".encode(),
                 {"Content-Type": "text/plain"}
             )
             return
+
+    # Request allowed
+    stats["requests_allowed"] += 1
+    update_stats()
 
 def response(flow: http.HTTPFlow) -> None:
     """Log allowed requests for visibility"""
