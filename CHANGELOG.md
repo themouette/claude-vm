@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Check for available updates regularly
+
 ### Fixed
 
 - **Git capability config merge**: Fixed bug where git capability was not being merged when loading from `.claude-vm.toml` files. The config merge function was missing the line to merge the git field, causing git configuration to be ignored when specified in project or global config files.
