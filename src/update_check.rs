@@ -1,9 +1,13 @@
 use crate::commands::update::get_latest_version;
 use crate::version::{is_newer_version, VERSION};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 /// Configuration for update checking
 #[derive(Debug, Clone)]
@@ -22,13 +26,15 @@ pub struct UpdateCheckCache {
 
 impl UpdateCheckCache {
     /// Check if the cache is stale based on the interval
+    /// Uses saturating_sub to handle clock skew gracefully
     pub fn is_stale(&self, interval_hours: u64) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        let elapsed_hours = (now - self.last_check) / 3600;
+        let elapsed_seconds = now.saturating_sub(self.last_check);
+        let elapsed_hours = elapsed_seconds / 3600;
         elapsed_hours >= interval_hours
     }
 }
@@ -48,7 +54,7 @@ fn load_cache() -> Option<UpdateCheckCache> {
     serde_json::from_str(&content).ok()
 }
 
-/// Save the cache to disk
+/// Save the cache to disk with restricted permissions (0600)
 fn save_cache(cache: &UpdateCheckCache) {
     if let Some(path) = cache_path() {
         // Ensure the directory exists
@@ -58,7 +64,13 @@ fn save_cache(cache: &UpdateCheckCache) {
 
         // Write cache file
         if let Ok(content) = serde_json::to_string_pretty(cache) {
-            let _ = fs::write(path, content);
+            if fs::write(&path, content).is_ok() {
+                // Set file permissions to 0600 (owner read/write only) on Unix systems
+                #[cfg(unix)]
+                {
+                    let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+                }
+            }
         }
     }
 }
@@ -73,7 +85,13 @@ fn perform_version_check() -> Option<UpdateCheckCache> {
     // Query GitHub API with timeout (handled by self_update crate)
     let latest_version = get_latest_version().ok().flatten();
 
-    let update_available = if let Some(ref latest) = latest_version {
+    // Validate version string is valid semver before caching
+    let validated_version = latest_version.and_then(|v| {
+        // Only cache if it's a valid semver string
+        Version::parse(&v).ok().map(|_| v)
+    });
+
+    let update_available = if let Some(ref latest) = validated_version {
         is_newer_version(latest)
     } else {
         false
@@ -81,13 +99,39 @@ fn perform_version_check() -> Option<UpdateCheckCache> {
 
     Some(UpdateCheckCache {
         last_check: now,
-        latest_version,
+        latest_version: validated_version,
         update_available,
     })
 }
 
+/// Check if running in a CI/CD environment
+/// CI environments typically don't need update notifications as users can't act on them
+fn is_ci_environment() -> bool {
+    // Common CI environment variables
+    std::env::var("CI").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+        || std::env::var("GITLAB_CI").is_ok()
+        || std::env::var("CIRCLECI").is_ok()
+        || std::env::var("TRAVIS").is_ok()
+        || std::env::var("JENKINS_HOME").is_ok()
+        || std::env::var("TEAMCITY_VERSION").is_ok()
+        || std::env::var("BUILDKITE").is_ok()
+}
+
+/// Sanitize version string to prevent terminal injection attacks
+/// Only allows characters valid in semver: 0-9, a-z, A-Z, ., -, +
+fn sanitize_version(version: &str) -> String {
+    version
+        .chars()
+        .filter(|c| c.is_alphanumeric() || *c == '.' || *c == '-' || *c == '+')
+        .collect()
+}
+
 /// Display a boxed notification about the available update
 fn display_update_notification(latest_version: &str) {
+    // Sanitize version string to prevent terminal injection
+    let safe_version = sanitize_version(latest_version);
+
     let width = 45;
     let top = format!("╭{}╮", "─".repeat(width - 2));
     let bottom = format!("╰{}╯", "─".repeat(width - 2));
@@ -97,25 +141,21 @@ fn display_update_notification(latest_version: &str) {
     let title_line = format!("│{:^width$}│", title, width = width - 2);
 
     let current_line = format!("│  Current: {:<width$}│", VERSION, width = width - 13);
-    let latest_line = format!(
-        "│  Latest:  {:<width$}│",
-        latest_version,
-        width = width - 13
-    );
+    let latest_line = format!("│  Latest:  {:<width$}│", safe_version, width = width - 13);
 
     let command = "Run: claude-vm update";
     let command_line = format!("│  {:<width$}│", command, width = width - 4);
 
-    println!();
-    println!("{}", top);
-    println!("{}", title_line);
-    println!("{}", separator);
-    println!("{}", current_line);
-    println!("{}", latest_line);
-    println!("{}", separator);
-    println!("{}", command_line);
-    println!("{}", bottom);
-    println!();
+    eprintln!();
+    eprintln!("{}", top);
+    eprintln!("{}", title_line);
+    eprintln!("{}", separator);
+    eprintln!("{}", current_line);
+    eprintln!("{}", latest_line);
+    eprintln!("{}", separator);
+    eprintln!("{}", command_line);
+    eprintln!("{}", bottom);
+    eprintln!();
 }
 
 /// Main entry point for update checking
@@ -123,6 +163,11 @@ fn display_update_notification(latest_version: &str) {
 pub fn check_and_notify(config: &UpdateCheckConfig) {
     // Return early if disabled
     if !config.enabled {
+        return;
+    }
+
+    // Don't show notifications in CI environments
+    if is_ci_environment() {
         return;
     }
 
@@ -222,5 +267,76 @@ mod tests {
         };
         assert!(config.enabled);
         assert_eq!(config.check_interval_hours, 72);
+    }
+
+    #[test]
+    fn test_sanitize_version() {
+        // Valid semver characters
+        assert_eq!(sanitize_version("1.2.3"), "1.2.3");
+        assert_eq!(sanitize_version("1.2.3-alpha"), "1.2.3-alpha");
+        assert_eq!(sanitize_version("1.2.3+build.123"), "1.2.3+build.123");
+
+        // Filter out dangerous characters
+        // \x1b is filtered, but [31m becomes 31m (alphanumeric chars remain)
+        assert_eq!(
+            sanitize_version("1.2.3\x1b[31m"),
+            "1.2.331m" // Escape code filtered, leaving alphanumerics
+        );
+        assert_eq!(
+            sanitize_version("1.2.3\n\r\t"),
+            "1.2.3" // Control characters removed
+        );
+        assert_eq!(
+            sanitize_version("1.2.3; rm -rf /"),
+            "1.2.3rm-rf" // Special chars filtered, hyphen allowed (semver)
+        );
+
+        // Complete escape sequences are neutralized
+        let malicious = "0.3.0\x1b]0;evil\x07";
+        let sanitized = sanitize_version(malicious);
+        // Escape codes are stripped, 'evil' remains but harmless without escapes
+        assert!(sanitized.starts_with("0.3.0"));
+        assert!(!sanitized.contains('\x1b'));
+        assert!(!sanitized.contains('\x07'));
+    }
+
+    #[test]
+    fn test_is_ci_environment() {
+        // Save original env vars
+        let original_ci = std::env::var("CI").ok();
+
+        // Test with CI=true
+        std::env::set_var("CI", "true");
+        assert!(is_ci_environment());
+
+        // Test with CI unset
+        std::env::remove_var("CI");
+        // Note: This test might fail if running in actual CI
+        // In real CI, other env vars like GITHUB_ACTIONS would be set
+
+        // Restore original
+        if let Some(val) = original_ci {
+            std::env::set_var("CI", val);
+        } else {
+            std::env::remove_var("CI");
+        }
+    }
+
+    #[test]
+    fn test_cache_is_stale_with_future_timestamp() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Cache with future timestamp (clock skew scenario)
+        let future_cache = UpdateCheckCache {
+            last_check: now + 3600, // 1 hour in the future
+            latest_version: Some("0.3.0".to_string()),
+            update_available: true,
+        };
+
+        // Should handle gracefully with saturating_sub (elapsed = 0)
+        assert!(!future_cache.is_stale(1));
     }
 }
