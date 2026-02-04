@@ -146,3 +146,35 @@ pub fn get_port_forwards(config: &Config) -> Result<Vec<PortForward>> {
 
     Ok(port_forwards)
 }
+
+/// Setup all custom repositories from enabled capabilities.
+/// This runs BEFORE apt-get update to add custom sources (Docker, Node, gh, etc.)
+pub fn setup_repositories(project: &Project, config: &Config) -> Result<()> {
+    let registry = registry::CapabilityRegistry::load()?;
+    let repo_setups = registry.get_repo_setups(config)?;
+
+    if repo_setups.is_empty() {
+        return Ok(());
+    }
+
+    println!("Setting up package repositories...");
+    executor::execute_repository_setups(project, &repo_setups)?;
+
+    Ok(())
+}
+
+/// Batch install all system packages from capabilities and config.
+/// This runs a SINGLE apt-get update + install for all packages.
+pub fn install_system_packages(project: &Project, config: &Config) -> Result<()> {
+    let registry = registry::CapabilityRegistry::load()?;
+    let packages = registry.collect_system_packages(config)?;
+
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    println!("Installing system packages: {}", packages.join(", "));
+    executor::batch_install_system_packages(project, &packages)?;
+
+    Ok(())
+}
