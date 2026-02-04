@@ -1,4 +1,5 @@
 use crate::error::Result;
+use semver::Version;
 
 // Compile-time constants from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -26,6 +27,14 @@ pub fn binary_name() -> &'static str {
     PKG_NAME
 }
 
+/// Check if another version is newer than the current version
+pub fn is_newer_version(other: &str) -> bool {
+    match (Version::parse(VERSION), Version::parse(other)) {
+        (Ok(current), Ok(latest)) => latest > current,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -48,5 +57,19 @@ mod tests {
         // This will succeed on supported platforms
         let result = current_platform();
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_is_newer_version() {
+        // Test with valid versions
+        assert!(is_newer_version("999.0.0")); // Much newer
+        assert!(!is_newer_version("0.0.1")); // Much older
+
+        // Test with invalid versions
+        assert!(!is_newer_version("invalid"));
+        assert!(!is_newer_version(""));
+
+        // Test with same version (should return false)
+        assert!(!is_newer_version(VERSION));
     }
 }

@@ -26,6 +26,9 @@ pub struct Config {
     #[serde(default)]
     pub mounts: Vec<MountEntry>,
 
+    #[serde(default)]
+    pub update_check: UpdateCheckSettings,
+
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
@@ -175,6 +178,32 @@ fn default_writable() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckSettings {
+    #[serde(default = "default_update_check_enabled")]
+    pub enabled: bool,
+
+    #[serde(default = "default_update_check_interval")]
+    pub interval_hours: u64,
+}
+
+impl Default for UpdateCheckSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_update_check_enabled(),
+            interval_hours: default_update_check_interval(),
+        }
+    }
+}
+
+fn default_update_check_enabled() -> bool {
+    true
+}
+
+fn default_update_check_interval() -> u64 {
+    72 // 3 days
+}
+
 impl Config {
     /// Load configuration with precedence:
     /// 1. CLI flags (applied later via with_cli_overrides)
@@ -248,6 +277,9 @@ impl Config {
         if !other.context.instructions_file.is_empty() {
             self.context.instructions_file = other.context.instructions_file;
         }
+
+        // Update check settings (other takes precedence)
+        self.update_check = other.update_check;
 
         self
     }
@@ -324,6 +356,18 @@ impl Config {
         if let Ok(memory) = std::env::var("CLAUDE_VM_MEMORY") {
             if let Ok(memory) = memory.parse::<u32>() {
                 self.vm.memory = memory;
+            }
+        }
+
+        if let Ok(enabled) = std::env::var("CLAUDE_VM_UPDATE_CHECK") {
+            if let Ok(enabled) = enabled.parse::<bool>() {
+                self.update_check.enabled = enabled;
+            }
+        }
+
+        if let Ok(interval) = std::env::var("CLAUDE_VM_UPDATE_INTERVAL") {
+            if let Ok(interval) = interval.parse::<u64>() {
+                self.update_check.interval_hours = interval;
             }
         }
 
@@ -639,5 +683,24 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(&temp_home).unwrap();
+    }
+
+    #[test]
+    fn test_update_check_defaults() {
+        let config = Config::default();
+        assert!(config.update_check.enabled);
+        assert_eq!(config.update_check.interval_hours, 72);
+    }
+
+    #[test]
+    fn test_update_check_merge() {
+        let base = Config::default();
+        let mut override_cfg = Config::default();
+        override_cfg.update_check.enabled = false;
+        override_cfg.update_check.interval_hours = 168;
+
+        let merged = base.merge(override_cfg);
+        assert!(!merged.update_check.enabled);
+        assert_eq!(merged.update_check.interval_hours, 168);
     }
 }
