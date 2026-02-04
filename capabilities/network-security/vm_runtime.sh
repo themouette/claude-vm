@@ -104,7 +104,7 @@ echo $PROXY_PID > /tmp/mitmproxy.pid
 # Wait for proxy to be ready
 for i in {1..20}; do
   if nc -z localhost 8080 2>/dev/null; then
-    echo "  ✓ Proxy started (PID: $PROXY_PID)"
+    echo "  ✓ Proxy started (PID: $PROXY_PID) - Listening on localhost:8080"
     break
   fi
   if [ $i -eq 20 ]; then
@@ -118,6 +118,46 @@ for i in {1..20}; do
   sleep 0.5
 done
 
+# Display policy configuration
+echo ""
+echo "  Policy Configuration:"
+echo "    Mode: ${POLICY_MODE:-denylist}"
+
+# Count and display domain patterns
+ALLOWED_COUNT=$(echo "${ALLOWED_DOMAINS:-}" | awk -F',' '{print NF}')
+if [ -z "${ALLOWED_DOMAINS:-}" ]; then
+    ALLOWED_COUNT=0
+fi
+BLOCKED_COUNT=$(echo "${BLOCKED_DOMAINS:-}" | awk -F',' '{print NF}')
+if [ -z "${BLOCKED_DOMAINS:-}" ]; then
+    BLOCKED_COUNT=0
+fi
+BYPASS_COUNT=$(echo "${BYPASS_DOMAINS:-}" | awk -F',' '{print NF}')
+if [ -z "${BYPASS_DOMAINS:-}" ]; then
+    BYPASS_COUNT=0
+fi
+
+if [ "$ALLOWED_COUNT" -gt 0 ]; then
+    echo "    Allowed: ${ALLOWED_DOMAINS} ($ALLOWED_COUNT pattern$([ "$ALLOWED_COUNT" -ne 1 ] && echo "s" || echo ""))"
+else
+    echo "    Allowed: none"
+fi
+
+if [ "$BLOCKED_COUNT" -gt 0 ]; then
+    echo "    Blocked: ${BLOCKED_DOMAINS} ($BLOCKED_COUNT pattern$([ "$BLOCKED_COUNT" -ne 1 ] && echo "s" || echo ""))"
+else
+    echo "    Blocked: none"
+fi
+
+if [ "$BYPASS_COUNT" -gt 0 ]; then
+    echo "    Bypass: ${BYPASS_DOMAINS} ($BYPASS_COUNT pattern$([ "$BYPASS_COUNT" -ne 1 ] && echo "s" || echo ""))"
+else
+    echo "    Bypass: none"
+fi
+
+echo ""
+echo "  Protocol Blocks:"
+
 # Set proxy environment variables for the session
 export HTTP_PROXY="http://localhost:8080"
 export HTTPS_PROXY="http://localhost:8080"
@@ -128,8 +168,6 @@ export no_proxy="$NO_PROXY"
 
 # Block raw TCP/UDP if configured
 if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
-    echo "  Blocking non-HTTP protocols (raw TCP/UDP)..."
-
     # IPv4 rules
     # Allow established connections
     sudo iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
@@ -160,13 +198,11 @@ if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     sudo ip6tables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
     sudo ip6tables -A OUTPUT -p udp -j REJECT --reject-with icmp6-port-unreachable
 
-    echo "  ✓ Non-HTTP traffic blocked (IPv4 and IPv6)"
+    echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
 fi
 
 # Block private networks if configured
 if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
-    echo "  Blocking private networks..."
-
     # IPv4 private networks
     # Insert at beginning to override later rules
     sudo iptables -I OUTPUT -d 10.0.0.0/8 -j REJECT
@@ -177,20 +213,18 @@ if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
     sudo ip6tables -I OUTPUT -d fc00::/7 -j REJECT      # Unique local addresses
     sudo ip6tables -I OUTPUT -d fe80::/10 -j REJECT     # Link-local addresses
 
-    echo "  ✓ Private networks blocked (IPv4 and IPv6)"
+    echo "    ✓ Private networks blocked (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)"
 fi
 
 # Block metadata services if configured
 if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
-    echo "  Blocking cloud metadata services..."
-
     # IPv4 metadata
     sudo iptables -I OUTPUT -d 169.254.169.254 -j REJECT
 
     # IPv6 metadata (fe80::)
     sudo ip6tables -I OUTPUT -d fe80::a9fe:a9fe -j REJECT  # IPv6-mapped 169.254.169.254
 
-    echo "  ✓ Metadata services blocked (IPv4 and IPv6)"
+    echo "    ✓ Cloud metadata blocked (169.254.169.254)"
 fi
 
 # Write runtime context for Claude
@@ -211,4 +245,5 @@ You can only make HTTP/HTTPS requests. The proxy filters domains according to th
 Raw TCP connections and UDP traffic are blocked for security.
 EOF
 
-echo "✓ Network security policies enforced"
+echo ""
+echo "✓ Network security active - Use 'claude-vm network logs' to monitor requests"

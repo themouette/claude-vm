@@ -156,4 +156,7 @@ pub enum NetworkAction {
         #[arg(short = 'a', long)]
         all: bool,
     },
+
+    /// Show network security status
+    Status,
 }

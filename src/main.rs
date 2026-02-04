@@ -62,6 +62,9 @@ fn main() -> Result<()> {
             NetworkAction::Logs { lines, filter, all } => {
                 commands::network::logs::execute(&project, *lines, filter.as_deref(), *all)?;
             }
+            NetworkAction::Status => {
+                commands::network::status::execute(&project, &config)?;
+            }
         },
         None => {
             // Default: run Claude with provided arguments
