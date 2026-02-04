@@ -26,6 +26,9 @@ pub struct Config {
     #[serde(default)]
     pub mounts: Vec<MountEntry>,
 
+    #[serde(default)]
+    pub security: SecurityConfig,
+
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
@@ -175,6 +178,87 @@ fn default_writable() -> bool {
     true
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityConfig {
+    #[serde(default)]
+    pub network: NetworkSecurityConfig,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            network: NetworkSecurityConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkSecurityConfig {
+    /// Network policy mode: allowlist or denylist
+    #[serde(default = "default_policy_mode")]
+    pub mode: PolicyMode,
+
+    /// Block private networks (10.0.0.0/8, 192.168.0.0/16, etc.)
+    #[serde(default = "default_true")]
+    pub block_private_networks: bool,
+
+    /// Block cloud metadata services (169.254.169.254)
+    #[serde(default = "default_true")]
+    pub block_metadata_services: bool,
+
+    /// Block non-HTTP protocols (raw TCP, UDP)
+    #[serde(default = "default_true")]
+    pub block_tcp_udp: bool,
+
+    /// Allowed domains (for denylist mode)
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+
+    /// Blocked domains (for allowlist mode)
+    #[serde(default)]
+    pub blocked_domains: Vec<String>,
+
+    /// Bypass HTTPS inspection for these domains (certificate pinning)
+    #[serde(default)]
+    pub bypass_domains: Vec<String>,
+
+    /// Enable network filtering
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+impl Default for NetworkSecurityConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_policy_mode(),
+            block_private_networks: true,
+            block_metadata_services: true,
+            block_tcp_udp: true,
+            allowed_domains: vec![],
+            blocked_domains: vec![],
+            bypass_domains: vec![],
+            enabled: false, // Opt-in for backward compatibility
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PolicyMode {
+    /// Allow all except blocked (default)
+    Allowlist,
+    /// Block all except allowed (more secure)
+    Denylist,
+}
+
+fn default_policy_mode() -> PolicyMode {
+    PolicyMode::Denylist
+}
+
+fn default_true() -> bool {
+    true
+}
+
 impl Config {
     /// Load configuration with precedence:
     /// 1. CLI flags (applied later via with_cli_overrides)
@@ -247,6 +331,22 @@ impl Config {
         if !other.context.instructions_file.is_empty() {
             self.context.instructions_file = other.context.instructions_file;
         }
+
+        // Security (merge network policies)
+        if other.security.network.enabled {
+            self.security.network.enabled = true;
+        }
+        if other.security.network.mode != default_policy_mode() {
+            self.security.network.mode = other.security.network.mode;
+        }
+        self.security.network.block_private_networks = other.security.network.block_private_networks;
+        self.security.network.block_metadata_services = other.security.network.block_metadata_services;
+        self.security.network.block_tcp_udp = other.security.network.block_tcp_udp;
+
+        // Merge domain lists (append)
+        self.security.network.allowed_domains.extend(other.security.network.allowed_domains);
+        self.security.network.blocked_domains.extend(other.security.network.blocked_domains);
+        self.security.network.bypass_domains.extend(other.security.network.bypass_domains);
 
         self
     }
