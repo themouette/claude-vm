@@ -8,8 +8,9 @@ use std::sync::Arc;
 ///
 /// Valid package names must:
 /// - Start with an alphanumeric character
-/// - Contain only lowercase letters, digits, and these symbols: '-', '.', '+', '=', ':'
+/// - Contain only lowercase letters, digits, and these symbols: '-', '.', '+', '=', ':', '*'
 /// - '=' is used for version pinning (e.g., "package=1.2.3")
+/// - '*' is used for version wildcards (e.g., "package=1.2.*")
 /// - ':' is used for architecture specification (e.g., "package:amd64")
 ///
 /// This validation prevents confusing apt-get errors and potential security issues.
@@ -37,12 +38,13 @@ fn validate_package_name(name: &str) -> Result<()> {
             || c == '.'
             || c == '+'
             || c == '='
-            || c == ':';
+            || c == ':'
+            || c == '*'; // Allow wildcards in version strings
 
         if !valid {
             return Err(ClaudeVmError::InvalidConfig(format!(
                 "Invalid package name '{}': contains invalid character '{}'. \
-                 Package names must contain only lowercase letters, digits, and '.', '-', '+', '=', ':'",
+                 Package names must contain only lowercase letters, digits, and '.', '-', '+', '=', ':', '*'",
                 name, c
             )));
         }
@@ -228,7 +230,7 @@ impl CapabilityRegistry {
     /// Performance: Clones each unique package only once using HashSet-based deduplication.
     pub fn collect_system_packages(&self, config: &Config) -> Result<Vec<String>> {
         let enabled = self.get_enabled_capabilities(config)?;
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::<String>::new();
         let mut packages = Vec::new();
 
         // Collect packages from capabilities (already in dependency order)
@@ -240,7 +242,7 @@ impl CapabilityRegistry {
                     validate_package_name(pkg)?;
 
                     // Only clone and add if not already seen
-                    if seen.insert(pkg.as_str()) {
+                    if seen.insert(pkg.clone()) {
                         packages.push(pkg.clone());
                     }
                 }
@@ -253,7 +255,7 @@ impl CapabilityRegistry {
             validate_package_name(pkg)?;
 
             // Only clone and add if not already seen
-            if seen.insert(pkg.as_str()) {
+            if seen.insert(pkg.clone()) {
                 packages.push(pkg.clone());
             }
         }
