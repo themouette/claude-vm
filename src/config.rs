@@ -749,4 +749,124 @@ mod tests {
         // Cleanup
         std::fs::remove_dir_all(&temp_home).unwrap();
     }
+
+    #[test]
+    fn test_network_security_config_parsing() {
+        let toml = r#"
+            [security.network]
+            enabled = true
+            mode = "allowlist"
+            allowed_domains = ["api.github.com", "*.npmjs.org"]
+            blocked_domains = ["evil.com"]
+            bypass_domains = ["localhost"]
+            block_tcp_udp = true
+            block_private_networks = true
+            block_metadata_services = true
+        "#;
+
+        let config: Config = toml::from_str(toml).expect("Failed to parse config");
+
+        assert!(config.security.network.enabled);
+        assert_eq!(config.security.network.mode, PolicyMode::Allowlist);
+        assert_eq!(
+            config.security.network.allowed_domains,
+            vec!["api.github.com", "*.npmjs.org"]
+        );
+        assert_eq!(config.security.network.blocked_domains, vec!["evil.com"]);
+        assert_eq!(config.security.network.bypass_domains, vec!["localhost"]);
+        assert!(config.security.network.block_tcp_udp);
+        assert!(config.security.network.block_private_networks);
+        assert!(config.security.network.block_metadata_services);
+    }
+
+    #[test]
+    fn test_policy_mode_as_str() {
+        assert_eq!(PolicyMode::Allowlist.as_str(), "allowlist");
+        assert_eq!(PolicyMode::Denylist.as_str(), "denylist");
+    }
+
+    #[test]
+    fn test_policy_mode_serde() {
+        // Test serialization
+        let allowlist = PolicyMode::Allowlist;
+        let json = serde_json::to_string(&allowlist).unwrap();
+        assert_eq!(json, "\"allowlist\"");
+
+        let denylist = PolicyMode::Denylist;
+        let json = serde_json::to_string(&denylist).unwrap();
+        assert_eq!(json, "\"denylist\"");
+
+        // Test deserialization
+        let parsed: PolicyMode = serde_json::from_str("\"allowlist\"").unwrap();
+        assert_eq!(parsed, PolicyMode::Allowlist);
+
+        let parsed: PolicyMode = serde_json::from_str("\"denylist\"").unwrap();
+        assert_eq!(parsed, PolicyMode::Denylist);
+    }
+
+    #[test]
+    fn test_network_security_config_defaults() {
+        let config = NetworkSecurityConfig::default();
+
+        assert!(!config.enabled); // Disabled by default
+        assert_eq!(config.mode, PolicyMode::Denylist); // Denylist is default
+        assert!(config.block_tcp_udp);
+        assert!(config.block_private_networks);
+        assert!(config.block_metadata_services);
+        assert!(config.allowed_domains.is_empty());
+        assert!(config.blocked_domains.is_empty());
+        assert!(config.bypass_domains.is_empty());
+    }
+
+    #[test]
+    fn test_network_security_domain_list_merging() {
+        // Test that domain lists are accumulated (not replaced) during merge
+        let mut base = Config::default();
+        base.security.network.allowed_domains = vec!["api.github.com".to_string()];
+        base.security.network.blocked_domains = vec!["evil.com".to_string()];
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.allowed_domains = vec!["api.npmjs.org".to_string()];
+        override_cfg.security.network.blocked_domains = vec!["bad.com".to_string()];
+
+        let merged = base.merge(override_cfg);
+
+        // Domain lists should be accumulated
+        assert_eq!(
+            merged.security.network.allowed_domains,
+            vec!["api.github.com", "api.npmjs.org"]
+        );
+        assert_eq!(
+            merged.security.network.blocked_domains,
+            vec!["evil.com", "bad.com"]
+        );
+    }
+
+    #[test]
+    fn test_network_security_enabled_flag_merge() {
+        let mut base = Config::default();
+        base.security.network.enabled = false;
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.enabled = true;
+
+        let merged = base.merge(override_cfg);
+
+        // enabled flag should be set to true if any config enables it
+        assert!(merged.security.network.enabled);
+    }
+
+    #[test]
+    fn test_network_security_mode_override() {
+        let mut base = Config::default();
+        base.security.network.mode = PolicyMode::Denylist;
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.mode = PolicyMode::Allowlist;
+
+        let merged = base.merge(override_cfg);
+
+        // Mode should be overridden if different from default
+        assert_eq!(merged.security.network.mode, PolicyMode::Allowlist);
+    }
 }
