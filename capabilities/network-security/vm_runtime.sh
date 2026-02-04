@@ -9,6 +9,21 @@ fi
 
 echo "Enforcing network security policies..."
 
+# Cleanup function to kill proxy on exit
+cleanup() {
+    if [ -f /tmp/mitmproxy.pid ]; then
+        PROXY_PID=$(cat /tmp/mitmproxy.pid)
+        if kill -0 "$PROXY_PID" 2>/dev/null; then
+            echo "Cleaning up proxy process..."
+            kill "$PROXY_PID" 2>/dev/null || true
+        fi
+        rm -f /tmp/mitmproxy.pid
+    fi
+}
+
+# Set trap to cleanup on script failure
+trap cleanup EXIT ERR
+
 # Generate mitmproxy filter script from configuration
 cat > /tmp/mitmproxy_filter.py << 'FILTER_SCRIPT_EOF'
 from mitmproxy import http
@@ -115,6 +130,7 @@ export no_proxy="$NO_PROXY"
 if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     echo "  Blocking non-HTTP protocols (raw TCP/UDP)..."
 
+    # IPv4 rules
     # Allow established connections
     sudo iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
@@ -129,28 +145,52 @@ if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     sudo iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
     sudo iptables -A OUTPUT -p udp -j REJECT --reject-with icmp-port-unreachable
 
-    echo "  ✓ Non-HTTP traffic blocked"
+    # IPv6 rules (same logic)
+    # Allow established connections
+    sudo ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+    # Allow DNS
+    sudo ip6tables -A OUTPUT -p udp --dport 53 -j ACCEPT
+    sudo ip6tables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+
+    # Allow localhost
+    sudo ip6tables -A OUTPUT -o lo -j ACCEPT
+
+    # Block everything else
+    sudo ip6tables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
+    sudo ip6tables -A OUTPUT -p udp -j REJECT --reject-with icmp6-port-unreachable
+
+    echo "  ✓ Non-HTTP traffic blocked (IPv4 and IPv6)"
 fi
 
 # Block private networks if configured
 if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
     echo "  Blocking private networks..."
 
+    # IPv4 private networks
     # Insert at beginning to override later rules
     sudo iptables -I OUTPUT -d 10.0.0.0/8 -j REJECT
     sudo iptables -I OUTPUT -d 172.16.0.0/12 -j REJECT
     sudo iptables -I OUTPUT -d 192.168.0.0/16 -j REJECT
 
-    echo "  ✓ Private networks blocked"
+    # IPv6 private networks
+    sudo ip6tables -I OUTPUT -d fc00::/7 -j REJECT      # Unique local addresses
+    sudo ip6tables -I OUTPUT -d fe80::/10 -j REJECT     # Link-local addresses
+
+    echo "  ✓ Private networks blocked (IPv4 and IPv6)"
 fi
 
 # Block metadata services if configured
 if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
     echo "  Blocking cloud metadata services..."
 
+    # IPv4 metadata
     sudo iptables -I OUTPUT -d 169.254.169.254 -j REJECT
 
-    echo "  ✓ Metadata services blocked"
+    # IPv6 metadata (fe80::)
+    sudo ip6tables -I OUTPUT -d fe80::a9fe:a9fe -j REJECT  # IPv6-mapped 169.254.169.254
+
+    echo "  ✓ Metadata services blocked (IPv4 and IPv6)"
 fi
 
 # Write runtime context for Claude

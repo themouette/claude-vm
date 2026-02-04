@@ -197,16 +197,16 @@ disk = 20      # VM disk size in GB (default: 20)
 memory = 8     # VM memory size in GB (default: 8)
 
 [tools]
-docker = true           # Install Docker (default: false)
-node = true             # Install Node.js (default: false)
-python = false          # Install Python (default: false)
-chromium = true         # Install Chromium for debugging (default: false)
-gpg = true              # Enable GPG agent forwarding (default: false)
-network-security = true # Enable network filtering (default: false)
+docker = true    # Install Docker (default: false)
+node = true      # Install Node.js (default: false)
+python = false   # Install Python (default: false)
+chromium = true  # Install Chromium for debugging (default: false)
+gpg = true       # Enable GPG agent forwarding (default: false)
+git = true       # Configure git identity and signing (default: false)
 
 [security.network]
-enabled = true
-mode = "denylist"  # or "allowlist"
+enabled = true                     # Enable network filtering (default: false)
+mode = "denylist"                  # or "allowlist"
 allowed_domains = ["api.github.com", "*.npmjs.org"]
 blocked_domains = []
 block_tcp_udp = true
@@ -322,15 +322,16 @@ The `[tools]` section controls which tools are installed during setup:
 
 ```toml
 [tools]
-docker = true           # Docker Engine + Docker Compose
-node = true             # Node.js (LTS) + npm
-python = true           # Python 3 + pip
-chromium = true         # Chromium + Chrome DevTools MCP
-gpg = true              # GPG agent forwarding + key sync
-gh = true               # GitHub CLI + authentication
-git = true              # Git identity and signing configuration
-network-security = true # HTTP/HTTPS filtering proxy with domain policies
+docker = true    # Docker Engine + Docker Compose
+node = true      # Node.js (LTS) + npm
+python = true    # Python 3 + pip
+chromium = true  # Chromium + Chrome DevTools MCP
+gpg = true       # GPG agent forwarding + key sync
+gh = true        # GitHub CLI + authentication
+git = true       # Git identity and signing configuration
 ```
+
+**Network security** is configured separately via `[security.network]` section (see Network Security below).
 
 Each enabled capability automatically provides context to Claude about its status (version, configuration, availability) via the generated `~/.claude/CLAUDE.md` file.
 
@@ -377,12 +378,9 @@ The network-security capability provides HTTP/HTTPS filtering with domain polici
 **Enable network security:**
 
 ```toml
-[tools]
-network-security = true
-
 [security.network]
-enabled = true
-mode = "denylist"  # or "allowlist"
+enabled = true                     # Enable network security
+mode = "denylist"                  # or "allowlist"
 
 # Domain policies
 allowed_domains = ["api.example.com", "*.github.com"]
@@ -390,9 +388,15 @@ blocked_domains = ["malicious-site.com"]
 bypass_domains = ["localhost", "127.0.0.1"]
 
 # Protocol and network blocks (default: true)
-block_tcp_udp = true              # Block raw TCP/UDP connections
-block_private_networks = true     # Block 10.0.0.0/8, 192.168.0.0/16, etc.
-block_metadata_services = true    # Block cloud metadata (169.254.169.254)
+block_tcp_udp = true               # Block raw TCP/UDP connections
+block_private_networks = true      # Block 10.0.0.0/8, 192.168.0.0/16, etc.
+block_metadata_services = true     # Block cloud metadata (169.254.169.254)
+```
+
+**CLI shortcut:**
+
+```bash
+claude-vm setup --network-security  # Equivalent to setting security.network.enabled = true
 ```
 
 **Policy modes:**

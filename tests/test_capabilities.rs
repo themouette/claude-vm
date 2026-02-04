@@ -1,7 +1,7 @@
+use clap::Parser;
 use claude_vm::capabilities::registry::CapabilityRegistry;
 use claude_vm::cli::Cli;
 use claude_vm::config::{Config, PolicyMode, ToolsConfig};
-use clap::Parser;
 
 #[test]
 fn test_capability_registry_loads() {
@@ -134,14 +134,16 @@ fn test_network_security_capability_loads() {
     let registry = CapabilityRegistry::load().expect("Failed to load registry");
 
     let mut config = Config::default();
-    config.tools.network_security = true;
+    config.security.network.enabled = true;
 
     let enabled = registry
         .get_enabled_capabilities(&config)
         .expect("Failed to get enabled capabilities");
 
     // Check that network-security capability is present
-    let has_network_security = enabled.iter().any(|c| c.capability.id == "network-security");
+    let has_network_security = enabled
+        .iter()
+        .any(|c| c.capability.id == "network-security");
     assert!(
         has_network_security,
         "Network security capability should be enabled"
@@ -174,8 +176,8 @@ fn test_network_security_cli_enable() {
     let config = Config::default().with_cli_overrides(&cli);
 
     assert!(
-        config.tools.network_security,
-        "CLI flag --network-security should enable network_security in config"
+        config.security.network.enabled,
+        "CLI flag --network-security should enable security.network.enabled"
     );
 }
 
@@ -183,15 +185,15 @@ fn test_network_security_cli_enable() {
 fn test_network_security_config_enable() {
     // Test TOML config
     let toml = r#"
-        [tools]
-        network-security = true
+        [security.network]
+        enabled = true
     "#;
 
     let config: Config = toml::from_str(toml).expect("Failed to parse config");
 
     assert!(
-        config.tools.network_security,
-        "TOML config should enable network_security"
+        config.security.network.enabled,
+        "TOML config should enable security.network.enabled"
     );
 }
 
@@ -203,8 +205,8 @@ fn test_network_security_all_flag() {
     let config = Config::default().with_cli_overrides(&cli);
 
     assert!(
-        config.tools.network_security,
-        "CLI flag --all should enable network_security"
+        config.security.network.enabled,
+        "CLI flag --all should enable security.network.enabled"
     );
     assert!(config.tools.docker, "--all should enable docker");
     assert!(config.tools.node, "--all should enable node");
@@ -212,45 +214,44 @@ fn test_network_security_all_flag() {
 }
 
 #[test]
-fn test_network_security_tools_config_methods() {
-    let mut tools = ToolsConfig::default();
+fn test_network_security_registry_enable_check() {
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
 
-    // Test is_enabled returns false by default
-    assert!(!tools.is_enabled("network-security"));
+    // Test that network-security is checked via security.network.enabled
+    let mut config = Config::default();
 
-    // Test enable method
-    tools.enable("network-security");
-    assert!(
-        tools.network_security,
-        "enable() should set network_security to true"
-    );
-    assert!(
-        tools.is_enabled("network-security"),
-        "is_enabled() should return true after enable()"
-    );
+    // Should be disabled by default
+    config.security.network.enabled = false;
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get capabilities");
+    assert!(!enabled
+        .iter()
+        .any(|c| c.capability.id == "network-security"));
+
+    // Should be enabled when security.network.enabled = true
+    config.security.network.enabled = true;
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get capabilities");
+    assert!(enabled
+        .iter()
+        .any(|c| c.capability.id == "network-security"));
 }
 
 #[test]
-fn test_network_security_with_security_config() {
-    // Test full configuration with both tools and security sections
+fn test_network_security_with_full_config() {
+    // Test full configuration with security.network section
     let toml = r#"
-        [tools]
-        network-security = true
-
         [security.network]
         enabled = true
         mode = "allowlist"
         allowed_domains = ["api.github.com", "*.npmjs.org"]
         blocked_domains = ["evil.com"]
+        bypass_domains = ["localhost"]
     "#;
 
     let config: Config = toml::from_str(toml).expect("Failed to parse config");
-
-    // Verify tools section
-    assert!(
-        config.tools.network_security,
-        "Tools section should enable network-security"
-    );
 
     // Verify security.network section
     assert!(
@@ -271,5 +272,10 @@ fn test_network_security_with_security_config() {
         config.security.network.blocked_domains,
         vec!["evil.com"],
         "Blocked domains should match"
+    );
+    assert_eq!(
+        config.security.network.bypass_domains,
+        vec!["localhost"],
+        "Bypass domains should match"
     );
 }

@@ -90,10 +90,6 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub git: bool,
-
-    #[serde(default)]
-    #[serde(rename = "network-security")]
-    pub network_security: bool,
 }
 
 impl ToolsConfig {
@@ -107,7 +103,6 @@ impl ToolsConfig {
             "gpg" => self.gpg,
             "gh" => self.gh,
             "git" => self.git,
-            "network-security" => self.network_security,
             _ => false,
         }
     }
@@ -122,7 +117,6 @@ impl ToolsConfig {
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
             "git" => self.git = true,
-            "network-security" => self.network_security = true,
             _ => {}
         }
     }
@@ -510,7 +504,7 @@ impl Config {
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
                 self.tools.enable("git");
-                self.tools.enable("network-security");
+                self.security.network.enabled = true;
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -534,7 +528,7 @@ impl Config {
                     self.tools.enable("git");
                 }
                 if *network_security {
-                    self.tools.enable("network-security");
+                    self.security.network.enabled = true;
                 }
             }
 
