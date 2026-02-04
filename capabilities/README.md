@@ -43,6 +43,15 @@ id = "unique-id"
 name = "Human Readable Name"
 description = "What this capability provides"
 
+# Optional: Declarative package management
+[packages]
+system = ["package1", "package2"]  # Debian packages to install
+setup_script = """
+#!/bin/bash
+# Optional: Add custom repositories before package installation
+# Must be idempotent (safe to run multiple times)
+"""
+
 # Optional: Run on host before VM creation
 [host_setup]
 script = """
@@ -58,6 +67,7 @@ script_file = "setup.sh"  # Reference embedded script
 script = """
 #!/bin/bash
 # Inline script content
+# Note: Use [packages] for installing system packages instead
 """
 
 # Optional: Run in VM before each session (vm_runtime)
@@ -80,6 +90,99 @@ enabled_when = "other-capability"  # Optional: Only if another capability is ena
 type = "unix_socket"
 host = { detect = "command-to-detect-socket" }
 guest = "/path/in/vm"
+```
+
+## Declarative Package Management
+
+Capabilities can declare system packages directly in their TOML files using the `[packages]` section. This eliminates the need for manual `apt-get install` commands in setup scripts.
+
+### Basic Package Declaration
+
+```toml
+[capability]
+id = "python"
+name = "Python"
+description = "Python 3 with pip and development tools"
+
+[packages]
+system = ["python3", "python3-pip", "python3-venv"]
+```
+
+### Advanced Features
+
+**Version Pinning:**
+```toml
+[packages]
+system = [
+    "python3=3.11.0-1",      # Exact version
+    "nodejs=22.*",           # Wildcard version
+    "libc6:amd64"            # Architecture specification
+]
+```
+
+**Custom Repositories:**
+```toml
+[packages]
+system = ["docker-ce", "docker-ce-cli", "containerd.io"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add Docker's official GPG key and repository
+
+# Ensure keyring directory exists
+sudo mkdir -p /etc/apt/keyrings
+sudo chmod 755 /etc/apt/keyrings
+
+# Download GPG key only if not present
+if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg \\
+        -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+fi
+
+# Add repository only if not configured
+if ! grep -q "download.docker.com" /etc/apt/sources.list.d/docker.list 2>/dev/null; then
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | \\
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+fi
+"""
+```
+
+### Benefits
+
+- **Declarative**: Packages defined in data, not imperative scripts
+- **Optimized**: All packages install in a single batch operation
+- **Validated**: Package names are validated to prevent shell injection
+- **Deduplicated**: Duplicate packages across capabilities are automatically removed
+- **Ordered**: Dependency order is preserved during deduplication
+
+### Package Installation Flow
+
+1. Base packages install first (git, curl, wget, etc.) without `apt-get update`
+2. All capability `setup_script`s run to add custom repositories
+3. Single `apt-get update` executes
+4. All packages from all capabilities install in one batch operation
+5. Individual capability `vm_setup` scripts run for post-install configuration
+
+### Migration from Shell Scripts
+
+**Before (imperative):**
+```toml
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+sudo apt-get update
+sudo apt-get install -y python3 python3-pip python3-venv
+"""
+```
+
+**After (declarative):**
+```toml
+[packages]
+system = ["python3", "python3-pip", "python3-venv"]
+
+# vm_setup now only handles post-install configuration if needed
 ```
 
 ## Available Capabilities
@@ -191,7 +294,7 @@ That's it! The capability system handles everything else automatically.
 
 ## Examples
 
-### Simple Capability (inline script)
+### Simple Capability (declarative packages)
 
 ```toml
 [capability]
@@ -199,43 +302,58 @@ id = "git-lfs"
 name = "Git LFS"
 description = "Git Large File Storage support"
 
+[packages]
+system = ["git-lfs"]
+
 [vm_setup]
 script = """
 #!/bin/bash
 set -e
-sudo apt-get update
-sudo apt-get install -y git-lfs
+# Post-install configuration
 git lfs install
 """
 ```
 
-### Complex Capability (with MCP)
+### Complex Capability (with custom repository and MCP)
 
 ```toml
 [capability]
 id = "postgres"
 name = "PostgreSQL"
 description = "PostgreSQL database server"
-requires = ["docker"]
+
+[packages]
+system = ["postgresql-16", "postgresql-client-16"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add PostgreSQL official repository
+if [ ! -f /etc/apt/keyrings/postgresql.asc ]; then
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | \\
+        sudo gpg --dearmor -o /etc/apt/keyrings/postgresql.asc
+    echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | \\
+        sudo tee /etc/apt/sources.list.d/pgdg.list
+fi
+"""
 
 [vm_setup]
 script = """
 #!/bin/bash
 set -e
-# Pull PostgreSQL Docker image
-docker pull postgres:16
+# Configure PostgreSQL
+sudo systemctl enable postgresql
+sudo systemctl start postgresql
 """
 
 [vm_runtime]
 script = """
 #!/bin/bash
-# Start PostgreSQL container if not running
-if ! docker ps | grep -q postgres-dev; then
-  docker run -d --name postgres-dev \
-    -e POSTGRES_PASSWORD=dev \
-    -p 5432:5432 \
-    postgres:16
-fi
+# Write PostgreSQL context
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/postgres.txt <<EOF
+PostgreSQL version: $(psql --version 2>/dev/null || echo "not available")
+Service status: $(systemctl is-active postgresql 2>/dev/null || echo "unknown")
+EOF
 """
 
 [[mcp]]
