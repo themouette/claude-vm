@@ -190,7 +190,6 @@ pub struct PackagesConfig {
     /// ```
     #[serde(default)]
     pub setup_script: Option<String>,
-
     // Future extensions: npm, pip, cargo, etc.
 }
 

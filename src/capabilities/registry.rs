@@ -371,9 +371,8 @@ mod tests {
 
         let mut config = Config::default();
         // Add user-defined repository setup
-        config.packages.setup_script = Some(
-            "#!/bin/bash\nsudo add-apt-repository -y ppa:my-ppa/custom".to_string(),
-        );
+        config.packages.setup_script =
+            Some("#!/bin/bash\nsudo add-apt-repository -y ppa:my-ppa/custom".to_string());
 
         let setups = registry.get_repo_setups(&config).unwrap();
 
