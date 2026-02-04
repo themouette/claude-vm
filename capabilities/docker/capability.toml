@@ -3,8 +3,27 @@ id = "docker"
 name = "Docker"
 description = "Docker engine for container management"
 
+[packages]
+system = ["docker-ce", "docker-ce-cli", "containerd.io", "docker-compose-plugin"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add Docker's official GPG key and repository
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+"""
+
 [vm_setup]
-script_file = "vm_setup.sh"
+script = """
+#!/bin/bash
+set -e
+# Add user to docker group for non-root access
+sudo usermod -aG docker $(whoami)
+echo "Docker installed successfully."
+docker --version
+"""
 
 [vm_runtime]
 script = """
