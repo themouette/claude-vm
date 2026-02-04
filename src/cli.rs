@@ -132,4 +132,28 @@ pub enum Commands {
         #[arg(short = 'y', long)]
         yes: bool,
     },
+
+    /// Network security commands
+    Network {
+        #[command(subcommand)]
+        action: NetworkAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NetworkAction {
+    /// View network filtering logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(short = 'n', long, default_value = "50")]
+        lines: usize,
+
+        /// Filter logs by domain pattern
+        #[arg(short = 'f', long)]
+        filter: Option<String>,
+
+        /// Show all logs (no line limit)
+        #[arg(short = 'a', long)]
+        all: bool,
+    },
 }
