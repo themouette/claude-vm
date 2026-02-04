@@ -400,9 +400,12 @@ block_metadata_services = true    # Block cloud metadata (169.254.169.254)
 
 **How it works:**
 
-1. **Host setup**: Installs mitmproxy on the host machine for traffic filtering
-2. **VM setup**: Installs CA certificate in VM trust store for HTTPS inspection
-3. **Runtime**: Enforces iptables rules to block non-HTTP traffic and route HTTP/HTTPS through proxy
+1. **VM setup**: Installs mitmproxy and generates CA certificate inside the VM
+2. **Runtime**: Starts mitmproxy in the VM before each Claude session
+3. **Filtering**: HTTP/HTTPS traffic routed through `localhost:8080` proxy
+4. **Enforcement**: iptables rules block raw TCP/UDP and private networks
+
+Each VM runs its own isolated mitmproxy instance - no shared state between projects.
 
 **Example configurations:**
 
@@ -441,7 +444,7 @@ block_tcp_udp = false  # Allow raw TCP for development
 - HTTPS traffic inspection via man-in-the-middle proxy
 - Automatic runtime context for Claude about enabled policies
 
-**Architecture:** Based on Docker Sandboxes' proven network isolation design using mitmproxy and iptables.
+**Architecture:** Each VM runs its own mitmproxy instance for complete isolation. Inspired by Docker Sandboxes' network filtering design but adapted for Lima's VM-per-project model. No port conflicts, no host-side proxy management needed.
 
 ### Claude Context Instructions
 

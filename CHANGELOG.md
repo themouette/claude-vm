@@ -9,15 +9,17 @@ All notable changes to claude-vm will be documented in this file.
 #### Security
 
 - **Network security capability**: HTTP/HTTPS filtering proxy with domain policies and TCP/UDP blocking
-  - Installs and configures mitmproxy on host for filtering VM traffic
+  - Each VM runs its own isolated mitmproxy instance (localhost:8080)
+  - Perfect isolation: Multiple projects can run in parallel with independent policies
+  - Automatic lifecycle: Proxy starts with VM, stops with VM, no cleanup needed
   - Enforces iptables rules to block raw TCP/UDP protocols in VM
   - Blocks access to private networks (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)
   - Blocks cloud metadata services (169.254.169.254)
   - Supports allowlist and denylist policy modes for domain filtering
   - Configurable via TOML: allowed_domains, blocked_domains, bypass_domains
-  - Automatic CA certificate installation for HTTPS inspection
+  - Automatic CA certificate generation and installation for HTTPS inspection
   - Generates runtime context for Claude about enabled security policies
-  - Architecture based on Docker Sandboxes' proven network isolation design
+  - Architecture: In-VM proxy design for Lima, inspired by Docker Sandboxes
 
 ### Fixed
 
