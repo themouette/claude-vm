@@ -1,7 +1,7 @@
 use clap::Parser;
 use claude_vm::capabilities::registry::CapabilityRegistry;
 use claude_vm::cli::Cli;
-use claude_vm::config::{Config, PolicyMode, ToolsConfig};
+use claude_vm::config::{Config, PolicyMode};
 
 #[test]
 fn test_capability_registry_loads() {

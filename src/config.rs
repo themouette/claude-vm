@@ -234,6 +234,133 @@ impl Default for NetworkSecurityConfig {
     }
 }
 
+impl NetworkSecurityConfig {
+    /// Validate configuration and return warnings (not errors - config is still usable)
+    pub fn validate(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // Skip validation if network security is disabled
+        if !self.enabled {
+            return warnings;
+        }
+
+        // 1. Check for empty allowlist in allowlist mode
+        if self.mode == PolicyMode::Allowlist && self.allowed_domains.is_empty() {
+            warnings.push(
+                "Network security is in 'allowlist' mode but no domains are allowed. \
+                This will block ALL network access (only DNS and localhost allowed)."
+                    .to_string(),
+            );
+        }
+
+        // 2. Validate domain patterns
+        let all_domains: Vec<(&str, &str)> = self
+            .allowed_domains
+            .iter()
+            .map(|d| (d.as_str(), "allowed_domains"))
+            .chain(
+                self.blocked_domains
+                    .iter()
+                    .map(|d| (d.as_str(), "blocked_domains")),
+            )
+            .chain(
+                self.bypass_domains
+                    .iter()
+                    .map(|d| (d.as_str(), "bypass_domains")),
+            )
+            .collect();
+
+        for (domain, list_name) in all_domains {
+            if let Some(warning) = Self::validate_domain_pattern(domain) {
+                warnings.push(format!(
+                    "Invalid domain in {}: '{}' - {}",
+                    list_name, domain, warning
+                ));
+            }
+        }
+
+        // 3. Check for conflicting domains
+        for allowed in &self.allowed_domains {
+            if self.blocked_domains.contains(allowed) {
+                warnings.push(format!(
+                    "Domain '{}' appears in both allowed_domains and blocked_domains. \
+                    It will be treated as ALLOWED (allowed_domains takes precedence).",
+                    allowed
+                ));
+            }
+        }
+
+        warnings
+    }
+
+    /// Validate a single domain pattern
+    fn validate_domain_pattern(domain: &str) -> Option<String> {
+        if domain.is_empty() {
+            return Some("domain cannot be empty".to_string());
+        }
+
+        // Check for invalid characters (only alphanumeric, dots, hyphens, asterisk allowed)
+        if domain
+            .chars()
+            .any(|c| !c.is_alphanumeric() && c != '.' && c != '-' && c != '*')
+        {
+            return Some(
+                "domain contains invalid characters (only alphanumeric, '.', '-', '*' allowed)"
+                    .to_string(),
+            );
+        }
+
+        // Check wildcard usage
+        if domain.contains('*') {
+            // Wildcard must be at the beginning as "*."
+            if !domain.starts_with("*.") {
+                return Some(
+                    "wildcard (*) can only be used as a prefix in the form '*.domain.com'"
+                        .to_string(),
+                );
+            }
+
+            // Only one wildcard allowed
+            if domain.matches('*').count() > 1 {
+                return Some("only one wildcard (*) is allowed per domain".to_string());
+            }
+
+            // Check the part after "*."
+            let suffix = &domain[2..];
+            if suffix.is_empty() {
+                return Some(
+                    "wildcard pattern '*.` must be followed by a domain (e.g., '*.example.com')"
+                        .to_string(),
+                );
+            }
+
+            // The suffix should be a valid domain (no wildcards)
+            if suffix.contains('*') {
+                return Some("only one wildcard (*) is allowed per domain".to_string());
+            }
+        }
+
+        // Check for consecutive dots
+        if domain.contains("..") {
+            return Some("domain cannot contain consecutive dots".to_string());
+        }
+
+        // Check if domain starts or ends with dot (except after wildcard)
+        let check_domain = domain.strip_prefix("*.").unwrap_or(domain);
+
+        if check_domain.starts_with('.') || check_domain.ends_with('.') {
+            return Some("domain cannot start or end with a dot".to_string());
+        }
+
+        // Check for consecutive hyphens or invalid hyphen placement
+        if check_domain.starts_with('-') || check_domain.ends_with('-') {
+            return Some("domain cannot start or end with a hyphen".to_string());
+        }
+
+        None
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicyMode {
@@ -290,6 +417,19 @@ impl Config {
 
         // 4. Resolve context file if needed
         config = config.resolve_context_file()?;
+
+        // 5. Validate network security configuration
+        let warnings = config.security.network.validate();
+        if !warnings.is_empty() {
+            use std::io::{self, Write};
+            eprintln!();
+            eprintln!("⚠️  Network Security Configuration Warnings:");
+            for warning in warnings {
+                eprintln!("   - {}", warning);
+            }
+            eprintln!();
+            io::stderr().flush().ok();
+        }
 
         Ok(config)
     }
@@ -862,5 +1002,305 @@ mod tests {
 
         // Mode should be overridden if different from default
         assert_eq!(merged.security.network.mode, PolicyMode::Allowlist);
+    }
+
+    // === Validation Tests ===
+
+    #[test]
+    fn test_validation_disabled_network_security() {
+        let config = NetworkSecurityConfig {
+            enabled: false,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![], // Would normally warn
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert!(warnings.is_empty(), "Should not validate when disabled");
+    }
+
+    #[test]
+    fn test_validation_empty_allowlist() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("no domains are allowed"));
+        assert!(warnings[0].contains("block ALL network access"));
+    }
+
+    #[test]
+    fn test_validation_empty_denylist_ok() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Denylist,
+            blocked_domains: vec![], // OK in denylist mode
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert!(warnings.is_empty(), "Empty denylist should be valid");
+    }
+
+    #[test]
+    fn test_validation_valid_domains() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                "api.github.com".to_string(),
+                "example.com".to_string(),
+                "sub.example.co.uk".to_string(),
+                "*.npmjs.org".to_string(),
+                "*.cdn.example.com".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert!(
+            warnings.is_empty(),
+            "Valid domains should pass: {:?}",
+            warnings
+        );
+    }
+
+    #[test]
+    fn test_validation_invalid_domain_empty() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec!["".to_string()],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_validation_invalid_domain_characters() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                "api.github.com/path".to_string(), // slash not allowed
+                "example@.com".to_string(),        // @ not allowed
+                "test:8080".to_string(),           // colon not allowed
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 3);
+        for warning in &warnings {
+            assert!(warning.contains("invalid characters"));
+        }
+    }
+
+    #[test]
+    fn test_validation_invalid_wildcard_usage() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                "example.*.com".to_string(),   // wildcard in middle
+                "example.*".to_string(),       // wildcard at end
+                "*example.com".to_string(),    // wildcard without dot
+                "*.*.example.com".to_string(), // multiple wildcards
+                "*.".to_string(),              // wildcard without domain
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert!(
+            warnings.len() >= 5,
+            "Should have at least 5 warnings for invalid wildcards"
+        );
+
+        // Check specific error messages
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("example.*.com") && w.contains("only be used as a prefix")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("example.*") && w.contains("only be used as a prefix")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("*example.com") && w.contains("only be used as a prefix")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("*.*.example.com") && w.contains("only one wildcard")));
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("*.") && w.contains("must be followed by a domain")));
+    }
+
+    #[test]
+    fn test_validation_consecutive_dots() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec!["example..com".to_string(), "test...example.com".to_string()],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 2);
+        for warning in &warnings {
+            assert!(warning.contains("consecutive dots"));
+        }
+    }
+
+    #[test]
+    fn test_validation_domain_starts_ends_with_dot() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                ".example.com".to_string(),
+                "example.com.".to_string(),
+                "*.example.com.".to_string(), // wildcard doesn't excuse trailing dot
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 3);
+        for warning in &warnings {
+            assert!(warning.contains("cannot start or end with a dot"));
+        }
+    }
+
+    #[test]
+    fn test_validation_domain_starts_ends_with_hyphen() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                "-example.com".to_string(),
+                "example-.com".to_string(),
+                "*.--test.com".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert!(warnings.len() >= 2); // At least the first two should fail
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("cannot start or end with a hyphen")));
+    }
+
+    #[test]
+    fn test_validation_conflicting_domains() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Denylist,
+            allowed_domains: vec!["api.github.com".to_string(), "example.com".to_string()],
+            blocked_domains: vec![
+                "evil.com".to_string(),
+                "api.github.com".to_string(), // Conflict!
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("api.github.com"));
+        assert!(warnings[0].contains("both allowed_domains and blocked_domains"));
+        assert!(warnings[0].contains("ALLOWED"));
+    }
+
+    #[test]
+    fn test_validation_multiple_conflicts() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec!["example.com".to_string(), "test.com".to_string()],
+            blocked_domains: vec!["example.com".to_string(), "test.com".to_string()],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings[0].contains("example.com"));
+        assert!(warnings[1].contains("test.com"));
+    }
+
+    #[test]
+    fn test_validation_multiple_issues() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec![
+                "".to_string(),                // Empty
+                "example..com".to_string(),    // Consecutive dots
+                "api/test.com".to_string(),    // Invalid character
+                "*.example.*.com".to_string(), // Multiple wildcards
+            ],
+            blocked_domains: vec![],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        // Should have 4 domain validation warnings (no empty allowlist warning since list is not empty)
+        assert_eq!(warnings.len(), 4);
+    }
+
+    #[test]
+    fn test_validation_bypass_domains() {
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec!["api.github.com".to_string()],
+            bypass_domains: vec![
+                "localhost".to_string(),         // Valid
+                "example..com".to_string(),      // Invalid
+                "*.pinned-cert.com".to_string(), // Valid wildcard
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("bypass_domains"));
+        assert!(warnings[0].contains("example..com"));
+        assert!(warnings[0].contains("consecutive dots"));
+    }
+
+    #[test]
+    fn test_validation_all_domain_lists() {
+        // Test that validation checks all three domain lists
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            allowed_domains: vec!["valid.com".to_string(), "invalid..com".to_string()],
+            blocked_domains: vec![
+                "also-valid.com".to_string(),
+                "also..invalid.com".to_string(),
+            ],
+            bypass_domains: vec![
+                "another-valid.com".to_string(),
+                "another..invalid.com".to_string(),
+            ],
+            ..Default::default()
+        };
+
+        let warnings = config.validate();
+        // Should have 3 warnings (one for each invalid domain)
+        assert_eq!(warnings.len(), 3);
+
+        // Verify each list is checked
+        assert!(warnings.iter().any(|w| w.contains("allowed_domains")));
+        assert!(warnings.iter().any(|w| w.contains("blocked_domains")));
+        assert!(warnings.iter().any(|w| w.contains("bypass_domains")));
     }
 }
