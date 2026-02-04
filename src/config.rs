@@ -490,6 +490,20 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_git_capability() {
+        let base = Config::default();
+        let mut override_cfg = Config::default();
+        override_cfg.tools.git = true;
+        override_cfg.tools.gpg = true;
+        override_cfg.tools.gh = true;
+
+        let merged = base.merge(override_cfg);
+        assert!(merged.tools.git);
+        assert!(merged.tools.gpg);
+        assert!(merged.tools.gh);
+    }
+
+    #[test]
     fn test_context_instructions_inline() {
         let mut config = Config::default();
         config.context.instructions = "Test instructions".to_string();
