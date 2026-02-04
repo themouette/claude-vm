@@ -232,6 +232,7 @@ impl Config {
         self.tools.chromium = self.tools.chromium || other.tools.chromium;
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
+        self.tools.git = self.tools.git || other.tools.git;
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
