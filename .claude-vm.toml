@@ -41,11 +41,19 @@ This is the Claude VM project - a Rust CLI tool for running Claude Code in isola
 - Use proper error handling with Result types
 - Test configuration merging and precedence
 - Always run tests, format and clippy before creating a commit if rust code was changed
+- create small and comprehensive commits to ease review. A commit should
+  represent a logical step in the implementation.
+- Before creating a commit, ensure that code is properly formatted and clippy checked.
+- Before creating a commit, ensure that all tests are passing.
+- Before creating or updating a pull request, ensure that the code is well-tested and
+  that both CHANGELOG and documentation are up to date.
+
 
 ## Tools available
 
-The setup script located in `bin/setup` has been executed so you should be able
-to access tools needed to run, compile and develop the project.
+The setup script located in `bin/setup` should have been executed so you should
+be able to access tools needed to run, compile and develop the project.
+If something is missing, run this script again.
 
 SSH agent is not available in the VM so you cannot interact with the remote
 repository, but you can use `gh` to open and read pull requests or issues.

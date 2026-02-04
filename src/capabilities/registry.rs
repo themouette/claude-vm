@@ -4,6 +4,53 @@ use crate::error::{ClaudeVmError, Result};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// Validate a Debian package name according to Debian policy.
+///
+/// Valid package names must:
+/// - Start with an alphanumeric character
+/// - Contain only lowercase letters, digits, and these symbols: '-', '.', '+', '=', ':'
+/// - '=' is used for version pinning (e.g., "package=1.2.3")
+/// - ':' is used for architecture specification (e.g., "package:amd64")
+///
+/// This validation prevents confusing apt-get errors and potential security issues.
+fn validate_package_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        return Err(ClaudeVmError::InvalidConfig(
+            "Package name cannot be empty".to_string(),
+        ));
+    }
+
+    // Check first character is alphanumeric
+    let first_char = name.chars().next().unwrap();
+    if !first_char.is_ascii_alphanumeric() {
+        return Err(ClaudeVmError::InvalidConfig(format!(
+            "Invalid package name '{}': must start with a letter or digit",
+            name
+        )));
+    }
+
+    // Check all characters are valid
+    for c in name.chars() {
+        let valid = c.is_ascii_lowercase()
+            || c.is_ascii_digit()
+            || c == '-'
+            || c == '.'
+            || c == '+'
+            || c == '='
+            || c == ':';
+
+        if !valid {
+            return Err(ClaudeVmError::InvalidConfig(format!(
+                "Invalid package name '{}': contains invalid character '{}'. \
+                 Package names must contain only lowercase letters, digits, and '.', '-', '+', '=', ':'",
+                name, c
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 pub struct CapabilityRegistry {
     capabilities: HashMap<String, Arc<Capability>>,
 }
@@ -191,6 +238,11 @@ impl CapabilityRegistry {
         // Add user-defined packages from config
         packages.extend(config.packages.system.clone());
 
+        // Validate all package names before proceeding
+        for pkg in &packages {
+            validate_package_name(pkg)?;
+        }
+
         // Deduplicate while preserving order (first occurrence wins)
         let mut seen = HashSet::new();
         packages.retain(|pkg| seen.insert(pkg.clone()));
@@ -289,5 +341,73 @@ mod tests {
 
         // Should be empty
         assert_eq!(setups.len(), 0);
+    }
+
+    #[test]
+    fn test_validate_package_name_valid() {
+        // Simple package names
+        assert!(validate_package_name("python3").is_ok());
+        assert!(validate_package_name("nodejs").is_ok());
+        assert!(validate_package_name("curl").is_ok());
+
+        // With hyphens and dots
+        assert!(validate_package_name("python3-pip").is_ok());
+        assert!(validate_package_name("docker-ce").is_ok());
+        assert!(validate_package_name("python3.11").is_ok());
+
+        // With version pinning
+        assert!(validate_package_name("python3=3.11.0-1").is_ok());
+        assert!(validate_package_name("nodejs=22.0.0").is_ok());
+
+        // With architecture
+        assert!(validate_package_name("libc6:amd64").is_ok());
+
+        // With plus
+        assert!(validate_package_name("g++").is_ok());
+    }
+
+    #[test]
+    fn test_validate_package_name_invalid() {
+        // Empty name
+        assert!(validate_package_name("").is_err());
+
+        // Uppercase letters (Debian packages must be lowercase)
+        assert!(validate_package_name("Python3").is_err());
+        assert!(validate_package_name("CURL").is_err());
+
+        // Shell metacharacters
+        assert!(validate_package_name("python3; rm -rf /").is_err());
+        assert!(validate_package_name("python3 && whoami").is_err());
+        assert!(validate_package_name("python3|cat").is_err());
+        assert!(validate_package_name("python3$(whoami)").is_err());
+        assert!(validate_package_name("python3`whoami`").is_err());
+
+        // Invalid starting character
+        assert!(validate_package_name("-python3").is_err());
+        assert!(validate_package_name(".python3").is_err());
+
+        // Spaces
+        assert!(validate_package_name("python 3").is_err());
+
+        // Other invalid characters
+        assert!(validate_package_name("python3@latest").is_err());
+        assert!(validate_package_name("python3#comment").is_err());
+    }
+
+    #[test]
+    fn test_collect_packages_validates_names() {
+        let registry = CapabilityRegistry::load().unwrap();
+        let mut config = Config::default();
+
+        // Add invalid package name
+        config.packages.system = vec!["INVALID-UPPERCASE".to_string()];
+
+        // Should fail validation
+        let result = registry.collect_system_packages(&config);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid package name"));
     }
 }
