@@ -70,6 +70,10 @@ pub enum Commands {
         #[arg(long)]
         gh: bool,
 
+        /// Configure git from host
+        #[arg(long)]
+        git: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,

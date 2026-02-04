@@ -232,6 +232,7 @@ impl Config {
         self.tools.chromium = self.tools.chromium || other.tools.chromium;
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
+        self.tools.git = self.tools.git || other.tools.git;
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
@@ -374,6 +375,7 @@ impl Config {
             chromium,
             gpg,
             gh,
+            git,
             all,
             disk,
             memory,
@@ -388,6 +390,7 @@ impl Config {
                 self.tools.enable("chromium");
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
+                self.tools.enable("git");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -406,6 +409,9 @@ impl Config {
                 }
                 if *gh {
                     self.tools.enable("gh");
+                }
+                if *git {
+                    self.tools.enable("git");
                 }
             }
 
@@ -481,6 +487,20 @@ mod tests {
         assert_eq!(merged.vm.disk, 30); // Kept from base
         assert_eq!(merged.vm.memory, 16); // From override
         assert!(merged.tools.docker); // From override
+    }
+
+    #[test]
+    fn test_merge_git_capability() {
+        let base = Config::default();
+        let mut override_cfg = Config::default();
+        override_cfg.tools.git = true;
+        override_cfg.tools.gpg = true;
+        override_cfg.tools.gh = true;
+
+        let merged = base.merge(override_cfg);
+        assert!(merged.tools.git);
+        assert!(merged.tools.gpg);
+        assert!(merged.tools.gh);
     }
 
     #[test]

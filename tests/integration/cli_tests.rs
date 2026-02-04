@@ -35,7 +35,8 @@ fn test_setup_help() {
         .stdout(predicate::str::contains("--docker"))
         .stdout(predicate::str::contains("--node"))
         .stdout(predicate::str::contains("--python"))
-        .stdout(predicate::str::contains("--chromium"));
+        .stdout(predicate::str::contains("--chromium"))
+        .stdout(predicate::str::contains("--git"));
 }
 
 #[test]

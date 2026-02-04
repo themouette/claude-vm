@@ -48,18 +48,7 @@ GPG_SIGN=$(git config commit.gpgsign 2>/dev/null || echo "false")
 GPG_FORMAT=$(git config gpg.format 2>/dev/null || echo "openpgp")
 SIGNING_KEY=$(git config user.signingkey 2>/dev/null || echo "")
 
-# Show which config is being used
-CONFIG_SCOPE="global"
-if [ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.git" ]; then
-    # Check if local config exists and overrides global
-    LOCAL_NAME=$(cd "$PROJECT_ROOT" && git config --local user.name 2>/dev/null || echo "")
-    LOCAL_EMAIL=$(cd "$PROJECT_ROOT" && git config --local user.email 2>/dev/null || echo "")
-    if [ -n "$LOCAL_NAME" ] || [ -n "$LOCAL_EMAIL" ]; then
-        CONFIG_SCOPE="local (project-specific)"
-    fi
-fi
-
-echo "Using git config from: $CONFIG_SCOPE"
+echo "Setting global git config in VM:"
 echo "  User: $GIT_USER_NAME"
 echo "  Email: $GIT_USER_EMAIL"
 
@@ -102,6 +91,10 @@ fi
 # Execute git config commands in VM, reading from temp files
 if ! limactl shell "$VM_NAME" bash <<'SHELL_EOF'
 set -e
+
+if ! command -v git >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive sudo apt-get install -y git
+fi
 
 # Configure git user identity
 git config --global user.name "$(cat /tmp/git-user-name)"

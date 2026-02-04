@@ -6,6 +6,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **Git capability config merge**: Fixed bug where git capability was not being merged when loading from `.claude-vm.toml` files. The config merge function was missing the line to merge the git field, causing git configuration to be ignored when specified in project or global config files.
+- **Git capability host setup**: Fixed syntax error and permission issues in git capability host setup script that prevented git from being installed in the VM. Added proper sudo usage and fixed bash syntax for git installation check.
+- **Worktree support**: Fixed project detection to properly work with git worktrees. Previously, the tool would always use the main repository's root even when run from a worktree, causing it to miss worktree-specific `.claude-vm.toml` files. Now uses `git rev-parse --show-toplevel` to correctly detect the worktree root.
+- **Git capability CLI flag**: Added missing `--git` flag to `claude-vm setup` command. The git capability was added in v0.2.2 but the CLI flag was not included, preventing users from enabling git configuration via command line and causing it to be excluded from `--all`. Users can now use `claude-vm setup --git` or `claude-vm setup --all` to enable git configuration.
 - **Chromium MCP server**: Removed `enabled_when = "node"` condition from chromium capability's MCP server configuration. The chrome-devtools MCP server now registers whenever chromium is enabled, allowing users who install Node.js manually in setup scripts to use the MCP functionality without enabling the node capability.
 
 ## [0.2.2] - 2026-02-03
