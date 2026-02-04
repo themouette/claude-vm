@@ -56,14 +56,38 @@ pub struct CapabilityMeta {
 /// are not available in the default Debian repositories, use `setup_script`
 /// to add custom apt sources first.
 ///
-/// Execution order:
+/// ## Version Pinning
+///
+/// Package names support version constraints using standard Debian syntax:
+/// - `package=1.2.3` - Exact version
+/// - `package=1.2.*` - Version wildcard
+/// - `package>=1.2.0` - Minimum version (requires apt policy)
+///
+/// Examples:
+/// ```toml
+/// [packages]
+/// system = [
+///     "python3",              # Latest available version
+///     "nodejs=22.*",          # Node 22.x (any patch version)
+///     "docker-ce=5:24.0.0-1", # Exact Docker version with epoch
+/// ]
+/// ```
+///
+/// ## Execution Order
+///
 /// 1. All `setup_script`s run (adds custom repositories/GPG keys)
 /// 2. Single `apt-get update` runs (refreshes package lists)
 /// 3. Single `apt-get install` runs (installs all system packages)
 /// 4. `vm_setup` scripts run (for post-install configuration)
 #[derive(Debug, Clone, Deserialize)]
 pub struct PackageSpec {
-    /// System packages to install via apt
+    /// System packages to install via apt.
+    ///
+    /// Supports version pinning with Debian apt syntax:
+    /// - "package" - latest version
+    /// - "package=1.2.3" - exact version
+    /// - "package=1.2.*" - version wildcard
+    /// - "package:amd64" - specific architecture
     #[serde(default)]
     pub system: Vec<String>,
 

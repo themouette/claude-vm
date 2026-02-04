@@ -131,9 +131,27 @@ impl ToolsConfig {
 /// Users can specify additional packages to install in their .claude-vm.toml files.
 /// These are merged with capability-defined packages and installed together in a
 /// single batch operation to minimize setup time.
+///
+/// ## Version Pinning Example
+///
+/// ```toml
+/// [packages]
+/// system = [
+///     "postgresql-client",     # Latest version
+///     "redis-tools=7.0.*",     # Redis 7.0.x
+///     "jq",                    # Latest version
+///     "htop",                  # Latest version
+/// ]
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PackagesConfig {
-    /// System packages to install via apt
+    /// System packages to install via apt.
+    ///
+    /// Supports version pinning:
+    /// - "package" - latest version
+    /// - "package=1.2.3" - exact version
+    /// - "package=1.2.*" - version wildcard
+    /// - "package:amd64" - specific architecture
     #[serde(default)]
     pub system: Vec<String>,
     // Future extensions: npm, pip, cargo, etc.

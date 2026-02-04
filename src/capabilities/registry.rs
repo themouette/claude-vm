@@ -366,15 +366,24 @@ mod tests {
         assert!(validate_package_name("docker-ce").is_ok());
         assert!(validate_package_name("python3.11").is_ok());
 
-        // With version pinning
+        // With version pinning (exact version)
         assert!(validate_package_name("python3=3.11.0-1").is_ok());
         assert!(validate_package_name("nodejs=22.0.0").is_ok());
 
-        // With architecture
+        // With version wildcards
+        assert!(validate_package_name("nodejs=22.*").is_ok());
+        assert!(validate_package_name("docker-ce=5:24.0.*").is_ok());
+
+        // With architecture specification
         assert!(validate_package_name("libc6:amd64").is_ok());
+        assert!(validate_package_name("gcc:arm64").is_ok());
 
         // With plus
         assert!(validate_package_name("g++").is_ok());
+        assert!(validate_package_name("c++").is_ok());
+
+        // Complex version strings with epoch
+        assert!(validate_package_name("docker-ce=5:24.0.0-1").is_ok());
     }
 
     #[test]
@@ -420,5 +429,28 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Invalid package name"));
+    }
+
+    #[test]
+    fn test_version_pinning_support() {
+        let registry = CapabilityRegistry::load().unwrap();
+        let mut config = Config::default();
+
+        // Add packages with version pinning
+        config.packages.system = vec![
+            "python3=3.11.*".to_string(),
+            "nodejs=22.0.0".to_string(),
+            "docker-ce=5:24.0.0-1".to_string(),
+            "libc6:amd64".to_string(),
+        ];
+
+        // Should succeed - version pinning is supported
+        let packages = registry.collect_system_packages(&config).unwrap();
+
+        assert_eq!(packages.len(), 4);
+        assert!(packages.contains(&"python3=3.11.*".to_string()));
+        assert!(packages.contains(&"nodejs=22.0.0".to_string()));
+        assert!(packages.contains(&"docker-ce=5:24.0.0-1".to_string()));
+        assert!(packages.contains(&"libc6:amd64".to_string()));
     }
 }
