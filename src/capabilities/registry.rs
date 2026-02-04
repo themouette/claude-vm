@@ -224,28 +224,39 @@ impl CapabilityRegistry {
     /// Collect all system packages from enabled capabilities and user config.
     /// Returns packages in dependency order (respects capability.requires).
     /// Duplicates are removed while preserving order (first occurrence wins).
+    ///
+    /// Performance: Clones each unique package only once using HashSet-based deduplication.
     pub fn collect_system_packages(&self, config: &Config) -> Result<Vec<String>> {
         let enabled = self.get_enabled_capabilities(config)?;
+        let mut seen = HashSet::new();
         let mut packages = Vec::new();
 
         // Collect packages from capabilities (already in dependency order)
+        // Deduplicate and validate as we go to minimize cloning
         for capability in enabled {
             if let Some(pkg_spec) = &capability.packages {
-                packages.extend(pkg_spec.system.clone());
+                for pkg in &pkg_spec.system {
+                    // Validate package name
+                    validate_package_name(pkg)?;
+
+                    // Only clone and add if not already seen
+                    if seen.insert(pkg.as_str()) {
+                        packages.push(pkg.clone());
+                    }
+                }
             }
         }
 
         // Add user-defined packages from config
-        packages.extend(config.packages.system.clone());
-
-        // Validate all package names before proceeding
-        for pkg in &packages {
+        for pkg in &config.packages.system {
+            // Validate package name
             validate_package_name(pkg)?;
-        }
 
-        // Deduplicate while preserving order (first occurrence wins)
-        let mut seen = HashSet::new();
-        packages.retain(|pkg| seen.insert(pkg.clone()));
+            // Only clone and add if not already seen
+            if seen.insert(pkg.as_str()) {
+                packages.push(pkg.clone());
+            }
+        }
 
         Ok(packages)
     }
