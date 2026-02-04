@@ -14,11 +14,26 @@ set -e
 sudo mkdir -p /etc/apt/keyrings
 sudo chmod 755 /etc/apt/keyrings
 
-# Download GPG key only if not present or changed
+# Download and verify GPG key only if not present
 if [ ! -f /etc/apt/keyrings/docker.asc ]; then
     echo "Downloading Docker GPG key..."
     sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
     sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Verify GPG key fingerprint for security
+    # Official Docker GPG key fingerprint from https://docs.docker.com/engine/install/debian/
+    EXPECTED_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
+    ACTUAL_FINGERPRINT=$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')
+
+    if [ "$ACTUAL_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]; then
+        echo "ERROR: Docker GPG key fingerprint mismatch!"
+        echo "Expected: $EXPECTED_FINGERPRINT"
+        echo "Got:      $ACTUAL_FINGERPRINT"
+        echo "This may indicate a security issue. Aborting."
+        sudo rm -f /etc/apt/keyrings/docker.asc
+        exit 1
+    fi
+    echo "✓ Docker GPG key fingerprint verified"
 else
     echo "Docker GPG key already present"
 fi
