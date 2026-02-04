@@ -4,6 +4,44 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Declarative system package management**: Capabilities can now declare system packages directly in TOML files via `[packages]` section, eliminating the need for manual `apt-get install` commands in setup scripts
+  - Package specifications with `system` array for Debian package names
+  - Optional `setup_script` for adding custom repositories (Docker, Node.js, GitHub CLI)
+  - Repository setup scripts run before package installation with idempotent checks
+  - Support for version pinning (e.g., `python3=3.11.0-1`), wildcards (e.g., `nodejs=22.*`), and architecture specifications (e.g., `libc6:amd64`)
+  - Package name validation prevents shell injection and provides clear error messages
+  - Automatic deduplication preserves dependency order across capabilities
+- **User-defined package management**: Users can now add custom packages and repository setup scripts via config files
+  - `[packages]` section in `.claude-vm.toml` for user-defined system packages
+  - `packages.setup_script` for adding custom repositories (PPAs, third-party repos)
+  - User setup scripts run after capability setups to allow extending or overriding
+  - Security warnings in documentation for setup_script usage
+- **Batch package installation optimization**: All system packages now install in a single `apt-get update` + `apt-get install` operation
+  - Reduces from 2 to 1 `apt-get update` call during VM setup
+  - Base packages (git, curl, wget, etc.) install without update using default Debian repos
+  - Repository setup scripts run before the single update to add custom sources
+  - Capability and user packages batch install together for maximum efficiency
+  - Enhanced error messages with troubleshooting steps for installation failures
+
+### Changed
+
+- **Capability migrations**: All capabilities migrated from imperative shell scripts to declarative package specifications
+  - Docker: Declarative packages with idempotent repository setup
+  - Node.js: Uses official NodeSource setup script for repository configuration
+  - Python: Simple package list (python3, python3-pip, python3-venv)
+  - Chromium: Packages plus post-install symlink configuration
+  - GPG: Added gnupg package declaration, removed apt-get from vm_setup
+  - GitHub CLI: Declarative package with repository setup
+
+### Fixed
+
+- **Repository GPG verification**: Corrected Docker and GitHub CLI repository setup scripts to match official vendor documentation
+  - Removed manual GPG fingerprint verification not present in official docs
+  - APT automatically verifies package signatures via `signed-by` parameter
+  - Downloads GPG keys over HTTPS for authenticity via TLS certificate validation
+
 ## [0.2.3] - 2026-02-04
 
 ### Added
