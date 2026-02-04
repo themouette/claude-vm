@@ -282,3 +282,64 @@ echo "MCP servers configured in $CONFIG"
 
     Ok(())
 }
+
+/// Execute repository setup scripts (adds custom apt sources before apt-get update)
+pub fn execute_repository_setups(
+    project: &Project,
+    repo_setups: &[(String, String)],
+) -> Result<()> {
+    for (capability_id, setup_script) in repo_setups {
+        println!("  Setting up repositories for {}...", capability_id);
+
+        let template_name = project.template_name();
+
+        // Execute the repo setup script
+        execute_vm_script(
+            template_name,
+            &ScriptConfig {
+                script: Some(setup_script.clone()),
+                script_file: None,
+            },
+            capability_id,
+            false,
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Batch install system packages via apt (SINGLE apt-get update + install)
+pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> Result<()> {
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    let template_name = project.template_name();
+
+    println!("  Running apt-get update...");
+    LimaCtl::shell(
+        template_name,
+        None,
+        "sudo",
+        &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update"],
+        false,
+    )?;
+
+    println!("  Installing {} packages...", packages.len());
+
+    // Build command: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y pkg1 pkg2 ...
+    let mut args = vec![
+        "DEBIAN_FRONTEND=noninteractive",
+        "apt-get",
+        "install",
+        "-y",
+    ];
+
+    let package_refs: Vec<&str> = packages.iter().map(|s| s.as_str()).collect();
+    args.extend(package_refs);
+
+    LimaCtl::shell(template_name, None, "sudo", &args, false)?;
+
+    println!("  ✓ System packages installed successfully");
+    Ok(())
+}
