@@ -8,11 +8,28 @@ system = ["docker-ce", "docker-ce-cli", "containerd.io", "docker-compose-plugin"
 setup_script = """
 #!/bin/bash
 set -e
-# Add Docker's official GPG key and repository
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# Add Docker's official GPG key and repository (idempotent)
+
+# Ensure keyring directory exists
+sudo mkdir -p /etc/apt/keyrings
+sudo chmod 755 /etc/apt/keyrings
+
+# Download GPG key only if not present or changed
+if [ ! -f /etc/apt/keyrings/docker.asc ]; then
+    echo "Downloading Docker GPG key..."
+    sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+else
+    echo "Docker GPG key already present"
+fi
+
+# Add repository only if not already configured
+if ! grep -q "download.docker.com" /etc/apt/sources.list.d/docker.list 2>/dev/null; then
+    echo "Adding Docker repository..."
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo \\"$VERSION_CODENAME\\") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+else
+    echo "Docker repository already configured"
+fi
 """
 
 [vm_setup]

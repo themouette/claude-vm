@@ -8,8 +8,15 @@ system = ["nodejs"]
 setup_script = """
 #!/bin/bash
 set -e
-# Add NodeSource repository for Node.js 22.x
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+# Add NodeSource repository for Node.js 22.x (idempotent)
+
+# Check if NodeSource repository is already configured
+if grep -q "deb.nodesource.com" /etc/apt/sources.list.d/nodesource.list 2>/dev/null; then
+    echo "NodeSource repository already configured"
+else
+    echo "Adding NodeSource repository..."
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+fi
 """
 
 [vm_runtime]
