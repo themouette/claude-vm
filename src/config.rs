@@ -136,7 +136,6 @@ pub struct PackagesConfig {
     /// System packages to install via apt
     #[serde(default)]
     pub system: Vec<String>,
-
     // Future extensions: npm, pip, cargo, etc.
 }
 

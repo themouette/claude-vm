@@ -324,12 +324,7 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
     println!("  Installing {} packages...", packages.len());
 
     // Build command: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y pkg1 pkg2 ...
-    let mut args = vec![
-        "DEBIAN_FRONTEND=noninteractive",
-        "apt-get",
-        "install",
-        "-y",
-    ];
+    let mut args = vec!["DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y"];
 
     let package_refs: Vec<&str> = packages.iter().map(|s| s.as_str()).collect();
     args.extend(package_refs);

@@ -207,10 +207,7 @@ impl CapabilityRegistry {
         for capability in enabled {
             if let Some(pkg_spec) = &capability.packages {
                 if let Some(setup_script) = &pkg_spec.setup_script {
-                    setups.push((
-                        capability.capability.id.clone(),
-                        setup_script.clone(),
-                    ));
+                    setups.push((capability.capability.id.clone(), setup_script.clone()));
                 }
             }
         }
@@ -233,10 +230,7 @@ mod tests {
         config.tools.node = true;
 
         // Add some user packages, including duplicates
-        config.packages.system = vec![
-            "git".to_string(),
-            "curl".to_string(),
-        ];
+        config.packages.system = vec!["git".to_string(), "curl".to_string()];
 
         let packages = registry.collect_system_packages(&config).unwrap();
 
@@ -274,10 +268,7 @@ mod tests {
         // Don't enable any capabilities
 
         // Add user-defined packages
-        config.packages.system = vec![
-            "htop".to_string(),
-            "jq".to_string(),
-        ];
+        config.packages.system = vec!["htop".to_string(), "jq".to_string()];
 
         let packages = registry.collect_system_packages(&config).unwrap();
 
