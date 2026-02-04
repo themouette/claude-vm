@@ -143,6 +143,25 @@ impl ToolsConfig {
 ///     "htop",                  # Latest version
 /// ]
 /// ```
+///
+/// ## Custom Repository Setup
+///
+/// ⚠️  **SECURITY WARNING**: `setup_script` executes arbitrary bash code with sudo privileges.
+/// Only use scripts from trusted sources. Malicious scripts can compromise your system.
+///
+/// ```toml
+/// [packages]
+/// system = ["my-custom-package"]
+/// setup_script = """
+/// #!/bin/bash
+/// set -e
+/// # Add custom repository
+/// sudo add-apt-repository ppa:my-ppa/custom
+/// # Or manually add repository and key
+/// curl -fsSL https://example.com/key.gpg | sudo tee /etc/apt/keyrings/custom.gpg > /dev/null
+/// echo "deb [signed-by=/etc/apt/keyrings/custom.gpg] https://example.com/debian stable main" | sudo tee /etc/apt/sources.list.d/custom.list
+/// """
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PackagesConfig {
     /// System packages to install via apt.
@@ -154,6 +173,24 @@ pub struct PackagesConfig {
     /// - "package:amd64" - specific architecture
     #[serde(default)]
     pub system: Vec<String>,
+
+    /// Optional script to run before apt-get update (adds custom repositories, GPG keys).
+    ///
+    /// ⚠️  **SECURITY WARNING**: This script runs with sudo privileges. Only use
+    /// trusted scripts. Review any script before adding it to your configuration.
+    ///
+    /// This script runs in the same phase as capability repository setup scripts,
+    /// before the single apt-get update call.
+    ///
+    /// Example: Add a PPA
+    /// ```bash
+    /// #!/bin/bash
+    /// set -e
+    /// sudo add-apt-repository -y ppa:deadsnakes/ppa
+    /// ```
+    #[serde(default)]
+    pub setup_script: Option<String>,
+
     // Future extensions: npm, pip, cargo, etc.
 }
 

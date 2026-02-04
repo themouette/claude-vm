@@ -263,16 +263,25 @@ impl CapabilityRegistry {
 
     /// Get capabilities that need repository setup (in dependency order).
     /// Returns tuples of (capability_id, setup_script).
+    ///
+    /// This includes both capability-defined and user-defined repository setups.
+    /// User-defined setups run after capability setups to allow overriding or extending.
     pub fn get_repo_setups(&self, config: &Config) -> Result<Vec<(String, String)>> {
         let enabled = self.get_enabled_capabilities(config)?;
         let mut setups = Vec::new();
 
+        // Collect capability repository setups (in dependency order)
         for capability in enabled {
             if let Some(pkg_spec) = &capability.packages {
                 if let Some(setup_script) = &pkg_spec.setup_script {
                     setups.push((capability.capability.id.clone(), setup_script.clone()));
                 }
             }
+        }
+
+        // Add user-defined repository setup (runs after capability setups)
+        if let Some(user_setup_script) = &config.packages.setup_script {
+            setups.push(("user-config".to_string(), user_setup_script.clone()));
         }
 
         Ok(setups)
@@ -352,6 +361,42 @@ mod tests {
 
         // Should be empty
         assert_eq!(setups.len(), 0);
+    }
+
+    #[test]
+    fn test_get_repo_setups_with_user_config() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let mut config = Config::default();
+        // Add user-defined repository setup
+        config.packages.setup_script = Some(
+            "#!/bin/bash\nsudo add-apt-repository -y ppa:my-ppa/custom".to_string(),
+        );
+
+        let setups = registry.get_repo_setups(&config).unwrap();
+
+        // Should have user setup
+        assert_eq!(setups.len(), 1);
+        assert_eq!(setups[0].0, "user-config");
+        assert!(setups[0].1.contains("ppa:my-ppa/custom"));
+    }
+
+    #[test]
+    fn test_get_repo_setups_mixed() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let mut config = Config::default();
+        // Enable a capability with repo setup (e.g., docker)
+        config.tools.docker = true;
+        // Add user-defined repository setup
+        config.packages.setup_script = Some("#!/bin/bash\necho 'user setup'".to_string());
+
+        let setups = registry.get_repo_setups(&config).unwrap();
+
+        // Should have both capability and user setups
+        assert!(setups.len() >= 2);
+        // Last one should be user-config
+        assert_eq!(setups.last().unwrap().0, "user-config");
     }
 
     #[test]
