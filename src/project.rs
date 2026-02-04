@@ -20,25 +20,20 @@ impl Project {
     }
 
     /// Get the project root directory
-    /// Priority: git common dir parent, then current directory
+    /// Priority: git worktree/repo root (via --show-toplevel), then current directory
     fn get_project_root() -> Result<PathBuf> {
-        // Try git rev-parse --git-common-dir first (handles worktrees)
+        // Try git rev-parse --show-toplevel (returns worktree root if in worktree, main repo otherwise)
         if let Ok(output) = Command::new("git")
-            .args(["rev-parse", "--git-common-dir"])
+            .args(["rev-parse", "--show-toplevel"])
             .output()
         {
             if output.status.success() {
-                let git_dir = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                let git_path = PathBuf::from(git_dir);
+                let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let root_path = PathBuf::from(root);
 
-                // If it's a .git directory, use its parent
-                if git_path.is_dir() {
-                    if let Some(parent) = git_path.parent() {
-                        // Canonicalize to resolve any .. or symlinks
-                        if let Ok(canonical) = parent.canonicalize() {
-                            return Ok(canonical);
-                        }
-                    }
+                // Canonicalize to resolve any .. or symlinks
+                if let Ok(canonical) = root_path.canonicalize() {
+                    return Ok(canonical);
                 }
             }
         }
