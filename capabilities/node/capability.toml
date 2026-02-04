@@ -3,8 +3,14 @@ id = "node"
 name = "Node.js"
 description = "Node.js runtime and npm package manager"
 
-[vm_setup]
-script_file = "vm_setup.sh"
+[packages]
+system = ["nodejs"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add NodeSource repository for Node.js 22.x
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+"""
 
 [vm_runtime]
 script = """
