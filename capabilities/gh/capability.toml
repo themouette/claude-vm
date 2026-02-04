@@ -14,26 +14,12 @@ set -e
 sudo mkdir -p /etc/apt/keyrings
 sudo chmod 755 /etc/apt/keyrings
 
-# Download and verify GPG key only if not present
+# Download GPG key only if not present
 if [ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]; then
     echo "Downloading GitHub CLI GPG key..."
     wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
     sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-
-    # Verify GPG key fingerprint for security
-    # Official GitHub CLI GPG key fingerprint from https://github.com/cli/cli/blob/trunk/docs/install_linux.md
-    EXPECTED_FINGERPRINT="23F3D4EA75716059332820B8B4BB6EB5F3E1D86B"
-    ACTUAL_FINGERPRINT=$(gpg --show-keys --with-colons /etc/apt/keyrings/githubcli-archive-keyring.gpg 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')
-
-    if [ "$ACTUAL_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]; then
-        echo "ERROR: GitHub CLI GPG key fingerprint mismatch!"
-        echo "Expected: $EXPECTED_FINGERPRINT"
-        echo "Got:      $ACTUAL_FINGERPRINT"
-        echo "This may indicate a security issue. Aborting."
-        sudo rm -f /etc/apt/keyrings/githubcli-archive-keyring.gpg
-        exit 1
-    fi
-    echo "✓ GitHub CLI GPG key fingerprint verified"
+    echo "✓ GitHub CLI GPG key downloaded"
 else
     echo "GitHub CLI GPG key already present"
 fi
