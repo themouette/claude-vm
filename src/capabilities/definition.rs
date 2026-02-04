@@ -12,6 +12,10 @@ pub struct Capability {
     /// Capability metadata (id, name, description, dependencies)
     pub capability: CapabilityMeta,
 
+    /// Package specifications (system packages, optional repo setup)
+    #[serde(default)]
+    pub packages: Option<PackageSpec>,
+
     /// Optional host setup script (runs on host during setup)
     #[serde(default)]
     pub host_setup: Option<ScriptConfig>,
@@ -44,6 +48,31 @@ pub struct CapabilityMeta {
 
     #[serde(default)]
     pub conflicts: Vec<String>,
+}
+
+/// Package specifications for a capability.
+///
+/// The `system` field lists packages to install via apt. If these packages
+/// are not available in the default Debian repositories, use `setup_script`
+/// to add custom apt sources first.
+///
+/// Execution order:
+/// 1. All `setup_script`s run (adds custom repositories/GPG keys)
+/// 2. Single `apt-get update` runs (refreshes package lists)
+/// 3. Single `apt-get install` runs (installs all system packages)
+/// 4. `vm_setup` scripts run (for post-install configuration)
+#[derive(Debug, Clone, Deserialize)]
+pub struct PackageSpec {
+    /// System packages to install via apt
+    #[serde(default)]
+    pub system: Vec<String>,
+
+    /// Optional script to run before apt-get update (adds custom repos, GPG keys).
+    /// Only needed when packages are NOT in default Debian repositories.
+    ///
+    /// Example: Docker needs a custom repository setup
+    #[serde(default)]
+    pub setup_script: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

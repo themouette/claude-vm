@@ -11,6 +11,10 @@ pub struct Config {
     #[serde(default)]
     pub tools: ToolsConfig,
 
+    /// User-defined packages to install
+    #[serde(default)]
+    pub packages: PackagesConfig,
+
     #[serde(default)]
     pub setup: SetupConfig,
 
@@ -120,6 +124,20 @@ impl ToolsConfig {
             _ => {}
         }
     }
+}
+
+/// User-defined package specifications.
+///
+/// Users can specify additional packages to install in their .claude-vm.toml files.
+/// These are merged with capability-defined packages and installed together in a
+/// single batch operation to minimize setup time.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PackagesConfig {
+    /// System packages to install via apt
+    #[serde(default)]
+    pub system: Vec<String>,
+
+    // Future extensions: npm, pip, cargo, etc.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -262,6 +280,9 @@ impl Config {
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
         self.tools.git = self.tools.git || other.tools.git;
+
+        // Packages (extend/append)
+        self.packages.system.extend(other.packages.system);
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
