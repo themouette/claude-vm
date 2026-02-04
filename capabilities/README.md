@@ -42,6 +42,7 @@ Each capability is defined in a TOML file with this structure:
 id = "unique-id"
 name = "Human Readable Name"
 description = "What this capability provides"
+requires = ["other-capability"]  # Optional: Dependencies on other capabilities
 
 # Optional: Declarative package management
 [packages]
@@ -314,13 +315,56 @@ git lfs install
 """
 ```
 
-### Complex Capability (with custom repository and MCP)
+### Complex Capability (with dependencies and MCP)
+
+```toml
+[capability]
+id = "postgres-docker"
+name = "PostgreSQL (Docker)"
+description = "PostgreSQL database server running in Docker"
+requires = ["docker"]  # Requires Docker to be enabled
+
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+# Pull PostgreSQL Docker image
+docker pull postgres:16
+"""
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Start PostgreSQL container if not running
+if ! docker ps | grep -q postgres-dev; then
+  docker run -d --name postgres-dev \\
+    -e POSTGRES_PASSWORD=dev \\
+    -p 5432:5432 \\
+    postgres:16
+fi
+
+# Write context
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/postgres.txt <<EOF
+PostgreSQL container: $(docker ps --filter name=postgres-dev --format "{{.Status}}" 2>/dev/null || echo "not running")
+Connection: postgresql://postgres:dev@localhost:5432
+EOF
+"""
+
+[[mcp]]
+id = "postgres-query"
+command = "npx"
+args = ["-y", "postgres-mcp@latest"]
+enabled_when = "node"
+```
+
+### Capability with Custom Repository
 
 ```toml
 [capability]
 id = "postgres"
 name = "PostgreSQL"
-description = "PostgreSQL database server"
+description = "PostgreSQL database server (native install)"
 
 [packages]
 system = ["postgresql-16", "postgresql-client-16"]
