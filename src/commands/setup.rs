@@ -43,7 +43,17 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Install base packages
     install_base_packages(project)?;
 
-    // Install optional tools via capability system (vm_setup hooks)
+    // === THREE-PHASE PACKAGE MANAGEMENT ===
+
+    // Phase 1: Setup custom repositories (Docker, Node, gh, etc.)
+    capabilities::setup_repositories(project, config)?;
+
+    // Phase 2: Batch install all packages in SINGLE apt-get call
+    capabilities::install_system_packages(project, config)?;
+
+    // === END PACKAGE MANAGEMENT ===
+
+    // Execute vm_setup hooks (now primarily for post-install configuration)
     capabilities::execute_vm_setup(project, config)?;
 
     // Install vm_runtime scripts into template
