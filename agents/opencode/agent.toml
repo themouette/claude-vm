@@ -1,0 +1,20 @@
+[agent]
+id = "opencode"
+name = "OpenCode"
+description = "Open source AI coding agent"
+command = "opencode"
+requires_authentication = false
+
+[requires]
+capabilities = ["node"]
+
+[paths]
+config_dir = ".config/opencode"
+context_file = "AGENTS.md"
+mcp_config_file = "opencode.json"
+
+[install]
+script_file = "install.sh"
+
+[deploy]
+script_file = "deploy.sh"

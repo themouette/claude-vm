@@ -1,0 +1,20 @@
+[agent]
+id = "claude"
+name = "Claude Code"
+description = "Anthropic's official CLI for Claude"
+command = "claude"
+requires_authentication = true
+
+[paths]
+config_dir = ".claude"
+context_file = "CLAUDE.md"
+mcp_config_file = ".claude.json"
+
+[install]
+script_file = "install.sh"
+
+[authenticate]
+script_file = "authenticate.sh"
+
+[deploy]
+script_file = "deploy.sh"

@@ -241,42 +241,63 @@ fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String>
     Ok(content.to_string())
 }
 
-/// Configure MCP servers in the VM's .claude.json
-pub fn configure_mcp_in_vm(project: &Project, servers: &[McpServer]) -> Result<()> {
-    // Build jq commands to add each MCP server
-    let mut jq_updates = Vec::new();
-
-    for server in servers {
-        let args_json = serde_json::to_string(&server.args).map_err(|e| {
-            ClaudeVmError::InvalidConfig(format!("Failed to serialize MCP args: {}", e))
-        })?;
-
-        jq_updates.push(format!(
-            r#".mcpServers["{}"] = {{"command": "{}", "args": {}}}"#,
-            server.id, server.command, args_json
-        ));
+/// Register MCP servers in the VM's MCP registry
+/// Each capability writes its MCP servers to /usr/local/share/claude-vm/mcp.d/{capability}.json
+pub fn register_mcp_servers(
+    project: &Project,
+    capability_id: &str,
+    servers: &[McpServer],
+) -> Result<()> {
+    if servers.is_empty() {
+        return Ok(());
     }
 
-    let jq_expr = jq_updates.join(" | ");
+    // Build JSON for this capability's MCP servers
+    let mut mcp_servers = serde_json::Map::new();
+    for server in servers {
+        let server_config = serde_json::json!({
+            "command": server.command,
+            "args": server.args
+        });
+        mcp_servers.insert(server.id.clone(), server_config);
+    }
 
-    let mcp_config_script = format!(
+    let registry_entry = serde_json::json!({
+        "mcpServers": mcp_servers
+    });
+
+    let registry_json = serde_json::to_string_pretty(&registry_entry).map_err(|e| {
+        ClaudeVmError::InvalidConfig(format!("Failed to serialize MCP registry: {}", e))
+    })?;
+
+    // Write to VM's MCP registry
+    let script = format!(
         r#"
-CONFIG="$HOME/.claude.json"
-if [ -f "$CONFIG" ]; then
-  jq '{}' "$CONFIG" > "$CONFIG.tmp" && mv "$CONFIG.tmp" "$CONFIG"
-else
-  jq -n '{{}}' | jq '{}' > "$CONFIG"
-fi
-echo "MCP servers configured in $CONFIG"
+# Register MCP servers for capability: {}
+REGISTRY_DIR="/usr/local/share/claude-vm/mcp.d"
+sudo mkdir -p "$REGISTRY_DIR"
+
+cat > /tmp/mcp-{}.json << 'EOF'
+{}
+EOF
+
+sudo mv /tmp/mcp-{}.json "$REGISTRY_DIR/{}.json"
+echo "MCP servers for {} registered in $REGISTRY_DIR/{}.json"
 "#,
-        jq_expr, jq_expr
+        capability_id,
+        capability_id,
+        registry_json,
+        capability_id,
+        capability_id,
+        capability_id,
+        capability_id
     );
 
     LimaCtl::shell(
         project.template_name(),
         None,
         "bash",
-        &["-c", &mcp_config_script],
+        &["-c", &script],
         false,
     )?;
 

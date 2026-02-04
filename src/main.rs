@@ -59,8 +59,8 @@ fn main() -> Result<()> {
             commands::clean::execute(&project)?;
         }
         None => {
-            // Default: run Claude with provided arguments
-            commands::run::execute(&project, &config, &cli.claude_args)?;
+            // Default: run agent with provided arguments
+            commands::run::execute(&project, &config, &cli.agent_args)?;
         }
         _ => unreachable!(),
     }
