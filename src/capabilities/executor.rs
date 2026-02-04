@@ -289,7 +289,7 @@ pub fn execute_repository_setups(
 
         let template_name = project.template_name();
 
-        // Execute the repo setup script
+        // Execute the repo setup script with enhanced error context
         execute_vm_script(
             template_name,
             &ScriptConfig {
@@ -298,7 +298,23 @@ pub fn execute_repository_setups(
             },
             capability_id,
             false,
-        )?;
+        )
+        .map_err(|e| {
+            ClaudeVmError::LimaExecution(format!(
+                "Failed to setup {} repository: {}\n\n\
+                 This error occurred while adding custom apt repositories.\n\n\
+                 Common causes:\n\
+                 • Network issues downloading GPG keys or repository lists\n\
+                 • Firewall blocking access to repository servers\n\
+                 • Changes in repository URLs or key locations\n\n\
+                 Troubleshooting:\n\
+                 1. Check network connectivity\n\
+                 2. Run 'claude-vm shell' and manually execute the setup commands\n\
+                 3. Verify the repository URLs are still valid\n\
+                 4. Check if your network requires proxy configuration",
+                capability_id, e
+            ))
+        })?;
     }
 
     Ok(())
@@ -312,6 +328,7 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
 
     let template_name = project.template_name();
 
+    // Phase 1: Update package lists with detailed error context
     println!("  Running apt-get update...");
     LimaCtl::shell(
         template_name,
@@ -319,9 +336,31 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
         "sudo",
         &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update"],
         false,
-    )?;
+    )
+    .map_err(|e| {
+        ClaudeVmError::LimaExecution(format!(
+            "Failed to update package lists: {}\n\n\
+             This error typically indicates:\n\
+             • Network connectivity issues\n\
+             • Invalid or unreachable repository URLs\n\
+             • Repository GPG key verification failures\n\n\
+             Troubleshooting steps:\n\
+             1. Check your internet connection\n\
+             2. Verify custom repositories were added correctly\n\
+             3. Run 'claude-vm shell' and manually execute:\n\
+                sudo apt-get update\n\
+             4. Check /etc/apt/sources.list.d/ for malformed entries",
+            e
+        ))
+    })?;
 
-    println!("  Installing {} packages...", packages.len());
+    // Phase 2: Install packages with detailed error context
+    println!(
+        "  Installing {} packages: {}",
+        packages.len(),
+        packages.join(", ")
+    );
+    println!("  (This may take several minutes for large packages)");
 
     // Build command: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y pkg1 pkg2 ...
     let mut args = vec!["DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y"];
@@ -329,7 +368,25 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
     let package_refs: Vec<&str> = packages.iter().map(|s| s.as_str()).collect();
     args.extend(package_refs);
 
-    LimaCtl::shell(template_name, None, "sudo", &args, false)?;
+    LimaCtl::shell(template_name, None, "sudo", &args, false).map_err(|e| {
+        ClaudeVmError::LimaExecution(format!(
+            "Failed to install packages: {}\n\n\
+             Attempted to install: {}\n\n\
+             Common causes:\n\
+             • Package name misspelled or doesn't exist\n\
+             • Package available only in specific Debian versions\n\
+             • Missing dependencies or conflicts with installed packages\n\
+             • Insufficient disk space\n\n\
+             Troubleshooting steps:\n\
+             1. Verify package names are correct for Debian\n\
+             2. Run 'claude-vm shell' and check package availability:\n\
+                apt-cache search <package-name>\n\
+             3. Try installing packages individually to identify the problematic one\n\
+             4. Check available disk space: df -h",
+            e,
+            packages.join(", ")
+        ))
+    })?;
 
     println!("  ✓ System packages installed successfully");
     Ok(())
