@@ -209,7 +209,7 @@ fn execute_host_script(
                 "false"
             },
         )
-        .env("POLICY_MODE", format!("{:?}", net_sec.mode).to_lowercase())
+        .env("POLICY_MODE", net_sec.mode.as_str())
         .env("ALLOWED_DOMAINS", net_sec.allowed_domains.join(","))
         .env("BLOCKED_DOMAINS", net_sec.blocked_domains.join(","))
         .env("BYPASS_DOMAINS", net_sec.bypass_domains.join(","));
@@ -280,7 +280,7 @@ export BYPASS_DOMAINS="{}"
             } else {
                 "false"
             },
-            format!("{:?}", net_sec.mode).to_lowercase(),
+            net_sec.mode.as_str(),
             net_sec.allowed_domains.join(","),
             net_sec.blocked_domains.join(","),
             net_sec.bypass_domains.join(",")

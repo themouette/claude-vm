@@ -90,6 +90,10 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub git: bool,
+
+    #[serde(default)]
+    #[serde(rename = "network-security")]
+    pub network_security: bool,
 }
 
 impl ToolsConfig {
@@ -103,6 +107,7 @@ impl ToolsConfig {
             "gpg" => self.gpg,
             "gh" => self.gh,
             "git" => self.git,
+            "network-security" => self.network_security,
             _ => false,
         }
     }
@@ -117,6 +122,7 @@ impl ToolsConfig {
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
             "git" => self.git = true,
+            "network-security" => self.network_security = true,
             _ => {}
         }
     }
@@ -237,10 +243,20 @@ impl Default for NetworkSecurityConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PolicyMode {
-    /// Allow all except blocked (default)
+    /// Block all except explicitly allowed domains
     Allowlist,
-    /// Block all except allowed (more secure)
+    /// Allow all except explicitly blocked domains (default)
     Denylist,
+}
+
+impl PolicyMode {
+    /// Get the string representation for environment variables
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PolicyMode::Allowlist => "allowlist",
+            PolicyMode::Denylist => "denylist",
+        }
+    }
 }
 
 fn default_policy_mode() -> PolicyMode {
@@ -477,6 +493,8 @@ impl Config {
             chromium,
             gpg,
             gh,
+            git,
+            network_security,
             all,
             disk,
             memory,
@@ -491,6 +509,8 @@ impl Config {
                 self.tools.enable("chromium");
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
+                self.tools.enable("git");
+                self.tools.enable("network-security");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -509,6 +529,12 @@ impl Config {
                 }
                 if *gh {
                     self.tools.enable("gh");
+                }
+                if *git {
+                    self.tools.enable("git");
+                }
+                if *network_security {
+                    self.tools.enable("network-security");
                 }
             }
 

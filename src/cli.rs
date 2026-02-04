@@ -70,6 +70,14 @@ pub enum Commands {
         #[arg(long)]
         gh: bool,
 
+        /// Configure git identity and signing
+        #[arg(long)]
+        git: bool,
+
+        /// Enable network security filtering
+        #[arg(long)]
+        network_security: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,
