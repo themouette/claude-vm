@@ -3,8 +3,21 @@ id = "chromium"
 name = "Chromium Browser"
 description = "Headless Chromium for web automation and testing"
 
+[packages]
+system = ["chromium", "fonts-liberation", "xvfb"]
+
 [vm_setup]
-script_file = "vm_setup.sh"
+script = """
+#!/bin/bash
+set -e
+# Create symlinks for compatibility with tools looking for google-chrome
+sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome
+sudo ln -sf /usr/bin/chromium /usr/bin/google-chrome-stable
+sudo mkdir -p /opt/google/chrome
+sudo ln -sf /usr/bin/chromium /opt/google/chrome/chrome
+echo "Chromium configured successfully."
+chromium --version || true
+"""
 
 [vm_runtime]
 script = """
