@@ -372,6 +372,8 @@ claude_args = []
 
 The network-security capability provides HTTP/HTTPS filtering with domain policies and protocol blocking, preventing Claude from making arbitrary network connections.
 
+⚠️ **Security Note:** This provides policy enforcement, not security isolation. See [`capabilities/network-security/SECURITY.md`](capabilities/network-security/SECURITY.md) for detailed security model, limitations, and when to use this capability.
+
 **Enable network security:**
 
 ```toml
