@@ -48,7 +48,7 @@ pub fn execute_host_setup(project: &Project, config: &Config) -> Result<()> {
     let enabled = registry.get_enabled_capabilities(config)?;
 
     for capability in enabled {
-        executor::execute_host_setup(project, &capability)?;
+        executor::execute_host_setup(project, &capability, config)?;
     }
 
     Ok(())
@@ -60,7 +60,7 @@ pub fn execute_vm_setup(project: &Project, config: &Config) -> Result<()> {
     let enabled = registry.get_enabled_capabilities(config)?;
 
     for capability in enabled {
-        executor::execute_vm_setup(project, &capability)?;
+        executor::execute_vm_setup(project, &capability, config)?;
     }
 
     Ok(())
@@ -73,7 +73,7 @@ pub fn execute_vm_runtime(vm_name: &str, config: &Config) -> Result<()> {
     let enabled = registry.get_enabled_capabilities(config)?;
 
     for capability in enabled {
-        executor::execute_vm_runtime_in_vm(vm_name, &capability)?;
+        executor::execute_vm_runtime_in_vm(vm_name, &capability, config)?;
     }
 
     Ok(())

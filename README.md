@@ -197,11 +197,21 @@ disk = 20      # VM disk size in GB (default: 20)
 memory = 8     # VM memory size in GB (default: 8)
 
 [tools]
-docker = true     # Install Docker (default: false)
-node = true       # Install Node.js (default: false)
-python = false    # Install Python (default: false)
-chromium = true   # Install Chromium for debugging (default: false)
-gpg = true        # Enable GPG agent forwarding (default: false)
+docker = true    # Install Docker (default: false)
+node = true      # Install Node.js (default: false)
+python = false   # Install Python (default: false)
+chromium = true  # Install Chromium for debugging (default: false)
+gpg = true       # Enable GPG agent forwarding (default: false)
+git = true       # Configure git identity and signing (default: false)
+
+[security.network]
+enabled = true                     # Enable network filtering (default: false)
+mode = "denylist"                  # or "allowlist"
+allowed_domains = ["api.github.com", "*.npmjs.org"]
+blocked_domains = []
+block_tcp_udp = true
+block_private_networks = true
+block_metadata_services = true
 
 [setup]
 # ADDITIONAL setup scripts (run during template creation)
@@ -312,14 +322,16 @@ The `[tools]` section controls which tools are installed during setup:
 
 ```toml
 [tools]
-docker = true     # Docker Engine + Docker Compose
-node = true       # Node.js (LTS) + npm
-python = true     # Python 3 + pip
-chromium = true   # Chromium + Chrome DevTools MCP
-gpg = true        # GPG agent forwarding + key sync
-gh = true         # GitHub CLI + authentication
-git = true        # Git identity and signing configuration
+docker = true    # Docker Engine + Docker Compose
+node = true      # Node.js (LTS) + npm
+python = true    # Python 3 + pip
+chromium = true  # Chromium + Chrome DevTools MCP
+gpg = true       # GPG agent forwarding + key sync
+gh = true        # GitHub CLI + authentication
+git = true       # Git identity and signing configuration
 ```
+
+**Network security** is configured separately via `[security.network]` section (see Network Security below).
 
 Each enabled capability automatically provides context to Claude about its status (version, configuration, availability) via the generated `~/.claude/CLAUDE.md` file.
 
@@ -356,6 +368,100 @@ To disable permission bypass (not recommended), set an empty array:
 [defaults]
 claude_args = []
 ```
+
+### Network Security
+
+The network-security capability provides HTTP/HTTPS filtering with domain policies and protocol blocking, preventing Claude from making arbitrary network connections.
+
+⚠️ **Security Note:** This provides policy enforcement, not security isolation. See [`capabilities/network-security/SECURITY.md`](capabilities/network-security/SECURITY.md) for detailed security model, limitations, and when to use this capability.
+
+**Enable network security:**
+
+```toml
+[security.network]
+enabled = true                     # Enable network security
+mode = "denylist"                  # or "allowlist"
+
+# Domain policies
+allowed_domains = ["api.example.com", "*.github.com"]
+blocked_domains = ["malicious-site.com"]
+bypass_domains = ["localhost", "127.0.0.1"]
+
+# Protocol and network blocks (default: true)
+block_tcp_udp = true               # Block raw TCP/UDP connections
+block_private_networks = true      # Block 10.0.0.0/8, 192.168.0.0/16, etc.
+block_metadata_services = true     # Block cloud metadata (169.254.169.254)
+```
+
+**CLI shortcut:**
+
+```bash
+claude-vm setup --network-security  # Equivalent to setting security.network.enabled = true
+```
+
+**Policy modes:**
+
+- **`denylist`** (default): Allow all domains except those in `blocked_domains`
+- **`allowlist`**: Block all domains except those in `allowed_domains`
+
+**How it works:**
+
+1. **VM setup**: Installs mitmproxy and generates CA certificate inside the VM
+2. **Runtime**: Starts mitmproxy in the VM before each Claude session
+3. **Filtering**: HTTP/HTTPS traffic routed through `localhost:8080` proxy
+4. **Enforcement**: iptables rules block raw TCP/UDP and private networks
+
+Each VM runs its own isolated mitmproxy instance - no shared state between projects.
+
+**Example configurations:**
+
+```toml
+# Strict allowlist - only allow specific APIs
+[security.network]
+enabled = true
+mode = "allowlist"
+allowed_domains = ["api.github.com", "api.openai.com"]
+
+# Denylist - block known problematic domains
+[security.network]
+enabled = true
+mode = "denylist"
+blocked_domains = ["example-bad-site.com", "*.tracking-domain.com"]
+
+# Development - allow everything except private networks
+[security.network]
+enabled = true
+mode = "denylist"
+block_private_networks = true
+block_tcp_udp = false  # Allow raw TCP for development
+```
+
+**Domain matching:**
+
+Domain patterns support exact matches and wildcard prefixes:
+
+- **Exact match**: `api.github.com` - only matches `api.github.com`
+- **Wildcard prefix**: `*.github.com` - matches any subdomain
+  - ✓ Matches: `api.github.com`, `gist.github.com`, `raw.githubusercontent.github.com`
+  - ✓ Also matches: `github.com` (the domain itself)
+  - ✗ Does NOT match: `notgithub.com`, `github.com.evil.org`
+
+**Wildcard rules:**
+- Only prefix wildcards allowed: `*.example.com` ✓, `example.*.com` ✗, `example.*` ✗
+- Only one wildcard per domain: `*.*.example.com` ✗
+- Must be followed by a domain: `*.` ✗
+
+**Validation:** Invalid domain patterns are detected during config loading with helpful warnings. See validation output for specific issues.
+
+**Security features:**
+
+- Blocks raw TCP/UDP protocols (SSH, database connections, etc.)
+- Blocks access to private networks (prevents internal network scanning)
+- Blocks cloud metadata services (prevents credential theft)
+- HTTPS traffic inspection via man-in-the-middle proxy
+- Automatic runtime context for Claude about enabled policies
+
+**Architecture:** Each VM runs its own mitmproxy instance for complete isolation. Inspired by Docker Sandboxes' network filtering design but adapted for Lima's VM-per-project model. No port conflicts, no host-side proxy management needed.
 
 ### Claude Context Instructions
 
