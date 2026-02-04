@@ -1,4 +1,5 @@
 use super::definition::{Capability, McpServer, ScriptConfig};
+use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
@@ -10,20 +11,28 @@ use std::sync::Arc;
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
 
 /// Execute a capability's host_setup hook (runs on host machine)
-pub fn execute_host_setup(project: &Project, capability: &Arc<Capability>) -> Result<()> {
+pub fn execute_host_setup(
+    project: &Project,
+    capability: &Arc<Capability>,
+    config: &Config,
+) -> Result<()> {
     let Some(host_setup) = &capability.host_setup else {
         return Ok(());
     };
 
     println!("Running host setup for {}...", capability.capability.name);
 
-    execute_host_script(project, host_setup, &capability.capability.id)?;
+    execute_host_script(project, host_setup, &capability.capability.id, config)?;
 
     Ok(())
 }
 
 /// Execute a capability's vm_setup hook (runs in VM)
-pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Result<()> {
+pub fn execute_vm_setup(
+    project: &Project,
+    capability: &Arc<Capability>,
+    config: &Config,
+) -> Result<()> {
     let Some(vm_setup) = &capability.vm_setup else {
         return Ok(());
     };
@@ -35,13 +44,18 @@ pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Resu
         vm_setup,
         &capability.capability.id,
         false,
+        config,
     )?;
 
     Ok(())
 }
 
 /// Execute a capability's vm_runtime hook (runs in VM before each session)
-pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Result<()> {
+pub fn execute_vm_runtime(
+    project: &Project,
+    capability: &Arc<Capability>,
+    config: &Config,
+) -> Result<()> {
     let Some(vm_runtime) = &capability.vm_runtime else {
         return Ok(());
     };
@@ -52,19 +66,24 @@ pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Re
         vm_runtime,
         &capability.capability.id,
         true,
+        config,
     )?;
 
     Ok(())
 }
 
 /// Execute a capability's vm_runtime hook in a specific VM instance
-pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> Result<()> {
+pub fn execute_vm_runtime_in_vm(
+    vm_name: &str,
+    capability: &Arc<Capability>,
+    config: &Config,
+) -> Result<()> {
     let Some(vm_runtime) = &capability.vm_runtime else {
         return Ok(());
     };
 
     // Runtime scripts are executed silently unless there's an error
-    execute_vm_script(vm_name, vm_runtime, &capability.capability.id, true)?;
+    execute_vm_script(vm_name, vm_runtime, &capability.capability.id, true, config)?;
 
     Ok(())
 }
@@ -143,6 +162,7 @@ fn execute_host_script(
     project: &Project,
     script_config: &ScriptConfig,
     capability_id: &str,
+    config: &Config,
 ) -> Result<()> {
     let script_content = get_script_content(script_config, capability_id)?;
 
@@ -150,20 +170,57 @@ fn execute_host_script(
     let project_root = project.root().to_string_lossy();
     let template_name = project.template_name();
 
-    let output = Command::new("bash")
-        .arg("-c")
+    let mut cmd = Command::new("bash");
+    cmd.arg("-c")
         .arg(&script_content)
         .env("PROJECT_ROOT", project_root.as_ref())
         .env("TEMPLATE_NAME", template_name)
         .env("LIMA_INSTANCE", template_name)
-        .env("CAPABILITY_ID", capability_id)
-        .output()
-        .map_err(|e| {
-            ClaudeVmError::LimaExecution(format!(
-                "Failed to execute host script for capability '{}': {}",
-                capability_id, e
-            ))
-        })?;
+        .env("CAPABILITY_ID", capability_id);
+
+    // Add network security environment variables
+    if capability_id == "network-security" {
+        let net_sec = &config.security.network;
+        cmd.env(
+            "NETWORK_SECURITY_ENABLED",
+            if net_sec.enabled { "true" } else { "false" },
+        )
+        .env(
+            "BLOCK_TCP_UDP",
+            if net_sec.block_tcp_udp {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .env(
+            "BLOCK_PRIVATE_NETWORKS",
+            if net_sec.block_private_networks {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .env(
+            "BLOCK_METADATA_SERVICES",
+            if net_sec.block_metadata_services {
+                "true"
+            } else {
+                "false"
+            },
+        )
+        .env("POLICY_MODE", format!("{:?}", net_sec.mode).to_lowercase())
+        .env("ALLOWED_DOMAINS", net_sec.allowed_domains.join(","))
+        .env("BLOCKED_DOMAINS", net_sec.blocked_domains.join(","))
+        .env("BYPASS_DOMAINS", net_sec.bypass_domains.join(","));
+    }
+
+    let output = cmd.output().map_err(|e| {
+        ClaudeVmError::LimaExecution(format!(
+            "Failed to execute host script for capability '{}': {}",
+            capability_id, e
+        ))
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -187,8 +244,57 @@ fn execute_vm_script(
     script_config: &ScriptConfig,
     capability_id: &str,
     silent: bool,
+    config: &Config,
 ) -> Result<()> {
-    let script_content = get_script_content(script_config, capability_id)?;
+    let mut script_content = get_script_content(script_config, capability_id)?;
+
+    // For network-security capability, prepend environment variables
+    if capability_id == "network-security" {
+        let net_sec = &config.security.network;
+        let env_vars = format!(
+            r#"#!/bin/bash
+# Network security environment variables
+export NETWORK_SECURITY_ENABLED="{}"
+export BLOCK_TCP_UDP="{}"
+export BLOCK_PRIVATE_NETWORKS="{}"
+export BLOCK_METADATA_SERVICES="{}"
+export POLICY_MODE="{}"
+export ALLOWED_DOMAINS="{}"
+export BLOCKED_DOMAINS="{}"
+export BYPASS_DOMAINS="{}"
+
+"#,
+            if net_sec.enabled { "true" } else { "false" },
+            if net_sec.block_tcp_udp {
+                "true"
+            } else {
+                "false"
+            },
+            if net_sec.block_private_networks {
+                "true"
+            } else {
+                "false"
+            },
+            if net_sec.block_metadata_services {
+                "true"
+            } else {
+                "false"
+            },
+            format!("{:?}", net_sec.mode).to_lowercase(),
+            net_sec.allowed_domains.join(","),
+            net_sec.blocked_domains.join(","),
+            net_sec.bypass_domains.join(",")
+        );
+
+        // Strip existing shebang if present and prepend env vars
+        if script_content.starts_with("#!") {
+            if let Some(newline_pos) = script_content.find('\n') {
+                script_content = format!("{}{}", env_vars, &script_content[newline_pos + 1..]);
+            }
+        } else {
+            script_content = format!("{}{}", env_vars, script_content);
+        }
+    }
 
     let filename = format!("{}_{}.sh", capability_id, "script");
 
@@ -230,6 +336,15 @@ fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String>
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
         ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
+        ("network-security", "host_setup.sh") => {
+            include_str!("../../capabilities/network-security/host_setup.sh")
+        }
+        ("network-security", "vm_setup.sh") => {
+            include_str!("../../capabilities/network-security/vm_setup.sh")
+        }
+        ("network-security", "vm_runtime.sh") => {
+            include_str!("../../capabilities/network-security/vm_runtime.sh")
+        }
         _ => {
             return Err(ClaudeVmError::InvalidConfig(format!(
                 "Embedded script '{}' not found for capability '{}'",

@@ -178,18 +178,10 @@ fn default_writable() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     #[serde(default)]
     pub network: NetworkSecurityConfig,
-}
-
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            network: NetworkSecurityConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -339,14 +331,25 @@ impl Config {
         if other.security.network.mode != default_policy_mode() {
             self.security.network.mode = other.security.network.mode;
         }
-        self.security.network.block_private_networks = other.security.network.block_private_networks;
-        self.security.network.block_metadata_services = other.security.network.block_metadata_services;
+        self.security.network.block_private_networks =
+            other.security.network.block_private_networks;
+        self.security.network.block_metadata_services =
+            other.security.network.block_metadata_services;
         self.security.network.block_tcp_udp = other.security.network.block_tcp_udp;
 
         // Merge domain lists (append)
-        self.security.network.allowed_domains.extend(other.security.network.allowed_domains);
-        self.security.network.blocked_domains.extend(other.security.network.blocked_domains);
-        self.security.network.bypass_domains.extend(other.security.network.bypass_domains);
+        self.security
+            .network
+            .allowed_domains
+            .extend(other.security.network.allowed_domains);
+        self.security
+            .network
+            .blocked_domains
+            .extend(other.security.network.blocked_domains);
+        self.security
+            .network
+            .bypass_domains
+            .extend(other.security.network.bypass_domains);
 
         self
     }
