@@ -3,6 +3,9 @@ id = "gpg"
 name = "GPG Agent Forwarding"
 description = "Forward GPG agent from host to VM for signing operations"
 
+[packages]
+system = ["gnupg"]
+
 [host_setup]
 script_file = "host_setup.sh"
 
