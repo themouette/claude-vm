@@ -47,6 +47,15 @@ fn main() -> Result<()> {
     // Load configuration with precedence
     let config = Config::load(project.root())?.with_cli_overrides(&cli);
 
+    // Check for updates only on run command (default command)
+    if cli.command.is_none() {
+        let update_config = claude_vm::update_check::UpdateCheckConfig {
+            enabled: config.update_check.enabled,
+            check_interval_hours: config.update_check.interval_hours,
+        };
+        claude_vm::update_check::check_and_notify(&update_config);
+    }
+
     // Execute command
     match &cli.command {
         Some(Commands::Setup { .. }) => {

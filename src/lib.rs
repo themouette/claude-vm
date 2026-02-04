@@ -5,6 +5,7 @@ pub mod config;
 pub mod error;
 pub mod project;
 pub mod scripts;
+pub mod update_check;
 pub mod utils;
 pub mod version;
 pub mod vm;

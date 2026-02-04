@@ -84,7 +84,7 @@ fn perform_update(target: Option<String>, skip_confirm: bool) -> Result<()> {
     Ok(())
 }
 
-fn get_latest_version() -> Result<Option<String>> {
+pub fn get_latest_version() -> Result<Option<String>> {
     match self_update::backends::github::ReleaseList::configure()
         .repo_owner(version::REPO_OWNER)
         .repo_name(version::REPO_NAME)
