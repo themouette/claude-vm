@@ -41,6 +41,10 @@ impl CapabilityRegistry {
                 "git",
                 include_str!("../../capabilities/git/capability.toml"),
             ),
+            (
+                "network-security",
+                include_str!("../../capabilities/network-security/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {
