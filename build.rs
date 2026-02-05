@@ -36,6 +36,8 @@ fn get_git_hash() -> Option<String> {
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
+        // Print to stderr so developers know why git hash is missing
+        eprintln!("cargo:warning=Failed to get git commit hash (not in a git repository or git not available)");
         None
     }
 }
