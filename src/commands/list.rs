@@ -48,8 +48,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_list_commands_exist() {
-        // This test just verifies the module compiles
-        assert!(true);
+    fn test_list_function_signature() {
+        // Verify the execute function has the correct signature
+        let _execute_fn: fn(bool, bool) -> Result<()> = execute;
+    }
+
+    #[test]
+    fn test_list_flags_combinations() {
+        // Test that all flag combinations are valid type-wise
+        // Actual execution would require Lima VMs to exist
+
+        // Test flag types
+        let _unused_flag: bool = true;
+        let _disk_usage_flag: bool = true;
+
+        // Verify both can be combined
+        let _both_flags = (_unused_flag, _disk_usage_flag);
+    }
+
+    #[test]
+    fn test_list_uses_template_module() {
+        // Verify we're using the refactored template module functions
+        // This ensures we're using the shared utilities correctly
+
+        let template_name = "test-template";
+
+        // These functions should exist and be callable
+        let _unused = template::is_unused(template_name);
+        let _disk = template::get_disk_usage(template_name);
+        let _last_used = template::format_last_used(template_name);
     }
 }

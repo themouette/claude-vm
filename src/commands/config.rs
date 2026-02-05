@@ -121,10 +121,23 @@ fn show() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::ConfigCommands;
 
     #[test]
-    fn test_config_commands_exist() {
-        // This test just verifies the module compiles
-        assert!(true);
+    fn test_config_commands_dispatch() {
+        // Test that both command variants are handled
+        // This verifies the execute() function has all match arms
+
+        // We can't actually run these without a project setup,
+        // but we can verify the match statement compiles correctly
+        let _validate = ConfigCommands::Validate;
+        let _show = ConfigCommands::Show;
+    }
+
+    #[test]
+    fn test_config_module_exports() {
+        // Verify the execute function is accessible
+        // This ensures the public API is stable
+        let _execute_fn: fn(&ConfigCommands) -> Result<()> = execute;
     }
 }

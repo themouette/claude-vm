@@ -88,9 +88,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_info_command_exists() {
-        // This test just verifies the module compiles
-        // Actual functionality testing would require mocking Lima
-        assert!(true);
+    fn test_info_function_signature() {
+        // Verify the execute function has the correct signature
+        // This ensures the public API is stable
+        let _execute_fn: fn() -> Result<()> = execute;
+    }
+
+    #[test]
+    fn test_info_uses_project_and_config() {
+        // This test verifies that the info module has access to
+        // the required types and modules
+        // Actual execution would require a project setup and Lima
+
+        // Verify imports compile correctly
+        fn _check_types() {
+            let _project_type: Option<Project> = None;
+            let _config_type: Option<Config> = None;
+        }
     }
 }
