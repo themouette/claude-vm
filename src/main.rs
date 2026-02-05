@@ -68,7 +68,7 @@ fn main() -> Result<()> {
             commands::setup::execute(&project, &config)?;
         }
         Some(Commands::Shell) => {
-            commands::shell::execute(&project, &config)?;
+            commands::shell::execute(&project, &config, &cli)?;
         }
         Some(Commands::Exec { command }) => {
             commands::exec::execute(&project, &config, &cli, command)?;
@@ -87,7 +87,7 @@ fn main() -> Result<()> {
         }
         None => {
             // Default: run Claude with provided arguments
-            commands::run::execute(&project, &config, &cli.claude_args)?;
+            commands::run::execute(&project, &config, &cli, &cli.claude_args)?;
         }
         _ => unreachable!(),
     }

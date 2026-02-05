@@ -75,6 +75,37 @@ pub fn build_export_commands(env_vars: &HashMap<String, String>) -> String {
     exports.join("; ")
 }
 
+/// Collect all environment variables from CLI flags
+pub fn collect_env_vars(
+    env_args: &[String],
+    env_files: &[std::path::PathBuf],
+    inherit_vars: &[String],
+) -> Result<HashMap<String, String>> {
+    let mut env_vars = HashMap::new();
+
+    // Load from env files (lowest priority)
+    for file in env_files {
+        env_vars.extend(load_env_file(file)?);
+    }
+
+    // Add --env args (medium priority)
+    env_vars.extend(parse_env_args(env_args)?);
+
+    // Add inherited vars (highest priority)
+    env_vars.extend(get_inherited_vars(inherit_vars));
+
+    Ok(env_vars)
+}
+
+/// Prepend environment exports to a command string
+pub fn prepend_env_to_command(env_vars: &HashMap<String, String>, command: &str) -> String {
+    if env_vars.is_empty() {
+        command.to_string()
+    } else {
+        format!("{}; {}", build_export_commands(env_vars), command)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

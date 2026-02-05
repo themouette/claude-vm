@@ -1,10 +1,12 @@
+use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
 use crate::scripts::runner;
+use crate::utils::env as env_utils;
 use crate::vm::{session::VmSession, template};
 
-pub fn execute(project: &Project, config: &Config) -> Result<()> {
+pub fn execute(project: &Project, config: &Config, cli: &Cli) -> Result<()> {
     // Verify template exists
     template::verify(project.template_name())?;
 
@@ -33,6 +35,9 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     );
     println!("Type 'exit' to stop and delete the VM");
 
+    // Collect environment variables
+    let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
+
     // Open interactive shell with runtime scripts using entrypoint pattern
     let workdir = Some(current_dir.as_path());
     runner::execute_command_with_runtime_scripts(
@@ -43,6 +48,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
         workdir,
         "bash",
         &["-l"],
+        &env_vars,
     )?;
 
     Ok(())

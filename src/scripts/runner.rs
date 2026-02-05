@@ -5,6 +5,7 @@ use crate::project::Project;
 use crate::utils::git;
 use crate::vm::limactl::LimaCtl;
 use crate::vm::{mount, session::VmSession};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Directory where capability runtime scripts are installed in the VM
@@ -239,6 +240,7 @@ fn generate_base_context(config: &Config) -> Result<String> {
 ///     &["--help"]
 /// )?;
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub fn execute_command_with_runtime_scripts(
     vm_name: &str,
     _project: &Project,
@@ -247,6 +249,7 @@ pub fn execute_command_with_runtime_scripts(
     workdir: Option<&Path>,
     cmd: &str,
     args: &[&str],
+    env_vars: &HashMap<String, String>,
 ) -> Result<()> {
     // Collect all runtime scripts
     let mut scripts = Vec::new();
@@ -318,6 +321,17 @@ pub fn execute_command_with_runtime_scripts(
 
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
+
+    // Export environment variables if any
+    if !env_vars.is_empty() {
+        entrypoint.push_str("# Export environment variables\n");
+        for (key, value) in env_vars {
+            // Escape single quotes in the value
+            let escaped_value = value.replace('\'', "'\\''");
+            entrypoint.push_str(&format!("export {}='{}'\n", key, escaped_value));
+        }
+        entrypoint.push('\n');
+    }
 
     // Create context directory for runtime scripts
     entrypoint.push_str("# Create context directory for runtime scripts\n");
