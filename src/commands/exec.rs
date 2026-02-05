@@ -2,10 +2,10 @@ use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
+use crate::scripts::runner;
 use crate::utils::env as env_utils;
 use crate::utils::shell as shell_utils;
-use crate::vm::limactl::LimaCtl;
-use crate::vm::template;
+use crate::vm::{session::VmSession, template};
 
 pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]) -> Result<()> {
     // Verify template exists
@@ -16,24 +16,39 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
         std::process::exit(1);
     }
 
+    if !config.verbose {
+        println!("Starting ephemeral VM session...");
+    }
+
+    // Create ephemeral session (like run and shell commands)
+    let session = VmSession::new(
+        project,
+        config.verbose,
+        config.mount_conversations,
+        &config.mounts,
+    )?;
+    let _cleanup = session.ensure_cleanup();
+
     // Collect environment variables
     let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
 
-    // Build command string with env exports
-    let mut cmd_parts = Vec::new();
-    if !env_vars.is_empty() {
-        cmd_parts.push(env_utils::build_export_commands(&env_vars));
-    }
-    cmd_parts.push(shell_utils::join_args(command));
-    let cmd_str = cmd_parts.join("; ");
+    // Build command as bash -c with proper escaping
+    let cmd_str = shell_utils::join_args(command);
 
-    // Execute command in VM
-    match LimaCtl::shell(
-        project.template_name(),
-        Some(project.root()),
+    println!("Executing command in VM: {}", session.name());
+
+    // Execute command with runtime scripts using entrypoint pattern
+    let current_dir = std::env::current_dir()?;
+    let workdir = Some(current_dir.as_path());
+    match runner::execute_command_with_runtime_scripts(
+        session.name(),
+        project,
+        config,
+        &session,
+        workdir,
         "bash",
         &["-c", &cmd_str],
-        config.forward_ssh_agent,
+        &env_vars,
     ) {
         Ok(()) => Ok(()),
         Err(ClaudeVmError::CommandExitCode(code)) => {
