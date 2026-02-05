@@ -729,6 +729,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_context_tilde_expansion() {
         use std::io::Write;
 

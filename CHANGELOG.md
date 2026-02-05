@@ -57,6 +57,7 @@ All notable changes to claude-vm will be documented in this file.
 - **Mount configuration not applied**: Fixed bug where mount configurations from TOML files were not being merged and applied to VMs. Both `mounts` and `setup.mounts` fields were being ignored when loading from global or project config files. Only CLI `--mount` arguments were working. The `Config::merge` function now properly extends mount arrays when merging configurations.
 - **packages.setup_script not merged**: Fixed bug where `packages.setup_script` configuration in TOML files was not being merged. Only the first loaded config's setup_script was used, ignoring overrides from project configs.
 - **Comprehensive merge test coverage**: Added tests for all config merge behaviors to prevent future regressions.
+- **Test race condition with HOME environment variable**: Fixed intermittent test failures in `test_from_spec_tilde_expansion` and `test_from_spec_tilde_expansion_both_paths`. These tests read the HOME environment variable but weren't marked with `#[serial_test::serial]`, causing failures when other tests modified HOME concurrently. All tests that access HOME (even just reading) are now properly serialized to prevent race conditions.
 
 ## [0.2.3] - 2026-02-04
 

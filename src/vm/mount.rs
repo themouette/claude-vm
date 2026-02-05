@@ -547,6 +547,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_from_spec_tilde_expansion() {
         use std::env;
         let home = env::var("HOME").unwrap();
@@ -556,6 +557,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_from_spec_tilde_expansion_both_paths() {
         use std::env;
         let home = env::var("HOME").unwrap();
