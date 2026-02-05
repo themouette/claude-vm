@@ -98,6 +98,9 @@ pub enum Commands {
     /// Open a shell in the template VM
     Shell,
 
+    /// Show information about the current project's template
+    Info,
+
     /// List all claude-vm templates
     List,
 

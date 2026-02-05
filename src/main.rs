@@ -66,6 +66,9 @@ fn main() -> Result<()> {
         Some(Commands::Shell) => {
             commands::shell::execute(&project, &config)?;
         }
+        Some(Commands::Info) => {
+            commands::info::execute()?;
+        }
         Some(Commands::Clean) => {
             commands::clean::execute(&project)?;
         }

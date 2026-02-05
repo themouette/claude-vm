@@ -126,6 +126,20 @@ Open a shell in the template VM:
 claude-vm shell
 ```
 
+### Project Information
+
+Show information about the current project's template:
+
+```bash
+claude-vm info
+```
+
+This displays:
+- Project path and template name
+- Template status (running, stopped, not created)
+- Configuration (disk, memory, capabilities)
+- Configured mounts and runtime scripts
+
 ### List Templates
 
 List all claude-vm templates:
