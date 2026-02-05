@@ -38,8 +38,9 @@ All notable changes to claude-vm will be documented in this file.
 
 - **GitHub Actions pinning**: All GitHub Actions now pinned to specific commit SHAs instead of version tags
   - Prevents supply chain attacks from compromised action updates
-  - Each action includes version comment for reference (e.g., `# v4.3.1`)
+  - Each action includes version comment for reference (e.g., `# v6.0.2`)
   - Provides immutable action versions that cannot be modified post-audit
+  - Updated actions/checkout to v6.0.2 for latest improvements
 
 ### Changed
 
