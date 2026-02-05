@@ -8,7 +8,8 @@ fn main() {
     let full_version = if profile == "debug" {
         // Dev build - add git hash
         let git_hash = get_git_hash().unwrap_or_else(|| "unknown".to_string());
-        let dirty = is_git_dirty();
+        // Skip dirty check in CI environments (often have build artifacts)
+        let dirty = !is_ci_environment() && is_git_dirty();
 
         if dirty {
             format!("{}-dev+{}.dirty", version, git_hash)
@@ -59,4 +60,14 @@ fn is_git_dirty() -> bool {
         .unwrap_or(false);
 
     unstaged || staged
+}
+
+fn is_ci_environment() -> bool {
+    // Check common CI environment variables
+    env::var("CI").is_ok()
+        || env::var("GITHUB_ACTIONS").is_ok()
+        || env::var("GITLAB_CI").is_ok()
+        || env::var("CIRCLECI").is_ok()
+        || env::var("TRAVIS").is_ok()
+        || env::var("JENKINS_URL").is_ok()
 }
