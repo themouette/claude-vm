@@ -38,7 +38,12 @@ script = """
 #!/bin/bash
 set -e
 gh --version
-gh auth login --git-protocol https --hostname github.com
+
+# Use device flow by providing empty input and setting git protocol to avoid prompts
+gh auth login --git-protocol https --hostname github.com <<EOF
+
+
+EOF
 """
 
 [vm_runtime]
