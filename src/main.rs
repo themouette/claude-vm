@@ -71,7 +71,7 @@ fn main() -> Result<()> {
             commands::shell::execute(&project, &config)?;
         }
         Some(Commands::Exec { command }) => {
-            commands::exec::execute(&project, &config, command)?;
+            commands::exec::execute(&project, &config, &cli, command)?;
         }
         Some(Commands::Attach) => {
             commands::attach::execute(&project, &config)?;

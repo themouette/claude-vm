@@ -49,6 +49,18 @@ pub struct Cli {
     /// Custom mount in docker-style format: /host/path[:vm/path][:ro|rw]
     #[arg(long = "mount", global = true)]
     pub mounts: Vec<String>,
+
+    /// Set environment variable (KEY=VALUE)
+    #[arg(long = "env", global = true)]
+    pub env: Vec<String>,
+
+    /// Load environment variables from file
+    #[arg(long = "env-file", global = true)]
+    pub env_file: Vec<PathBuf>,
+
+    /// Inherit specific environment variables from host
+    #[arg(long = "inherit-env", global = true)]
+    pub inherit_env: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]

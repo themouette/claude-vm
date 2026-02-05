@@ -24,6 +24,11 @@ All notable changes to claude-vm will be documented in this file.
   - Useful for scripting and automation
 - **attach command**: New `claude-vm attach` command to attach to a running VM
   - Opens an interactive shell in an already-running VM
+- **Environment variable support**: Pass environment variables to VM commands
+  - `--env KEY=VALUE` sets individual variables
+  - `--env-file path` loads variables from a file
+  - `--inherit-env VAR` inherits specific variables from host
+  - Works with all VM commands (exec, shell, run)
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)

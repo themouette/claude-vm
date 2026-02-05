@@ -134,6 +134,22 @@ claude-vm exec ls -la
 claude-vm exec -- git status
 ```
 
+Pass environment variables:
+
+```bash
+# Set individual variables
+claude-vm --env DATABASE_URL=postgres://localhost/db exec "npm test"
+
+# Load from file
+claude-vm --env-file .env.test exec "npm test"
+
+# Inherit from host
+claude-vm --inherit-env PATH --inherit-env HOME exec "echo \$PATH"
+
+# Combine multiple sources
+claude-vm --env-file .env --env API_KEY=secret --inherit-env USER exec "npm start"
+```
+
 Attach to a running VM:
 
 ```bash
