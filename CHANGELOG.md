@@ -6,6 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Code safety guarantee**: Added `#![forbid(unsafe_code)]` attribute to enforce zero unsafe code in the codebase at compile time
 - **Declarative system package management**: Capabilities can now declare system packages directly in TOML files via `[packages]` section, eliminating the need for manual `apt-get install` commands in setup scripts
   - Package specifications with `system` array for Debian package names
   - Optional `setup_script` for adding custom repositories (Docker, Node.js, GitHub CLI)
