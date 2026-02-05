@@ -18,6 +18,9 @@ pub enum ClaudeVmError {
     #[error("Lima subprocess failed: {0}")]
     LimaExecution(String),
 
+    #[error("Command exited with status {0}")]
+    CommandExitCode(i32),
+
     #[error("Config parse error: {0}")]
     ConfigParse(#[from] toml::de::Error),
 

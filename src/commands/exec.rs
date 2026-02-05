@@ -1,8 +1,9 @@
 use crate::cli::Cli;
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::utils::env as env_utils;
+use crate::utils::shell as shell_utils;
 use crate::vm::limactl::LimaCtl;
 use crate::vm::template;
 use std::collections::HashMap;
@@ -35,17 +36,22 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
     if !env_vars.is_empty() {
         cmd_parts.push(env_utils::build_export_commands(&env_vars));
     }
-    cmd_parts.push(command.join(" "));
+    cmd_parts.push(shell_utils::join_args(command));
     let cmd_str = cmd_parts.join("; ");
 
     // Execute command in VM
-    LimaCtl::shell(
+    match LimaCtl::shell(
         project.template_name(),
         Some(project.root()),
         "bash",
         &["-c", &cmd_str],
         config.forward_ssh_agent,
-    )?;
-
-    Ok(())
+    ) {
+        Ok(()) => Ok(()),
+        Err(ClaudeVmError::CommandExitCode(code)) => {
+            // Propagate the exact exit code from the command
+            std::process::exit(code);
+        }
+        Err(e) => Err(e),
+    }
 }

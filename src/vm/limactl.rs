@@ -282,9 +282,11 @@ impl LimaCtl {
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to execute shell: {}", e)))?;
 
         if !status.success() {
-            return Err(ClaudeVmError::LimaExecution(
-                "Command execution failed".to_string(),
-            ));
+            // Return exit code if available, otherwise return generic error
+            return Err(match status.code() {
+                Some(code) => ClaudeVmError::CommandExitCode(code),
+                None => ClaudeVmError::LimaExecution("Command terminated by signal".to_string()),
+            });
         }
 
         Ok(())
