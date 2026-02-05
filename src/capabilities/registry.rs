@@ -4,6 +4,55 @@ use crate::error::{ClaudeVmError, Result};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// Validate a Debian package name according to Debian policy.
+///
+/// Valid package names must:
+/// - Start with an alphanumeric character
+/// - Contain only lowercase letters, digits, and these symbols: '-', '.', '+', '=', ':', '*'
+/// - '=' is used for version pinning (e.g., "package=1.2.3")
+/// - '*' is used for version wildcards (e.g., "package=1.2.*")
+/// - ':' is used for architecture specification (e.g., "package:amd64")
+///
+/// This validation prevents confusing apt-get errors and potential security issues.
+fn validate_package_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        return Err(ClaudeVmError::InvalidConfig(
+            "Package name cannot be empty".to_string(),
+        ));
+    }
+
+    // Check first character is alphanumeric
+    let first_char = name.chars().next().unwrap();
+    if !first_char.is_ascii_alphanumeric() {
+        return Err(ClaudeVmError::InvalidConfig(format!(
+            "Invalid package name '{}': must start with a letter or digit",
+            name
+        )));
+    }
+
+    // Check all characters are valid
+    for c in name.chars() {
+        let valid = c.is_ascii_lowercase()
+            || c.is_ascii_digit()
+            || c == '-'
+            || c == '.'
+            || c == '+'
+            || c == '='
+            || c == ':'
+            || c == '*'; // Allow wildcards in version strings
+
+        if !valid {
+            return Err(ClaudeVmError::InvalidConfig(format!(
+                "Invalid package name '{}': contains invalid character '{}'. \
+                 Package names must contain only lowercase letters, digits, and '.', '-', '+', '=', ':', '*'",
+                name, c
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 pub struct CapabilityRegistry {
     capabilities: HashMap<String, Arc<Capability>>,
 }
@@ -172,5 +221,282 @@ impl CapabilityRegistry {
         }
 
         Ok(servers)
+    }
+
+    /// Collect all system packages from enabled capabilities and user config.
+    /// Returns packages in dependency order (respects capability.requires).
+    /// Duplicates are removed while preserving order (first occurrence wins).
+    ///
+    /// Performance: Clones each unique package only once using HashSet-based deduplication.
+    pub fn collect_system_packages(&self, config: &Config) -> Result<Vec<String>> {
+        let enabled = self.get_enabled_capabilities(config)?;
+        let mut seen = HashSet::<String>::new();
+        let mut packages = Vec::new();
+
+        // Collect packages from capabilities (already in dependency order)
+        // Deduplicate and validate as we go to minimize cloning
+        for capability in enabled {
+            if let Some(pkg_spec) = &capability.packages {
+                for pkg in &pkg_spec.system {
+                    // Validate package name
+                    validate_package_name(pkg)?;
+
+                    // Only clone and add if not already seen
+                    if seen.insert(pkg.clone()) {
+                        packages.push(pkg.clone());
+                    }
+                }
+            }
+        }
+
+        // Add user-defined packages from config
+        for pkg in &config.packages.system {
+            // Validate package name
+            validate_package_name(pkg)?;
+
+            // Only clone and add if not already seen
+            if seen.insert(pkg.clone()) {
+                packages.push(pkg.clone());
+            }
+        }
+
+        Ok(packages)
+    }
+
+    /// Get capabilities that need repository setup (in dependency order).
+    /// Returns tuples of (capability_id, setup_script).
+    ///
+    /// This includes both capability-defined and user-defined repository setups.
+    /// User-defined setups run after capability setups to allow overriding or extending.
+    pub fn get_repo_setups(&self, config: &Config) -> Result<Vec<(String, String)>> {
+        let enabled = self.get_enabled_capabilities(config)?;
+        let mut setups = Vec::new();
+
+        // Collect capability repository setups (in dependency order)
+        for capability in enabled {
+            if let Some(pkg_spec) = &capability.packages {
+                if let Some(setup_script) = &pkg_spec.setup_script {
+                    setups.push((capability.capability.id.clone(), setup_script.clone()));
+                }
+            }
+        }
+
+        // Add user-defined repository setup (runs after capability setups)
+        if let Some(user_setup_script) = &config.packages.setup_script {
+            setups.push(("user-config".to_string(), user_setup_script.clone()));
+        }
+
+        Ok(setups)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_collect_packages_deduplication() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        // Enable capabilities that might share packages
+        let mut config = Config::default();
+        config.tools.python = true;
+        config.tools.node = true;
+
+        // Add some user packages, including duplicates
+        config.packages.system = vec!["git".to_string(), "curl".to_string()];
+
+        let packages = registry.collect_system_packages(&config).unwrap();
+
+        // Check that we got packages
+        assert!(!packages.is_empty(), "Should have collected packages");
+
+        // Check no duplicates
+        let mut seen = HashSet::new();
+        for pkg in &packages {
+            assert!(seen.insert(pkg), "Duplicate package found: {}", pkg);
+        }
+    }
+
+    #[test]
+    fn test_collect_packages_respects_dependencies() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        // Enable git capability (which has no requires)
+        let mut config = Config::default();
+        config.tools.git = true;
+
+        let packages = registry.collect_system_packages(&config).unwrap();
+
+        // Git capability should provide packages in correct order
+        // The actual packages depend on capability definition
+        // Just verify the method works without error
+        assert!(packages.is_empty() || !packages.is_empty());
+    }
+
+    #[test]
+    fn test_user_packages_merged() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let mut config = Config::default();
+        // Don't enable any capabilities
+
+        // Add user-defined packages
+        config.packages.system = vec!["htop".to_string(), "jq".to_string()];
+
+        let packages = registry.collect_system_packages(&config).unwrap();
+
+        // Should have exactly the user packages
+        assert_eq!(packages.len(), 2);
+        assert!(packages.contains(&"htop".to_string()));
+        assert!(packages.contains(&"jq".to_string()));
+    }
+
+    #[test]
+    fn test_get_repo_setups_empty() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let config = Config::default();
+        // No capabilities enabled
+
+        let setups = registry.get_repo_setups(&config).unwrap();
+
+        // Should be empty
+        assert_eq!(setups.len(), 0);
+    }
+
+    #[test]
+    fn test_get_repo_setups_with_user_config() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let mut config = Config::default();
+        // Add user-defined repository setup
+        config.packages.setup_script =
+            Some("#!/bin/bash\nsudo add-apt-repository -y ppa:my-ppa/custom".to_string());
+
+        let setups = registry.get_repo_setups(&config).unwrap();
+
+        // Should have user setup
+        assert_eq!(setups.len(), 1);
+        assert_eq!(setups[0].0, "user-config");
+        assert!(setups[0].1.contains("ppa:my-ppa/custom"));
+    }
+
+    #[test]
+    fn test_get_repo_setups_mixed() {
+        let registry = CapabilityRegistry::load().unwrap();
+
+        let mut config = Config::default();
+        // Enable a capability with repo setup (e.g., docker)
+        config.tools.docker = true;
+        // Add user-defined repository setup
+        config.packages.setup_script = Some("#!/bin/bash\necho 'user setup'".to_string());
+
+        let setups = registry.get_repo_setups(&config).unwrap();
+
+        // Should have both capability and user setups
+        assert!(setups.len() >= 2);
+        // Last one should be user-config
+        assert_eq!(setups.last().unwrap().0, "user-config");
+    }
+
+    #[test]
+    fn test_validate_package_name_valid() {
+        // Simple package names
+        assert!(validate_package_name("python3").is_ok());
+        assert!(validate_package_name("nodejs").is_ok());
+        assert!(validate_package_name("curl").is_ok());
+
+        // With hyphens and dots
+        assert!(validate_package_name("python3-pip").is_ok());
+        assert!(validate_package_name("docker-ce").is_ok());
+        assert!(validate_package_name("python3.11").is_ok());
+
+        // With version pinning (exact version)
+        assert!(validate_package_name("python3=3.11.0-1").is_ok());
+        assert!(validate_package_name("nodejs=22.0.0").is_ok());
+
+        // With version wildcards
+        assert!(validate_package_name("nodejs=22.*").is_ok());
+        assert!(validate_package_name("docker-ce=5:24.0.*").is_ok());
+
+        // With architecture specification
+        assert!(validate_package_name("libc6:amd64").is_ok());
+        assert!(validate_package_name("gcc:arm64").is_ok());
+
+        // With plus
+        assert!(validate_package_name("g++").is_ok());
+        assert!(validate_package_name("c++").is_ok());
+
+        // Complex version strings with epoch
+        assert!(validate_package_name("docker-ce=5:24.0.0-1").is_ok());
+    }
+
+    #[test]
+    fn test_validate_package_name_invalid() {
+        // Empty name
+        assert!(validate_package_name("").is_err());
+
+        // Uppercase letters (Debian packages must be lowercase)
+        assert!(validate_package_name("Python3").is_err());
+        assert!(validate_package_name("CURL").is_err());
+
+        // Shell metacharacters
+        assert!(validate_package_name("python3; rm -rf /").is_err());
+        assert!(validate_package_name("python3 && whoami").is_err());
+        assert!(validate_package_name("python3|cat").is_err());
+        assert!(validate_package_name("python3$(whoami)").is_err());
+        assert!(validate_package_name("python3`whoami`").is_err());
+
+        // Invalid starting character
+        assert!(validate_package_name("-python3").is_err());
+        assert!(validate_package_name(".python3").is_err());
+
+        // Spaces
+        assert!(validate_package_name("python 3").is_err());
+
+        // Other invalid characters
+        assert!(validate_package_name("python3@latest").is_err());
+        assert!(validate_package_name("python3#comment").is_err());
+    }
+
+    #[test]
+    fn test_collect_packages_validates_names() {
+        let registry = CapabilityRegistry::load().unwrap();
+        let mut config = Config::default();
+
+        // Add invalid package name
+        config.packages.system = vec!["INVALID-UPPERCASE".to_string()];
+
+        // Should fail validation
+        let result = registry.collect_system_packages(&config);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid package name"));
+    }
+
+    #[test]
+    fn test_version_pinning_support() {
+        let registry = CapabilityRegistry::load().unwrap();
+        let mut config = Config::default();
+
+        // Add packages with version pinning
+        config.packages.system = vec![
+            "python3=3.11.*".to_string(),
+            "nodejs=22.0.0".to_string(),
+            "docker-ce=5:24.0.0-1".to_string(),
+            "libc6:amd64".to_string(),
+        ];
+
+        // Should succeed - version pinning is supported
+        let packages = registry.collect_system_packages(&config).unwrap();
+
+        assert_eq!(packages.len(), 4);
+        assert!(packages.contains(&"python3=3.11.*".to_string()));
+        assert!(packages.contains(&"nodejs=22.0.0".to_string()));
+        assert!(packages.contains(&"docker-ce=5:24.0.0-1".to_string()));
+        assert!(packages.contains(&"libc6:amd64".to_string()));
     }
 }

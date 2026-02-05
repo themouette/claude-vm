@@ -203,6 +203,15 @@ python = false    # Install Python (default: false)
 chromium = true   # Install Chromium for debugging (default: false)
 gpg = true        # Enable GPG agent forwarding (default: false)
 
+[packages]
+# Custom system packages to install
+system = ["postgresql-client", "redis-tools", "jq"]
+# Optional: Add custom repositories
+setup_script = """
+#!/bin/bash
+# Add third-party repositories here (must be idempotent)
+"""
+
 [setup]
 # ADDITIONAL setup scripts (run during template creation)
 # Standard scripts are auto-detected, no config needed:
@@ -328,6 +337,49 @@ Each enabled capability automatically provides context to Claude about its statu
 ```bash
 claude-vm setup --all  # Installs all tools
 ```
+
+### Custom Package Installation
+
+Add custom system packages to your VM using the `[packages]` section:
+
+```toml
+[packages]
+system = [
+    "postgresql-client",
+    "redis-tools",
+    "jq",
+    "htop"
+]
+```
+
+**Advanced: Custom repositories**
+
+For packages from third-party repositories, add a setup script:
+
+```toml
+[packages]
+system = ["terraform", "kubectl"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add HashiCorp repository
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+
+# Add Kubernetes repository
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.28/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+"""
+```
+
+**Package features:**
+- Version pinning: `"python3=3.11.0-1"` (exact version)
+- Wildcards: `"nodejs=22.*"` (any 22.x version)
+- Architecture: `"libc6:amd64"` (specific architecture)
+- Batch installation: All packages install in one operation for speed
+- Validation: Package names are validated to prevent injection attacks
+
+**Important:** Setup scripts must be idempotent (safe to run multiple times).
 
 ### Default Claude Arguments
 

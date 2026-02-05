@@ -222,11 +222,6 @@ fn get_script_content(script_config: &ScriptConfig, capability_id: &str) -> Resu
 fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
     // Scripts are now embedded from capabilities/{id}/{script_name}
     let content = match (capability_id, script_name) {
-        ("docker", "vm_setup.sh") => include_str!("../../capabilities/docker/vm_setup.sh"),
-        ("node", "vm_setup.sh") => include_str!("../../capabilities/node/vm_setup.sh"),
-        ("python", "vm_setup.sh") => include_str!("../../capabilities/python/vm_setup.sh"),
-        ("chromium", "vm_setup.sh") => include_str!("../../capabilities/chromium/vm_setup.sh"),
-        ("gh", "vm_setup.sh") => include_str!("../../capabilities/gh/vm_setup.sh"),
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
         ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
@@ -280,5 +275,118 @@ echo "MCP servers configured in $CONFIG"
         false,
     )?;
 
+    Ok(())
+}
+
+/// Execute repository setup scripts (adds custom apt sources before apt-get update)
+pub fn execute_repository_setups(
+    project: &Project,
+    repo_setups: &[(String, String)],
+) -> Result<()> {
+    for (capability_id, setup_script) in repo_setups {
+        println!("  Setting up repositories for {}...", capability_id);
+
+        let template_name = project.template_name();
+
+        // Execute the repo setup script with enhanced error context
+        execute_vm_script(
+            template_name,
+            &ScriptConfig {
+                script: Some(setup_script.clone()),
+                script_file: None,
+            },
+            capability_id,
+            false,
+        )
+        .map_err(|e| {
+            ClaudeVmError::LimaExecution(format!(
+                "Failed to setup {} repository: {}\n\n\
+                 This error occurred while adding custom apt repositories.\n\n\
+                 Common causes:\n\
+                 • Network issues downloading GPG keys or repository lists\n\
+                 • Firewall blocking access to repository servers\n\
+                 • Changes in repository URLs or key locations\n\n\
+                 Troubleshooting:\n\
+                 1. Check network connectivity\n\
+                 2. Run 'claude-vm shell' and manually execute the setup commands\n\
+                 3. Verify the repository URLs are still valid\n\
+                 4. Check if your network requires proxy configuration",
+                capability_id, e
+            ))
+        })?;
+    }
+
+    Ok(())
+}
+
+/// Batch install system packages via apt (SINGLE apt-get update + install)
+pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> Result<()> {
+    if packages.is_empty() {
+        return Ok(());
+    }
+
+    let template_name = project.template_name();
+
+    // Phase 1: Update package lists with detailed error context
+    println!("  Running apt-get update...");
+    LimaCtl::shell(
+        template_name,
+        None,
+        "sudo",
+        &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update"],
+        false,
+    )
+    .map_err(|e| {
+        ClaudeVmError::LimaExecution(format!(
+            "Failed to update package lists: {}\n\n\
+             This error typically indicates:\n\
+             • Network connectivity issues\n\
+             • Invalid or unreachable repository URLs\n\
+             • Repository GPG key verification failures\n\n\
+             Troubleshooting steps:\n\
+             1. Check your internet connection\n\
+             2. Verify custom repositories were added correctly\n\
+             3. Run 'claude-vm shell' and manually execute:\n\
+                sudo apt-get update\n\
+             4. Check /etc/apt/sources.list.d/ for malformed entries",
+            e
+        ))
+    })?;
+
+    // Phase 2: Install packages with detailed error context
+    println!(
+        "  Installing {} packages: {}",
+        packages.len(),
+        packages.join(", ")
+    );
+    println!("  (This may take several minutes for large packages)");
+
+    // Build command: sudo DEBIAN_FRONTEND=noninteractive apt-get install -y pkg1 pkg2 ...
+    let mut args = vec!["DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y"];
+
+    let package_refs: Vec<&str> = packages.iter().map(|s| s.as_str()).collect();
+    args.extend(package_refs);
+
+    LimaCtl::shell(template_name, None, "sudo", &args, false).map_err(|e| {
+        ClaudeVmError::LimaExecution(format!(
+            "Failed to install packages: {}\n\n\
+             Attempted to install: {}\n\n\
+             Common causes:\n\
+             • Package name misspelled or doesn't exist\n\
+             • Package available only in specific Debian versions\n\
+             • Missing dependencies or conflicts with installed packages\n\
+             • Insufficient disk space\n\n\
+             Troubleshooting steps:\n\
+             1. Verify package names are correct for Debian\n\
+             2. Run 'claude-vm shell' and check package availability:\n\
+                apt-cache search <package-name>\n\
+             3. Try installing packages individually to identify the problematic one\n\
+             4. Check available disk space: df -h",
+            e,
+            packages.join(", ")
+        ))
+    })?;
+
+    println!("  ✓ System packages installed successfully");
     Ok(())
 }

@@ -3,8 +3,8 @@ id = "python"
 name = "Python"
 description = "Python 3 with pip and development tools"
 
-[vm_setup]
-script_file = "vm_setup.sh"
+[packages]
+system = ["python3", "python3-pip", "python3-venv"]
 
 [vm_runtime]
 script = """

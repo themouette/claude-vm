@@ -3,8 +3,48 @@ id = "gh"
 name = "GitHub CLI"
 description = "GitHub CLI for repository operations and authentication"
 
+[packages]
+system = ["gh"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add GitHub CLI repository (idempotent)
+
+# Ensure keyring directory exists
+sudo mkdir -p /etc/apt/keyrings
+sudo chmod 755 /etc/apt/keyrings
+
+# Download GPG key only if not present
+if [ ! -f /etc/apt/keyrings/githubcli-archive-keyring.gpg ]; then
+    echo "Downloading GitHub CLI GPG key..."
+    wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+    sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+    echo "✓ GitHub CLI GPG key downloaded"
+else
+    echo "GitHub CLI GPG key already present"
+fi
+
+# Add repository only if not already configured
+if ! grep -q "cli.github.com/packages" /etc/apt/sources.list.d/github-cli.list 2>/dev/null; then
+    echo "Adding GitHub CLI repository..."
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+else
+    echo "GitHub CLI repository already configured"
+fi
+"""
+
 [vm_setup]
-script_file = "vm_setup.sh"
+script = """
+#!/bin/bash
+set -e
+gh --version
+
+# Use device flow by providing empty input and setting git protocol to avoid prompts
+gh auth login --git-protocol https --hostname github.com <<EOF
+
+
+EOF
+"""
 
 [vm_runtime]
 script = """

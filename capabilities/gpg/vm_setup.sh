@@ -1,11 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Installing GPG in VM..."
-
-# Install GPG
-sudo apt-get update -qq
-sudo apt-get install -y gnupg
+echo "Configuring GPG in VM..."
 
 # Disable GPG agent autostart in VM (we'll use the forwarded agent)
 mkdir -p ~/.gnupg

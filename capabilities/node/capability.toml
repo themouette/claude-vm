@@ -3,8 +3,25 @@ id = "node"
 name = "Node.js"
 description = "Node.js runtime and npm package manager"
 
-[vm_setup]
-script_file = "vm_setup.sh"
+[packages]
+system = ["nodejs"]
+setup_script = """
+#!/bin/bash
+set -e
+# Add NodeSource repository for Node.js 22.x (idempotent)
+
+# Check if NodeSource repository is already configured
+if grep -q "deb.nodesource.com" /etc/apt/sources.list.d/nodesource.list 2>/dev/null; then
+    echo "NodeSource repository already configured"
+else
+    echo "Adding NodeSource repository..."
+    # Download and execute official NodeSource setup script
+    # Security: HTTPS (TLS) ensures authenticity via certificate validation
+    # The script handles GPG key download and verification internally
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+    echo "✓ NodeSource repository configured"
+fi
+"""
 
 [vm_runtime]
 script = """

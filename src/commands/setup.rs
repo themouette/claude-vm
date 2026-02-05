@@ -43,7 +43,17 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Install base packages
     install_base_packages(project)?;
 
-    // Install optional tools via capability system (vm_setup hooks)
+    // === THREE-PHASE PACKAGE MANAGEMENT ===
+
+    // Phase 1: Setup custom repositories (Docker, Node, gh, etc.)
+    capabilities::setup_repositories(project, config)?;
+
+    // Phase 2: Batch install all packages in SINGLE apt-get call
+    capabilities::install_system_packages(project, config)?;
+
+    // === END PACKAGE MANAGEMENT ===
+
+    // Execute vm_setup hooks (now primarily for post-install configuration)
     capabilities::execute_vm_setup(project, config)?;
 
     // Install vm_runtime scripts into template
@@ -135,14 +145,9 @@ fn disable_needrestart(project: &Project) -> Result<()> {
 fn install_base_packages(project: &Project) -> Result<()> {
     println!("Installing base packages...");
 
-    LimaCtl::shell(
-        project.template_name(),
-        None,
-        "sudo",
-        &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update"],
-        false,
-    )?;
-
+    // Note: No apt-get update needed here. Base packages are in default Debian repos
+    // and Lima templates come with current package lists. We do a single apt-get update
+    // later after repository setup scripts add custom sources.
     LimaCtl::shell(
         project.template_name(),
         None,

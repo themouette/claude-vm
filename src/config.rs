@@ -11,6 +11,10 @@ pub struct Config {
     #[serde(default)]
     pub tools: ToolsConfig,
 
+    /// User-defined packages to install
+    #[serde(default)]
+    pub packages: PackagesConfig,
+
     #[serde(default)]
     pub setup: SetupConfig,
 
@@ -120,6 +124,74 @@ impl ToolsConfig {
             _ => {}
         }
     }
+}
+
+/// User-defined package specifications.
+///
+/// Users can specify additional packages to install in their .claude-vm.toml files.
+/// These are merged with capability-defined packages and installed together in a
+/// single batch operation to minimize setup time.
+///
+/// ## Version Pinning Example
+///
+/// ```toml
+/// [packages]
+/// system = [
+///     "postgresql-client",     # Latest version
+///     "redis-tools=7.0.*",     # Redis 7.0.x
+///     "jq",                    # Latest version
+///     "htop",                  # Latest version
+/// ]
+/// ```
+///
+/// ## Custom Repository Setup
+///
+/// ⚠️  **SECURITY WARNING**: `setup_script` executes arbitrary bash code with sudo privileges
+/// in the VM during setup. Only use scripts from trusted sources. Malicious scripts can
+/// compromise the VM.
+///
+/// ```toml
+/// [packages]
+/// system = ["my-custom-package"]
+/// setup_script = """
+/// #!/bin/bash
+/// set -e
+/// # Add custom repository
+/// sudo add-apt-repository ppa:my-ppa/custom
+/// # Or manually add repository and key
+/// curl -fsSL https://example.com/key.gpg | sudo tee /etc/apt/keyrings/custom.gpg > /dev/null
+/// echo "deb [signed-by=/etc/apt/keyrings/custom.gpg] https://example.com/debian stable main" | sudo tee /etc/apt/sources.list.d/custom.list
+/// """
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PackagesConfig {
+    /// System packages to install via apt.
+    ///
+    /// Supports version pinning:
+    /// - "package" - latest version
+    /// - "package=1.2.3" - exact version
+    /// - "package=1.2.*" - version wildcard
+    /// - "package:amd64" - specific architecture
+    #[serde(default)]
+    pub system: Vec<String>,
+
+    /// Optional script to run before apt-get update (adds custom repositories, GPG keys).
+    ///
+    /// ⚠️  **SECURITY WARNING**: This script runs with sudo privileges. Only use
+    /// trusted scripts. Review any script before adding it to your configuration.
+    ///
+    /// This script runs in the same phase as capability repository setup scripts,
+    /// before the single apt-get update call.
+    ///
+    /// Example: Add a PPA
+    /// ```bash
+    /// #!/bin/bash
+    /// set -e
+    /// sudo add-apt-repository -y ppa:deadsnakes/ppa
+    /// ```
+    #[serde(default)]
+    pub setup_script: Option<String>,
+    // Future extensions: npm, pip, cargo, etc.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -262,6 +334,9 @@ impl Config {
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
         self.tools.git = self.tools.git || other.tools.git;
+
+        // Packages (extend/append)
+        self.packages.system.extend(other.packages.system);
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
