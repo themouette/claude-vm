@@ -41,9 +41,19 @@ fn get_git_hash() -> Option<String> {
 }
 
 fn is_git_dirty() -> bool {
-    Command::new("git")
+    // Check unstaged changes
+    let unstaged = Command::new("git")
         .args(["diff", "--quiet"])
         .status()
         .map(|status| !status.success())
-        .unwrap_or(false)
+        .unwrap_or(false);
+
+    // Check staged changes
+    let staged = Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .map(|status| !status.success())
+        .unwrap_or(false);
+
+    unstaged || staged
 }
