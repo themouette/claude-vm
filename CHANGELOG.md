@@ -7,6 +7,10 @@ All notable changes to claude-vm will be documented in this file.
 ### Added
 
 - **Code safety guarantee**: Added `#![forbid(unsafe_code)]` attribute to enforce zero unsafe code in the codebase at compile time
+- **Automated dependency updates**: Added Dependabot configuration for automatic weekly dependency updates
+  - Cargo dependencies monitored for security updates
+  - GitHub Actions automatically updated
+  - PRs created with `dependencies` and `security` labels
 - **Declarative system package management**: Capabilities can now declare system packages directly in TOML files via `[packages]` section, eliminating the need for manual `apt-get install` commands in setup scripts
   - Package specifications with `system` array for Debian package names
   - Optional `setup_script` for adding custom repositories (Docker, Node.js, GitHub CLI)
@@ -29,6 +33,14 @@ All notable changes to claude-vm will be documented in this file.
   - Removed manual GPG fingerprint verification not present in official docs
   - APT automatically verifies package signatures via `signed-by` parameter
   - Downloads GPG keys over HTTPS for authenticity via TLS certificate validation
+
+### Security
+
+- **GitHub Actions pinning**: All GitHub Actions now pinned to specific commit SHAs instead of version tags
+  - Prevents supply chain attacks from compromised action updates
+  - Each action includes version comment for reference (e.g., `# v6.0.2`)
+  - Provides immutable action versions that cannot be modified post-audit
+  - Updated actions/checkout to v6.0.2 for latest improvements
 
 ### Changed
 
