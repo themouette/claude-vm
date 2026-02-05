@@ -1,8 +1,8 @@
 use crate::error::Result;
 use semver::Version;
 
-// Compile-time constants from Cargo.toml
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+// Compile-time constants from Cargo.toml and build.rs
+pub const VERSION: &str = env!("CLAUDE_VM_VERSION");
 pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
 
 // GitHub repository info
@@ -71,5 +71,37 @@ mod tests {
 
         // Test with same version (should return false)
         assert!(!is_newer_version(VERSION));
+    }
+
+    #[test]
+    fn test_version_format() {
+        // VERSION should be non-empty
+        assert!(!VERSION.is_empty());
+
+        // Should either be a semver version (release) or contain -dev+ (debug)
+        // Examples: "0.3.0" or "0.3.0-dev+a1b2c3d4" or "0.3.0-dev+a1b2c3d4.dirty"
+        assert!(
+            VERSION.chars().next().unwrap().is_numeric(),
+            "Version should start with a number"
+        );
+    }
+
+    #[test]
+    fn test_version_is_valid_semver_with_metadata() {
+        // Version should be parseable by semver (which supports build metadata)
+        // Semver supports: 1.2.3-prerelease+build
+        // Our format: 0.3.0-dev+hash or 0.3.0-dev+hash.dirty
+        let base_version = if VERSION.contains('-') {
+            // Extract base version from "0.3.0-dev+hash"
+            VERSION.split('-').next().unwrap()
+        } else {
+            VERSION
+        };
+
+        assert!(
+            Version::parse(base_version).is_ok(),
+            "Base version should be valid semver: {}",
+            base_version
+        );
     }
 }
