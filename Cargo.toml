@@ -17,7 +17,7 @@ md5 = "0.7"
 which = "6.0"
 self_update = { version = "0.41", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
 semver = "1.0"
-indicatif = "0.17"
+indicatif = "0.18"
 uzers = "0.12"
 
 [dev-dependencies]
