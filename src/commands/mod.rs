@@ -1,4 +1,3 @@
-pub mod attach;
 pub mod clean;
 pub mod clean_all;
 pub mod config;

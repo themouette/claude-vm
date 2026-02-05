@@ -22,8 +22,7 @@ All notable changes to claude-vm will be documented in this file.
 - **exec command**: New `claude-vm exec` command to run commands without opening a shell
   - Execute one-off commands: `claude-vm exec "npm test"`
   - Useful for scripting and automation
-- **attach command**: New `claude-vm attach` command to attach to a running VM
-  - Opens an interactive shell in an already-running VM
+  - Creates ephemeral VM with full mounts and runtime scripts
 - **Environment variable support**: Pass environment variables to VM commands
   - `--env KEY=VALUE` sets individual variables
   - `--env-file path` loads variables from a file
@@ -40,7 +39,8 @@ All notable changes to claude-vm will be documented in this file.
 
 - **exec command shell escaping**: Command arguments in `claude-vm exec` are now properly escaped using single quotes to prevent word splitting and command injection. Commands with spaces, quotes, or special characters now work correctly (e.g., `claude-vm exec echo "hello world"`)
 - **exec command exit code propagation**: The `claude-vm exec` command now exits with the same exit code as the executed command, enabling proper error detection in scripts and automation (e.g., `claude-vm exec false && echo ok` will not print "ok")
-- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run, exec, attach), not just exec
+- **exec command mounts**: The `claude-vm exec` command now creates an ephemeral VM with proper mounts and runtime scripts, just like `shell` and `run` commands. Previously it executed directly on the template VM without any mounts.
+- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run, exec), not just exec
 
 ### Changed
 

@@ -76,7 +76,6 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 **Comprehensive Management Commands**
 
 - `exec` - Run one-off commands without opening a shell (perfect for CI/CD)
-- `attach` - Attach to running VMs for debugging and inspection
 - `logs` - View and follow VM logs in real-time
 - `info` - Display project template status and configuration
 - `config` - Validate and inspect effective configuration
@@ -158,12 +157,6 @@ claude-vm --inherit-env PATH --inherit-env HOME exec "echo \$PATH"
 
 # Combine multiple sources
 claude-vm --env-file .env --env API_KEY=secret --inherit-env USER exec "npm start"
-```
-
-Attach to a running VM:
-
-```bash
-claude-vm attach
 ```
 
 ### Project Information

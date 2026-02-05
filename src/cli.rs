@@ -126,9 +126,6 @@ pub enum Commands {
         command: Vec<String>,
     },
 
-    /// Attach to a running VM
-    Attach,
-
     /// Show information about the current project's template
     Info,
 
