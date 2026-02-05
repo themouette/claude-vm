@@ -52,6 +52,10 @@ All notable changes to claude-vm will be documented in this file.
   - GPG: Added gnupg package declaration, removed apt-get from vm_setup
   - GitHub CLI: Declarative package with repository setup
 
+### Fixed
+
+- **Mount configuration not applied**: Fixed bug where mount configurations from TOML files were not being merged and applied to VMs. Both `mounts` and `setup.mounts` fields were being ignored when loading from global or project config files. Only CLI `--mount` arguments were working. The `Config::merge` function now properly extends mount arrays when merging configurations.
+
 ## [0.2.3] - 2026-02-04
 
 ### Added

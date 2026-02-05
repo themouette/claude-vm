@@ -342,6 +342,10 @@ impl Config {
         self.setup.scripts.extend(other.setup.scripts);
         self.runtime.scripts.extend(other.runtime.scripts);
 
+        // Mounts (append)
+        self.mounts.extend(other.mounts);
+        self.setup.mounts.extend(other.setup.mounts);
+
         // Default Claude args (append)
         self.defaults.claude_args.extend(other.defaults.claude_args);
 
@@ -777,5 +781,62 @@ mod tests {
         let merged = base.merge(override_cfg);
         assert!(!merged.update_check.enabled);
         assert_eq!(merged.update_check.interval_hours, 168);
+    }
+
+    #[test]
+    fn test_mounts_merge() {
+        // Create base config with one mount
+        let mut base = Config::default();
+        base.mounts.push(MountEntry {
+            location: "/host/path1".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Create override config with another mount
+        let mut override_cfg = Config::default();
+        override_cfg.mounts.push(MountEntry {
+            location: "/host/path2".to_string(),
+            writable: false,
+            mount_point: Some("/vm/path2".to_string()),
+        });
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both mounts are present
+        assert_eq!(merged.mounts.len(), 2);
+        assert_eq!(merged.mounts[0].location, "/host/path1");
+        assert!(merged.mounts[0].writable);
+        assert_eq!(merged.mounts[1].location, "/host/path2");
+        assert!(!merged.mounts[1].writable);
+        assert_eq!(merged.mounts[1].mount_point, Some("/vm/path2".to_string()));
+    }
+
+    #[test]
+    fn test_setup_mounts_merge() {
+        // Create base config with one setup mount
+        let mut base = Config::default();
+        base.setup.mounts.push(MountEntry {
+            location: "/setup/path1".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Create override config with another setup mount
+        let mut override_cfg = Config::default();
+        override_cfg.setup.mounts.push(MountEntry {
+            location: "/setup/path2".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both setup mounts are present
+        assert_eq!(merged.setup.mounts.len(), 2);
+        assert_eq!(merged.setup.mounts[0].location, "/setup/path1");
+        assert_eq!(merged.setup.mounts[1].location, "/setup/path2");
     }
 }
