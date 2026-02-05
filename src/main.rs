@@ -34,8 +34,8 @@ fn main() -> Result<()> {
             commands::config::execute(command)?;
             return Ok(());
         }
-        Some(Commands::CleanAll) => {
-            commands::clean_all::execute()?;
+        Some(Commands::CleanAll { yes }) => {
+            commands::clean_all::execute(*yes)?;
             return Ok(());
         }
         _ => {}
@@ -73,8 +73,8 @@ fn main() -> Result<()> {
         Some(Commands::Info) => {
             commands::info::execute()?;
         }
-        Some(Commands::Clean) => {
-            commands::clean::execute(&project)?;
+        Some(Commands::Clean { yes }) => {
+            commands::clean::execute(&project, *yes)?;
         }
         None => {
             // Default: run Claude with provided arguments

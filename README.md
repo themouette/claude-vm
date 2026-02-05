@@ -190,6 +190,13 @@ Clean all templates:
 claude-vm clean-all
 ```
 
+Both commands will prompt for confirmation before deleting. Skip the prompt with:
+
+```bash
+claude-vm clean --yes
+claude-vm clean-all --yes
+```
+
 ### Update Claude VM
 
 Check for available updates:

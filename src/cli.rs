@@ -128,10 +128,18 @@ pub enum Commands {
     },
 
     /// Clean the template for this project
-    Clean,
+    Clean {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 
     /// Clean all claude-vm templates
-    CleanAll,
+    CleanAll {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 
     /// Check claude-vm version and updates
     Version {
