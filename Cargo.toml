@@ -15,7 +15,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 md5 = "0.7"
 which = "6.0"
-self_update = { version = "0.41", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
+self_update = { version = "0.42", default-features = false, features = ["archive-tar", "compression-flate2", "rustls"] }
 semver = "1.0"
 indicatif = "0.17"
 uzers = "0.12"
