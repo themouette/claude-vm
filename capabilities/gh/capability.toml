@@ -34,7 +34,12 @@ fi
 """
 
 [vm_setup]
-script_file = "vm_setup.sh"
+script = """
+#!/bin/bash
+set -e
+gh --version
+gh auth login --git-protocol https --hostname github.com
+"""
 
 [vm_runtime]
 script = """

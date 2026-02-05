@@ -24,6 +24,10 @@ All notable changes to claude-vm will be documented in this file.
   - Repository setup scripts run before the single update to add custom sources
   - Capability and user packages batch install together for maximum efficiency
   - Enhanced error messages with troubleshooting steps for installation failures
+- **Repository GPG verification**: Repository setup scripts follow official vendor documentation
+  - Removed manual GPG fingerprint verification not present in official docs
+  - APT automatically verifies package signatures via `signed-by` parameter
+  - Downloads GPG keys over HTTPS for authenticity via TLS certificate validation
 
 ### Changed
 
@@ -34,13 +38,6 @@ All notable changes to claude-vm will be documented in this file.
   - Chromium: Packages plus post-install symlink configuration
   - GPG: Added gnupg package declaration, removed apt-get from vm_setup
   - GitHub CLI: Declarative package with repository setup
-
-### Fixed
-
-- **Repository GPG verification**: Corrected Docker and GitHub CLI repository setup scripts to match official vendor documentation
-  - Removed manual GPG fingerprint verification not present in official docs
-  - APT automatically verifies package signatures via `signed-by` parameter
-  - Downloads GPG keys over HTTPS for authenticity via TLS certificate validation
 
 ## [0.2.3] - 2026-02-04
 

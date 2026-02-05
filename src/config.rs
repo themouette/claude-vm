@@ -146,8 +146,9 @@ impl ToolsConfig {
 ///
 /// ## Custom Repository Setup
 ///
-/// ⚠️  **SECURITY WARNING**: `setup_script` executes arbitrary bash code with sudo privileges.
-/// Only use scripts from trusted sources. Malicious scripts can compromise your system.
+/// ⚠️  **SECURITY WARNING**: `setup_script` executes arbitrary bash code with sudo privileges
+/// in the VM during setup. Only use scripts from trusted sources. Malicious scripts can
+/// compromise the VM.
 ///
 /// ```toml
 /// [packages]
