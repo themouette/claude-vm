@@ -164,6 +164,18 @@ List all claude-vm templates:
 claude-vm list
 ```
 
+List templates with disk usage information:
+
+```bash
+claude-vm list --disk-usage
+```
+
+List only unused templates (not accessed in 30+ days):
+
+```bash
+claude-vm list --unused
+```
+
 ### Clean Templates
 
 Clean the template for the current project:

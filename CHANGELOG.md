@@ -10,6 +10,9 @@ All notable changes to claude-vm will be documented in this file.
 - **config commands**: New `claude-vm config` subcommands for configuration management
   - `claude-vm config validate` - Validates configuration files without creating a VM
   - `claude-vm config show` - Shows effective configuration after merging all sources (CLI > Env > Project > Global > Defaults)
+- **list command improvements**: Enhanced template listing with filtering and disk usage
+  - `--unused` flag filters templates not accessed in 30+ days
+  - `--disk-usage` flag shows disk space usage and last access time for each template
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)

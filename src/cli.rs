@@ -117,7 +117,15 @@ pub enum Commands {
     },
 
     /// List all claude-vm templates
-    List,
+    List {
+        /// Show only unused templates (not used in 30 days)
+        #[arg(long)]
+        unused: bool,
+
+        /// Show disk usage information
+        #[arg(long)]
+        disk_usage: bool,
+    },
 
     /// Clean the template for this project
     Clean,

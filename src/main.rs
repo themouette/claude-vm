@@ -26,8 +26,8 @@ fn main() -> Result<()> {
             commands::update::execute(*check, version.clone(), *yes)?;
             return Ok(());
         }
-        Some(Commands::List) => {
-            commands::list::execute()?;
+        Some(Commands::List { unused, disk_usage }) => {
+            commands::list::execute(*unused, *disk_usage)?;
             return Ok(());
         }
         Some(Commands::Config { command }) => {
