@@ -337,10 +337,18 @@ impl Config {
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);
+        // Merge setup_script (other takes precedence if present)
+        if other.packages.setup_script.is_some() {
+            self.packages.setup_script = other.packages.setup_script;
+        }
 
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
         self.runtime.scripts.extend(other.runtime.scripts);
+
+        // Mounts (append)
+        self.mounts.extend(other.mounts);
+        self.setup.mounts.extend(other.setup.mounts);
 
         // Default Claude args (append)
         self.defaults.claude_args.extend(other.defaults.claude_args);
@@ -777,5 +785,244 @@ mod tests {
         let merged = base.merge(override_cfg);
         assert!(!merged.update_check.enabled);
         assert_eq!(merged.update_check.interval_hours, 168);
+    }
+
+    #[test]
+    fn test_mounts_merge() {
+        // Create base config with one mount
+        let mut base = Config::default();
+        base.mounts.push(MountEntry {
+            location: "/host/path1".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Create override config with another mount
+        let mut override_cfg = Config::default();
+        override_cfg.mounts.push(MountEntry {
+            location: "/host/path2".to_string(),
+            writable: false,
+            mount_point: Some("/vm/path2".to_string()),
+        });
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both mounts are present
+        assert_eq!(merged.mounts.len(), 2);
+        assert_eq!(merged.mounts[0].location, "/host/path1");
+        assert!(merged.mounts[0].writable);
+        assert_eq!(merged.mounts[1].location, "/host/path2");
+        assert!(!merged.mounts[1].writable);
+        assert_eq!(merged.mounts[1].mount_point, Some("/vm/path2".to_string()));
+    }
+
+    #[test]
+    fn test_setup_mounts_merge() {
+        // Create base config with one setup mount
+        let mut base = Config::default();
+        base.setup.mounts.push(MountEntry {
+            location: "/setup/path1".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Create override config with another setup mount
+        let mut override_cfg = Config::default();
+        override_cfg.setup.mounts.push(MountEntry {
+            location: "/setup/path2".to_string(),
+            writable: true,
+            mount_point: None,
+        });
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both setup mounts are present
+        assert_eq!(merged.setup.mounts.len(), 2);
+        assert_eq!(merged.setup.mounts[0].location, "/setup/path1");
+        assert_eq!(merged.setup.mounts[1].location, "/setup/path2");
+    }
+
+    #[test]
+    fn test_tools_merge() {
+        // Create base config with some tools enabled
+        let mut base = Config::default();
+        base.tools.docker = true;
+        base.tools.node = true;
+
+        // Create override config with different tools enabled
+        let mut override_cfg = Config::default();
+        override_cfg.tools.python = true;
+        override_cfg.tools.chromium = true;
+        override_cfg.tools.gpg = true;
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify all tools are enabled (ORed together)
+        assert!(merged.tools.docker);
+        assert!(merged.tools.node);
+        assert!(merged.tools.python);
+        assert!(merged.tools.chromium);
+        assert!(merged.tools.gpg);
+        assert!(!merged.tools.gh); // Not enabled in either
+    }
+
+    #[test]
+    fn test_packages_system_merge() {
+        // Create base config with system packages
+        let mut base = Config::default();
+        base.packages.system.push("htop".to_string());
+        base.packages.system.push("curl".to_string());
+
+        // Create override config with additional system packages
+        let mut override_cfg = Config::default();
+        override_cfg.packages.system.push("jq".to_string());
+        override_cfg.packages.system.push("vim".to_string());
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify all packages are present (extended)
+        assert_eq!(merged.packages.system.len(), 4);
+        assert!(merged.packages.system.contains(&"htop".to_string()));
+        assert!(merged.packages.system.contains(&"curl".to_string()));
+        assert!(merged.packages.system.contains(&"jq".to_string()));
+        assert!(merged.packages.system.contains(&"vim".to_string()));
+    }
+
+    #[test]
+    fn test_packages_setup_script_merge() {
+        // Create base config with setup_script
+        let mut base = Config::default();
+        base.packages.setup_script = Some("echo 'global setup'".to_string());
+
+        // Create override config with different setup_script
+        let mut override_cfg = Config::default();
+        override_cfg.packages.setup_script = Some("echo 'project setup'".to_string());
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify override takes precedence
+        assert_eq!(
+            merged.packages.setup_script,
+            Some("echo 'project setup'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_packages_setup_script_merge_none() {
+        // Create base config with setup_script
+        let mut base = Config::default();
+        base.packages.setup_script = Some("echo 'global setup'".to_string());
+
+        // Create override config with no setup_script
+        let override_cfg = Config::default();
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify base setup_script is preserved when override is None
+        assert_eq!(
+            merged.packages.setup_script,
+            Some("echo 'global setup'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_setup_scripts_merge() {
+        // Create base config with setup scripts
+        let mut base = Config::default();
+        base.setup.scripts.push("script1.sh".to_string());
+        base.setup.scripts.push("script2.sh".to_string());
+
+        // Create override config with additional setup scripts
+        let mut override_cfg = Config::default();
+        override_cfg.setup.scripts.push("script3.sh".to_string());
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify all scripts are present (extended)
+        assert_eq!(merged.setup.scripts.len(), 3);
+        assert_eq!(merged.setup.scripts[0], "script1.sh");
+        assert_eq!(merged.setup.scripts[1], "script2.sh");
+        assert_eq!(merged.setup.scripts[2], "script3.sh");
+    }
+
+    #[test]
+    fn test_runtime_scripts_merge() {
+        // Create base config with runtime scripts
+        let mut base = Config::default();
+        base.runtime.scripts.push("runtime1.sh".to_string());
+
+        // Create override config with additional runtime scripts
+        let mut override_cfg = Config::default();
+        override_cfg.runtime.scripts.push("runtime2.sh".to_string());
+        override_cfg.runtime.scripts.push("runtime3.sh".to_string());
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify all scripts are present (extended)
+        assert_eq!(merged.runtime.scripts.len(), 3);
+        assert_eq!(merged.runtime.scripts[0], "runtime1.sh");
+        assert_eq!(merged.runtime.scripts[1], "runtime2.sh");
+        assert_eq!(merged.runtime.scripts[2], "runtime3.sh");
+    }
+
+    #[test]
+    fn test_defaults_claude_args_merge() {
+        // Create base config with claude args
+        let mut base = Config::default();
+        base.defaults.claude_args = vec!["--arg1".to_string()];
+
+        // Create override config with additional claude args
+        let mut override_cfg = Config::default();
+        override_cfg.defaults.claude_args = vec!["--arg2".to_string(), "--arg3".to_string()];
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify all args are present (extended)
+        assert_eq!(merged.defaults.claude_args.len(), 3);
+        assert_eq!(merged.defaults.claude_args[0], "--arg1");
+        assert_eq!(merged.defaults.claude_args[1], "--arg2");
+        assert_eq!(merged.defaults.claude_args[2], "--arg3");
+    }
+
+    #[test]
+    fn test_context_instructions_file_merge() {
+        // Create base config with instructions_file
+        let mut base = Config::default();
+        base.context.instructions_file = "~/.global-context.md".to_string();
+
+        // Create override config with different instructions_file
+        let mut override_cfg = Config::default();
+        override_cfg.context.instructions_file = "./.local-context.md".to_string();
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify override takes precedence
+        assert_eq!(merged.context.instructions_file, "./.local-context.md");
+    }
+
+    #[test]
+    fn test_context_instructions_file_merge_empty() {
+        // Create base config with instructions_file
+        let mut base = Config::default();
+        base.context.instructions_file = "~/.global-context.md".to_string();
+
+        // Create override config with empty instructions_file
+        let override_cfg = Config::default();
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify base instructions_file is preserved when override is empty
+        assert_eq!(merged.context.instructions_file, "~/.global-context.md");
     }
 }
