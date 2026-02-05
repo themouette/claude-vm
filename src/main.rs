@@ -79,9 +79,6 @@ fn main() -> Result<()> {
         Some(Commands::Clean { yes }) => {
             commands::clean::execute(&project, *yes)?;
         }
-        Some(Commands::Logs { follow }) => {
-            commands::logs::execute(&project, *follow)?;
-        }
         None => {
             // Default: run Claude with provided arguments
             commands::run::execute(&project, &config, &cli, &cli.claude_args)?;

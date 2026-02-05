@@ -4,7 +4,6 @@ pub mod config;
 pub mod exec;
 pub mod info;
 pub mod list;
-pub mod logs;
 pub mod run;
 pub mod setup;
 pub mod shell;

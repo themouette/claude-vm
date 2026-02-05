@@ -16,9 +16,6 @@ All notable changes to claude-vm will be documented in this file.
 - **Confirmation prompts**: Added safety prompts to destructive operations
   - `claude-vm clean` and `claude-vm clean-all` now prompt before deleting templates
   - Use `--yes` or `-y` flag to skip prompts in scripts or automation
-- **logs command**: New `claude-vm logs` command to view VM logs
-  - Shows last 100 lines of Lima VM logs by default
-  - `--follow` flag enables real-time log streaming (like `tail -f`)
 - **exec command**: New `claude-vm exec` command to run commands without opening a shell
   - Execute one-off commands: `claude-vm exec "npm test"`
   - Useful for scripting and automation

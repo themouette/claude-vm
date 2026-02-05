@@ -76,7 +76,6 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 **Comprehensive Management Commands**
 
 - `exec` - Run one-off commands without opening a shell (perfect for CI/CD)
-- `logs` - View and follow VM logs in real-time
 - `info` - Display project template status and configuration
 - `config` - Validate and inspect effective configuration
 - `list` - Find unused templates with disk usage information
@@ -207,15 +206,6 @@ List only unused templates (not accessed in 30+ days):
 
 ```bash
 claude-vm list --unused
-```
-
-### View Logs
-
-View VM logs:
-
-```bash
-claude-vm logs              # Show last 100 lines
-claude-vm logs --follow     # Follow logs in real-time
 ```
 
 ### Clean Templates
