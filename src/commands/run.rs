@@ -6,7 +6,12 @@ use crate::scripts::runner;
 use crate::utils::env as env_utils;
 use crate::vm::{session::VmSession, template};
 
-pub fn execute(project: &Project, config: &Config, cli: &Cli, claude_args: &[String]) -> Result<()> {
+pub fn execute(
+    project: &Project,
+    config: &Config,
+    cli: &Cli,
+    claude_args: &[String],
+) -> Result<()> {
     // Verify template exists
     template::verify(project.template_name())?;
 

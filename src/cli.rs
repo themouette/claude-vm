@@ -116,13 +116,13 @@ pub enum Commands {
         mounts: Vec<String>,
     },
 
-    /// Open a shell in the template VM
-    Shell,
-
-    /// Execute a command in the VM without opening a shell
-    Exec {
-        /// Command to execute
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+    /// Open a shell or execute a command in an ephemeral VM
+    ///
+    /// Without arguments: Opens an interactive shell
+    /// With arguments: Executes the command and exits
+    Shell {
+        /// Command to execute (optional, opens interactive shell if not provided)
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
 

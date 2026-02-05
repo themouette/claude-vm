@@ -67,11 +67,8 @@ fn main() -> Result<()> {
         Some(Commands::Setup { .. }) => {
             commands::setup::execute(&project, &config)?;
         }
-        Some(Commands::Shell) => {
-            commands::shell::execute(&project, &config, &cli)?;
-        }
-        Some(Commands::Exec { command }) => {
-            commands::exec::execute(&project, &config, &cli, command)?;
+        Some(Commands::Shell { command }) => {
+            commands::shell::execute(&project, &config, &cli, command)?;
         }
         Some(Commands::Info) => {
             commands::info::execute()?;

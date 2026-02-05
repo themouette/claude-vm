@@ -16,10 +16,12 @@ All notable changes to claude-vm will be documented in this file.
 - **Confirmation prompts**: Added safety prompts to destructive operations
   - `claude-vm clean` and `claude-vm clean-all` now prompt before deleting templates
   - Use `--yes` or `-y` flag to skip prompts in scripts or automation
-- **exec command**: New `claude-vm exec` command to run commands without opening a shell
-  - Execute one-off commands: `claude-vm exec "npm test"`
-  - Useful for scripting and automation
+- **shell command enhancement**: The `shell` command now accepts optional command arguments
+  - Without arguments: Opens interactive shell (`claude-vm shell`)
+  - With arguments: Executes command and exits (`claude-vm shell ls -la`)
+  - Unified interface replaces the separate `exec` command
   - Creates ephemeral VM with full mounts and runtime scripts
+  - Properly escapes arguments and propagates exit codes
 - **Environment variable support**: Pass environment variables to VM commands
   - `--env KEY=VALUE` sets individual variables
   - `--env-file path` loads variables from a file
@@ -34,10 +36,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
-- **exec command shell escaping**: Command arguments in `claude-vm exec` are now properly escaped using single quotes to prevent word splitting and command injection. Commands with spaces, quotes, or special characters now work correctly (e.g., `claude-vm exec echo "hello world"`)
-- **exec command exit code propagation**: The `claude-vm exec` command now exits with the same exit code as the executed command, enabling proper error detection in scripts and automation (e.g., `claude-vm exec false && echo ok` will not print "ok")
-- **exec command mounts**: The `claude-vm exec` command now creates an ephemeral VM with proper mounts and runtime scripts, just like `shell` and `run` commands. Previously it executed directly on the template VM without any mounts.
-- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run, exec), not just exec
+- **shell command shell escaping**: Command arguments are now properly escaped using single quotes to prevent word splitting and command injection. Commands with spaces, quotes, or special characters now work correctly (e.g., `claude-vm shell echo "hello world"`)
+- **shell command exit code propagation**: When executing commands, the shell command now exits with the same exit code as the executed command, enabling proper error detection in scripts and automation (e.g., `claude-vm shell false && echo ok` will not print "ok")
+- **shell command mounts**: The shell command now always creates an ephemeral VM with proper mounts and runtime scripts, whether in interactive or command mode
+- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run)
 
 ### Changed
 

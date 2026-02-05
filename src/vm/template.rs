@@ -171,8 +171,7 @@ mod tests {
     #[serial_test::serial]
     fn test_format_last_used_with_mock_time() {
         // Create a temporary HOME directory
-        let temp_home = env::temp_dir().join(format!("claude-vm-test-home-{}",
-            std::process::id()));
+        let temp_home = env::temp_dir().join(format!("claude-vm-test-home-{}", std::process::id()));
         if temp_home.exists() {
             fs::remove_dir_all(&temp_home).ok();
         }

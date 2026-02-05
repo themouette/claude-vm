@@ -1,7 +1,6 @@
 pub mod clean;
 pub mod clean_all;
 pub mod config;
-pub mod exec;
 pub mod info;
 pub mod list;
 pub mod run;

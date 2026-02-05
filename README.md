@@ -75,7 +75,7 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 
 **Comprehensive Management Commands**
 
-- `exec` - Run one-off commands without opening a shell (perfect for CI/CD)
+- `shell` - Interactive shell or command execution in ephemeral VM (perfect for CI/CD)
 - `info` - Display project template status and configuration
 - `config` - Validate and inspect effective configuration
 - `list` - Find unused templates with disk usage information
@@ -128,34 +128,34 @@ claude-vm "help me code"
 
 ### Shell Access
 
-Open a shell in the template VM:
+Open an interactive shell in an ephemeral VM:
 
 ```bash
 claude-vm shell
 ```
 
-Execute a single command without opening a shell:
+Execute a single command and exit:
 
 ```bash
-claude-vm exec "npm test"
-claude-vm exec ls -la
-claude-vm exec -- git status
+claude-vm shell npm test
+claude-vm shell ls -la
+claude-vm shell git status
 ```
 
 Pass environment variables:
 
 ```bash
 # Set individual variables
-claude-vm --env DATABASE_URL=postgres://localhost/db exec "npm test"
+claude-vm --env DATABASE_URL=postgres://localhost/db shell npm test
 
 # Load from file
-claude-vm --env-file .env.test exec "npm test"
+claude-vm --env-file .env.test shell npm test
 
 # Inherit from host
-claude-vm --inherit-env PATH --inherit-env HOME exec "echo \$PATH"
+claude-vm --inherit-env PATH --inherit-env HOME shell echo \$PATH
 
 # Combine multiple sources
-claude-vm --env-file .env --env API_KEY=secret --inherit-env USER exec "npm start"
+claude-vm --env-file .env --env API_KEY=secret --inherit-env USER shell npm start
 ```
 
 ### Project Information
