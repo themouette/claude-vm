@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use users::os::unix::UserExt;
+use uzers::os::unix::UserExt;
 
 /// Expand tilde (~) in paths to actual home directories.
 ///
@@ -44,7 +44,7 @@ pub fn expand_tilde<P: AsRef<Path>>(path: P) -> Option<PathBuf> {
     let rest = &after_tilde[username_end..].trim_start_matches('/');
 
     // Look up the user's home directory
-    let user = users::get_user_by_name(username)?;
+    let user = uzers::get_user_by_name(username)?;
     let home_dir = user.home_dir();
 
     Some(home_dir.join(rest))
