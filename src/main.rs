@@ -70,6 +70,12 @@ fn main() -> Result<()> {
         Some(Commands::Shell) => {
             commands::shell::execute(&project, &config)?;
         }
+        Some(Commands::Exec { command }) => {
+            commands::exec::execute(&project, &config, command)?;
+        }
+        Some(Commands::Attach) => {
+            commands::attach::execute(&project, &config)?;
+        }
         Some(Commands::Info) => {
             commands::info::execute()?;
         }

@@ -126,6 +126,20 @@ Open a shell in the template VM:
 claude-vm shell
 ```
 
+Execute a single command without opening a shell:
+
+```bash
+claude-vm exec "npm test"
+claude-vm exec ls -la
+claude-vm exec -- git status
+```
+
+Attach to a running VM:
+
+```bash
+claude-vm attach
+```
+
 ### Project Information
 
 Show information about the current project's template:

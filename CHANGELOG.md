@@ -19,6 +19,11 @@ All notable changes to claude-vm will be documented in this file.
 - **logs command**: New `claude-vm logs` command to view VM logs
   - Shows last 100 lines of Lima VM logs by default
   - `--follow` flag enables real-time log streaming (like `tail -f`)
+- **exec command**: New `claude-vm exec` command to run commands without opening a shell
+  - Execute one-off commands: `claude-vm exec "npm test"`
+  - Useful for scripting and automation
+- **attach command**: New `claude-vm attach` command to attach to a running VM
+  - Opens an interactive shell in an already-running VM
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)

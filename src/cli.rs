@@ -107,6 +107,16 @@ pub enum Commands {
     /// Open a shell in the template VM
     Shell,
 
+    /// Execute a command in the VM without opening a shell
+    Exec {
+        /// Command to execute
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, required = true)]
+        command: Vec<String>,
+    },
+
+    /// Attach to a running VM
+    Attach,
+
     /// Show information about the current project's template
     Info,
 
