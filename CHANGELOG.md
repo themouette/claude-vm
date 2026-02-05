@@ -58,6 +58,7 @@ All notable changes to claude-vm will be documented in this file.
 - **packages.setup_script not merged**: Fixed bug where `packages.setup_script` configuration in TOML files was not being merged. Only the first loaded config's setup_script was used, ignoring overrides from project configs.
 - **Comprehensive merge test coverage**: Added tests for all config merge behaviors to prevent future regressions.
 - **Test race condition with HOME environment variable**: Fixed intermittent test failures in `test_from_spec_tilde_expansion` and `test_from_spec_tilde_expansion_both_paths`. These tests read the HOME environment variable but weren't marked with `#[serial_test::serial]`, causing failures when other tests modified HOME concurrently. All tests that access HOME (even just reading) are now properly serialized to prevent race conditions.
+- **Interactive test in release builds**: Fixed `test_context_file_not_found` that would hang during release builds by prompting for user input. The test now uses `#[cfg(test)]` to skip the interactive prompt and fail immediately when a context file is not found, making tests fully non-interactive.
 
 ## [0.2.3] - 2026-02-04
 
