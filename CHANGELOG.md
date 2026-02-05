@@ -36,6 +36,17 @@ All notable changes to claude-vm will be documented in this file.
   - Enables safe parallel usage of development and release builds without template conflicts
   - Automatic detection based on build profile (`cargo build` vs `cargo build --release`)
 
+### Fixed
+
+- **exec command shell escaping**: Command arguments in `claude-vm exec` are now properly escaped using single quotes to prevent word splitting and command injection. Commands with spaces, quotes, or special characters now work correctly (e.g., `claude-vm exec echo "hello world"`)
+- **exec command exit code propagation**: The `claude-vm exec` command now exits with the same exit code as the executed command, enabling proper error detection in scripts and automation (e.g., `claude-vm exec false && echo ok` will not print "ok")
+- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run, exec, attach), not just exec
+
+### Changed
+
+- **Template module refactoring**: Consolidated template metadata functions (`get_disk_usage`, `get_last_access_time`, `format_last_used`, `is_unused`) into `template.rs` for better code organization and reusability across commands
+- **Environment variable handling**: Simplified environment variable collection using a centralized `collect_env_vars()` helper function for consistency across all commands
+
 ## [0.3.0] - 2026-02-05
 
 ### Added

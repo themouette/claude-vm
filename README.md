@@ -66,11 +66,21 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 - Define VM resources, tools, and settings in `.claude-vm.toml`
 - Precedence system: CLI > Env > Project > Global > Defaults
 - No need to remember complex command-line flags
+- Pass environment variables via `--env`, `--env-file`, or `--inherit-env`
 
 **Git Worktree Support**
 
 - Automatically detects and mounts both worktree and main repository
 - Full git functionality in isolated VMs
+
+**Comprehensive Management Commands**
+
+- `exec` - Run one-off commands without opening a shell (perfect for CI/CD)
+- `attach` - Attach to running VMs for debugging and inspection
+- `logs` - View and follow VM logs in real-time
+- `info` - Display project template status and configuration
+- `config` - Validate and inspect effective configuration
+- `list` - Find unused templates with disk usage information
 
 ## Installation
 
@@ -847,6 +857,9 @@ This shows:
 - `-A, --forward-ssh-agent` - Forward SSH agent to VM
 - `--no-conversations` - Don't mount Claude conversation folder in VM
 - `--mount <SPEC>` - Custom mount in docker-style format (can be used multiple times)
+- `--env KEY=VALUE` - Set environment variable in VM (can be used multiple times)
+- `--env-file <PATH>` - Load environment variables from file (can be used multiple times)
+- `--inherit-env VAR` - Inherit specific environment variable from host (can be used multiple times)
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options
