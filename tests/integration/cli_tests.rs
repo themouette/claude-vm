@@ -25,6 +25,51 @@ fn test_version_output() {
 }
 
 #[test]
+fn test_version_format() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--version");
+
+    let output = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+
+    // Version should be in format "claude-vm X.Y.Z" or "claude-vm X.Y.Z-dev+hash[.dirty]"
+    assert!(stdout.starts_with("claude-vm "));
+
+    // Extract version part after "claude-vm "
+    let version_part = stdout.strip_prefix("claude-vm ").unwrap().trim();
+
+    // Should start with a digit (semver)
+    assert!(
+        version_part.chars().next().unwrap().is_numeric(),
+        "Version should start with a number: {}",
+        version_part
+    );
+
+    // Debug builds should have -dev or be a plain version
+    // Release builds should be plain semver
+    #[cfg(debug_assertions)]
+    {
+        // In debug builds, should contain -dev+ (unless built in CI or without git)
+        // or be plain version if git unavailable
+        assert!(
+            version_part.contains("-dev+") || !version_part.contains("-dev"),
+            "Debug build version should contain -dev+ or be plain version: {}",
+            version_part
+        );
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        // In release builds, should NOT contain -dev
+        assert!(
+            !version_part.contains("-dev"),
+            "Release build version should not contain -dev: {}",
+            version_part
+        );
+    }
+}
+
+#[test]
 fn test_setup_help() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["setup", "--help"]);

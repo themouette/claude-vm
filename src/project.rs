@@ -44,7 +44,7 @@ impl Project {
         })
     }
 
-    /// Generate template name: claude-tpl_{sanitized-basename}_{8-char-md5-hash}
+    /// Generate template name: claude-tpl_{sanitized-basename}_{8-char-md5-hash}[-dev]
     fn generate_template_name(root: &Path) -> String {
         let basename = root
             .file_name()
@@ -60,7 +60,13 @@ impl Project {
         let hash = format!("{:x}", digest);
         let short_hash = &hash[..8];
 
-        format!("claude-tpl_{}_{}", sanitized, short_hash)
+        // Add -dev suffix for debug builds
+        #[cfg(debug_assertions)]
+        let suffix = "-dev";
+        #[cfg(not(debug_assertions))]
+        let suffix = "";
+
+        format!("claude-tpl_{}_{}{}", sanitized, short_hash, suffix)
     }
 
     /// Sanitize name: lowercase, alphanumeric + dash, collapse dashes
@@ -112,6 +118,47 @@ mod tests {
         let template_name = Project::generate_template_name(&path);
 
         assert!(template_name.starts_with("claude-tpl_my-project_"));
-        assert_eq!(template_name.len(), "claude-tpl_my-project_".len() + 8);
+
+        // Check length based on build profile
+        #[cfg(debug_assertions)]
+        {
+            // Format: claude-tpl_my-project_12345678-dev
+            assert!(template_name.ends_with("-dev"));
+            assert_eq!(
+                template_name.len(),
+                "claude-tpl_my-project_".len() + 8 + "-dev".len()
+            );
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            // Format: claude-tpl_my-project_12345678
+            assert!(!template_name.ends_with("-dev"));
+            assert_eq!(template_name.len(), "claude-tpl_my-project_".len() + 8);
+        }
+    }
+
+    #[test]
+    fn test_generate_template_name_dev_suffix() {
+        let path = PathBuf::from("/home/user/test-project");
+        let template_name = Project::generate_template_name(&path);
+
+        // Verify format is correct
+        assert!(template_name.starts_with("claude-tpl_test-project_"));
+
+        // In debug builds, should have -dev suffix
+        #[cfg(debug_assertions)]
+        assert!(
+            template_name.ends_with("-dev"),
+            "Debug build should have -dev suffix: {}",
+            template_name
+        );
+
+        // In release builds, should not have -dev suffix
+        #[cfg(not(debug_assertions))]
+        assert!(
+            !template_name.ends_with("-dev"),
+            "Release build should not have -dev suffix: {}",
+            template_name
+        );
     }
 }

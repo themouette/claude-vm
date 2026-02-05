@@ -24,6 +24,78 @@ cargo build --release
 
 The binary will be at `target/release/claude-vm`.
 
+## Development vs Release Builds
+
+Claude-vm automatically distinguishes between development and release builds to enable safe parallel usage:
+
+### Development Builds (`cargo build`)
+
+Development builds include additional version information and use separate VM templates:
+
+**Version String:**
+- Includes git commit hash: `0.3.0-dev+a1b2c3d4`
+- Shows `.dirty` suffix if working tree has uncommitted changes: `0.3.0-dev+a1b2c3d4.dirty`
+- Falls back to `0.3.0-dev+unknown` if git is unavailable
+
+**Template Names:**
+- Include `-dev` suffix: `claude-tpl_project_hash-dev`
+- Isolated from release templates
+
+**Example:**
+```bash
+cargo build
+./target/debug/claude-vm --version
+# Output: claude-vm 0.3.0-dev+a1b2c3d4.dirty
+
+./target/debug/claude-vm setup --all
+# Creates: claude-tpl_my-project_12345678-dev
+```
+
+### Release Builds (`cargo build --release`)
+
+Release builds use clean version strings and standard template names:
+
+**Version String:**
+- Clean semver version: `0.3.0`
+- No git metadata
+
+**Template Names:**
+- Standard format: `claude-tpl_project_hash`
+- Isolated from dev templates
+
+**Example:**
+```bash
+cargo build --release
+./target/release/claude-vm --version
+# Output: claude-vm 0.3.0
+
+./target/release/claude-vm setup --all
+# Creates: claude-tpl_my-project_12345678
+```
+
+### Benefits
+
+This separation allows you to:
+- Test development builds without affecting release templates
+- Quickly identify which version is running
+- Track which commit a binary was built from
+- Run both dev and release builds in parallel without conflicts
+
+### Cleaning Up Templates
+
+After switching between dev and release builds, you may accumulate multiple templates:
+
+```bash
+# List all templates
+claude-vm list
+
+# Clean current project's template (dev or release depending on which binary you run)
+claude-vm clean
+
+# Clean all templates (both dev and release)
+claude-vm clean-all
+```
+
 ## Architecture
 
 ```

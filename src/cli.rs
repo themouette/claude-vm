@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
-#[command(version)]
+#[command(version = env!("CLAUDE_VM_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,

@@ -4,6 +4,15 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Development build indicators**: Development builds now clearly distinguish themselves from release builds
+  - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
+  - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)
+  - Dirty working tree indicated with `.dirty` suffix (e.g., `0.3.0-dev+a1b2c3d4.dirty`)
+  - Enables safe parallel usage of development and release builds without template conflicts
+  - Automatic detection based on build profile (`cargo build` vs `cargo build --release`)
+
 ## [0.3.0] - 2026-02-05
 
 ### Added
