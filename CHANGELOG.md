@@ -55,6 +55,8 @@ All notable changes to claude-vm will be documented in this file.
 ### Fixed
 
 - **Mount configuration not applied**: Fixed bug where mount configurations from TOML files were not being merged and applied to VMs. Both `mounts` and `setup.mounts` fields were being ignored when loading from global or project config files. Only CLI `--mount` arguments were working. The `Config::merge` function now properly extends mount arrays when merging configurations.
+- **packages.setup_script not merged**: Fixed bug where `packages.setup_script` configuration in TOML files was not being merged. Only the first loaded config's setup_script was used, ignoring overrides from project configs.
+- **Comprehensive merge test coverage**: Added tests for all config merge behaviors to prevent future regressions.
 
 ## [0.2.3] - 2026-02-04
 
