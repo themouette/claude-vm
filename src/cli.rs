@@ -141,6 +141,13 @@ pub enum Commands {
         yes: bool,
     },
 
+    /// View VM logs
+    Logs {
+        /// Follow log output (like tail -f)
+        #[arg(short = 'f', long)]
+        follow: bool,
+    },
+
     /// Check claude-vm version and updates
     Version {
         /// Check for available updates

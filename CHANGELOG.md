@@ -16,6 +16,9 @@ All notable changes to claude-vm will be documented in this file.
 - **Confirmation prompts**: Added safety prompts to destructive operations
   - `claude-vm clean` and `claude-vm clean-all` now prompt before deleting templates
   - Use `--yes` or `-y` flag to skip prompts in scripts or automation
+- **logs command**: New `claude-vm logs` command to view VM logs
+  - Shows last 100 lines of Lima VM logs by default
+  - `--follow` flag enables real-time log streaming (like `tail -f`)
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)

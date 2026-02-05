@@ -176,6 +176,15 @@ List only unused templates (not accessed in 30+ days):
 claude-vm list --unused
 ```
 
+### View Logs
+
+View VM logs:
+
+```bash
+claude-vm logs              # Show last 100 lines
+claude-vm logs --follow     # Follow logs in real-time
+```
+
 ### Clean Templates
 
 Clean the template for the current project:
