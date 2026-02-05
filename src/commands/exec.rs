@@ -6,7 +6,6 @@ use crate::utils::env as env_utils;
 use crate::utils::shell as shell_utils;
 use crate::vm::limactl::LimaCtl;
 use crate::vm::template;
-use std::collections::HashMap;
 
 pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]) -> Result<()> {
     // Verify template exists
@@ -18,18 +17,7 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
     }
 
     // Collect environment variables
-    let mut env_vars = HashMap::new();
-
-    // Load from env files
-    for file in &cli.env_file {
-        env_vars.extend(env_utils::load_env_file(file)?);
-    }
-
-    // Add --env args
-    env_vars.extend(env_utils::parse_env_args(&cli.env)?);
-
-    // Add inherited vars
-    env_vars.extend(env_utils::get_inherited_vars(&cli.inherit_env));
+    let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
 
     // Build command string with env exports
     let mut cmd_parts = Vec::new();
