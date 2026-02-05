@@ -25,6 +25,7 @@ fn main() {
     // Re-run if git state changes
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/refs/heads/");
+    println!("cargo:rerun-if-changed=.git/index"); // Detects staging changes
 }
 
 fn get_git_hash() -> Option<String> {
