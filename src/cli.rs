@@ -1,6 +1,15 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Validate configuration files
+    Validate,
+
+    /// Show effective configuration after merging all sources
+    Show,
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
@@ -100,6 +109,12 @@ pub enum Commands {
 
     /// Show information about the current project's template
     Info,
+
+    /// Configuration management commands
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
 
     /// List all claude-vm templates
     List,

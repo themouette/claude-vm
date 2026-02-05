@@ -140,6 +140,22 @@ This displays:
 - Configuration (disk, memory, capabilities)
 - Configured mounts and runtime scripts
 
+### Configuration Management
+
+Validate configuration files:
+
+```bash
+claude-vm config validate
+```
+
+Show effective configuration after merging all sources:
+
+```bash
+claude-vm config show
+```
+
+This displays the final configuration after applying precedence rules: CLI flags > Environment variables > Project config > Global config > Defaults.
+
 ### List Templates
 
 List all claude-vm templates:

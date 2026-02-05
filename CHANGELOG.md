@@ -7,6 +7,9 @@ All notable changes to claude-vm will be documented in this file.
 ### Added
 
 - **info command**: New `claude-vm info` command displays project information including template status, configuration, enabled capabilities, mounts, and runtime scripts
+- **config commands**: New `claude-vm config` subcommands for configuration management
+  - `claude-vm config validate` - Validates configuration files without creating a VM
+  - `claude-vm config show` - Shows effective configuration after merging all sources (CLI > Env > Project > Global > Defaults)
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)

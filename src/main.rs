@@ -30,6 +30,10 @@ fn main() -> Result<()> {
             commands::list::execute()?;
             return Ok(());
         }
+        Some(Commands::Config { command }) => {
+            commands::config::execute(command)?;
+            return Ok(());
+        }
         Some(Commands::CleanAll) => {
             commands::clean_all::execute()?;
             return Ok(());
