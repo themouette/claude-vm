@@ -386,39 +386,53 @@ impl Config {
                     self.context.instructions = content;
                 }
                 Err(e) => {
-                    use std::io::{self, Write};
+                    // In test mode, fail immediately without prompting
+                    #[cfg(test)]
+                    {
+                        return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                            "Failed to read context file '{}': {}",
+                            file_path.display(),
+                            e
+                        )));
+                    }
 
-                    // Print highly visible warning
-                    eprintln!();
-                    eprintln!("╔═══════════════════════════════════════════════════════╗");
-                    eprintln!("║ ⚠️  WARNING: Failed to load context file            ║");
-                    eprintln!("╚═══════════════════════════════════════════════════════╝");
-                    eprintln!("  File: {}", file_path.display());
-                    eprintln!("  Error: {}", e);
-                    eprintln!();
-                    eprintln!("  Claude will start WITHOUT your custom instructions.");
-                    eprintln!();
+                    #[cfg(not(test))]
+                    {
+                        use std::io::{self, Write};
 
-                    // Prompt user to continue
-                    eprint!("Continue anyway? [y/N]: ");
-                    io::stderr().flush().ok();
+                        // Print highly visible warning
+                        eprintln!();
+                        eprintln!("╔═══════════════════════════════════════════════════════╗");
+                        eprintln!("║ ⚠️  WARNING: Failed to load context file            ║");
+                        eprintln!("╚═══════════════════════════════════════════════════════╝");
+                        eprintln!("  File: {}", file_path.display());
+                        eprintln!("  Error: {}", e);
+                        eprintln!();
+                        eprintln!("  Claude will start WITHOUT your custom instructions.");
+                        eprintln!();
 
-                    let mut input = String::new();
-                    match io::stdin().read_line(&mut input) {
-                        Ok(_) => {
-                            if !input.trim().eq_ignore_ascii_case("y") {
-                                return Err(crate::error::ClaudeVmError::InvalidConfig(
-                                    "Context file load failed and user chose to abort".to_string(),
-                                ));
+                        // Prompt user to continue
+                        eprint!("Continue anyway? [y/N]: ");
+                        io::stderr().flush().ok();
+
+                        let mut input = String::new();
+                        match io::stdin().read_line(&mut input) {
+                            Ok(_) => {
+                                if !input.trim().eq_ignore_ascii_case("y") {
+                                    return Err(crate::error::ClaudeVmError::InvalidConfig(
+                                        "Context file load failed and user chose to abort"
+                                            .to_string(),
+                                    ));
+                                }
                             }
-                        }
-                        Err(_) => {
-                            // If stdin is not available (non-interactive), abort
-                            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
-                                "Failed to read context file '{}': {}",
-                                file_path.display(),
-                                e
-                            )));
+                            Err(_) => {
+                                // If stdin is not available (non-interactive), abort
+                                return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                                    "Failed to read context file '{}': {}",
+                                    file_path.display(),
+                                    e
+                                )));
+                            }
                         }
                     }
                 }
@@ -708,15 +722,11 @@ mod tests {
         let mut config = Config::default();
         config.context.instructions_file = "/nonexistent/path/to/file.md".to_string();
 
-        // Should error in non-interactive mode (tests have no user input)
+        // Should error immediately in test mode (no interactive prompt)
         let result = config.resolve_context_file();
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
-        // Either stdin read fails, or user doesn't confirm
-        assert!(
-            error_msg.contains("Failed to read context file")
-                || error_msg.contains("Context file load failed")
-        );
+        assert!(error_msg.contains("Failed to read context file"));
     }
 
     #[test]
@@ -729,6 +739,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_context_tilde_expansion() {
         use std::io::Write;
 
