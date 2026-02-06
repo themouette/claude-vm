@@ -4,6 +4,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-02-06
+
 ### Added
 
 - **info command**: New `claude-vm info` command displays project information including template status, configuration, enabled capabilities, mounts, and runtime scripts
@@ -247,7 +249,8 @@ All notable changes to claude-vm will be documented in this file.
 - **VM lifecycle management**: Basic commands for creating, starting, stopping, and destroying VMs
 - **Lima integration**: Leverages Lima (Linux virtual machines) for macOS to provide lightweight, fast VM creation
 
-[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/themouette/claude-vm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/themouette/claude-vm/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/themouette/claude-vm/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/themouette/claude-vm/compare/v0.2.1...v0.2.2
