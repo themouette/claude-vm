@@ -96,9 +96,21 @@ jobs:
           body: |
             ## Installation
 
-            ### All in one script
+            ### Quick Install (Recommended)
+
+            Install to `~/.local/bin` (no sudo required):
             ```bash
             curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
+            ```
+
+            Install this specific version:
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --version ${{ github.ref_name }}
+            ```
+
+            Install system-wide to `/usr/local/bin`:
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --global
             ```
 
             ### Update From Existing Installation
@@ -106,26 +118,28 @@ jobs:
             claude-vm update
             ```
 
-            ### macOS (manual)
+            ### Manual Installation
+
+            #### macOS
             ```bash
-            # Apple Silicon (M1/M2)
+            # Apple Silicon (M1/M2/M3)
             curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-aarch64.tar.gz | tar xz
-            sudo mv claude-vm /usr/local/bin/
+            mv claude-vm ~/.local/bin/
 
             # Intel
             curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-macos-x86_64.tar.gz | tar xz
-            sudo mv claude-vm /usr/local/bin/
+            mv claude-vm ~/.local/bin/
             ```
 
-            ### Linux (manual)
+            #### Linux
             ```bash
             # x86_64
             curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-x86_64.tar.gz | tar xz
-            sudo mv claude-vm /usr/local/bin/
+            mv claude-vm ~/.local/bin/
 
             # ARM64
             curl -L https://github.com/themouette/claude-vm/releases/download/${{ github.ref_name }}/claude-vm-linux-aarch64.tar.gz | tar xz
-            sudo mv claude-vm /usr/local/bin/
+            mv claude-vm ~/.local/bin/
             ```
 
             ### Verify Installation
