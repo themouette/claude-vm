@@ -45,10 +45,24 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 
 - [Lima](https://lima-vm.io/docs/installation/)
 
-### One Liner
+### Quick Install
+
+Install to `~/.local/bin` (no sudo required):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
+```
+
+Install system-wide to `/usr/local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --global
+```
+
+Install specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --version v0.3.0
 ```
 
 ### Download from GitHub

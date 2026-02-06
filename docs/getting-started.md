@@ -12,16 +12,36 @@ This guide will help you install Claude VM and create your first template.
 
 ### Option 1: One-Line Install (Recommended)
 
+**Install to ~/.local/bin (no sudo required):**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
 ```
 
+**Install system-wide to /usr/local/bin:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --global
+```
+
+**Install specific version:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --version v0.3.0
+```
+
+**Custom installation directory:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --destination /opt/bin
+```
+
 This script will:
 1. Detect your platform (macOS or Linux)
-2. Download the appropriate binary
-3. Install it to `~/.local/bin/claude-vm`
+2. Download the appropriate binary for the specified version (or latest)
+3. Install it to the specified directory (default: `~/.local/bin`)
 4. Make it executable
-5. Verify the installation
+5. Verify the installation and check PATH configuration
 
 ### Option 2: Download from GitHub
 

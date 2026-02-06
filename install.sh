@@ -23,6 +23,51 @@ log_error() {
   echo -e "${RED}✗${NC} $1"
 }
 
+log_warning() {
+  echo -e "${YELLOW}!${NC} $1"
+}
+
+# Show help message
+show_help() {
+  cat << EOF
+claude-vm installer
+
+USAGE:
+    curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- [OPTIONS]
+
+OPTIONS:
+    --version <VERSION>        Version to install (default: latest)
+                               Examples: v0.3.0, latest
+
+    --destination <PATH>       Custom installation directory
+                               Overrides --local and --global
+
+    --global                   Install to /usr/local/bin (requires sudo)
+                               Default is ~/.local/bin (no sudo required)
+
+    --help                     Show this help message
+
+EXAMPLES:
+    # Install latest version to ~/.local/bin (default)
+    curl ... | bash
+
+    # Install specific version
+    curl ... | bash -s -- --version v0.3.0
+
+    # Install to system directory
+    curl ... | bash -s -- --global
+
+    # Install to custom directory
+    curl ... | bash -s -- --destination /opt/bin
+
+DOCUMENTATION:
+    https://github.com/themouette/claude-vm
+
+EOF
+  exit 0
+}
+
 # Detect OS and architecture
 detect_platform() {
   local os=""
@@ -64,11 +109,59 @@ get_latest_version() {
     | sed -E 's/.*"([^"]+)".*/\1/'
 }
 
+# Check if directory is in PATH
+check_path() {
+  local dir="$1"
+  if echo "$PATH" | tr ':' '\n' | grep -q "^${dir}$"; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 # Download and install
 install_claude_vm() {
   local platform=$(detect_platform)
-  local version="${1:-$(get_latest_version)}"
-  local install_dir="${2:-/usr/local/bin}"
+  local version="latest"
+  local install_dir="$HOME/.local/bin"
+  local use_global=false
+
+  # Parse arguments
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --version)
+        version="$2"
+        shift 2
+        ;;
+      --destination)
+        install_dir="$2"
+        shift 2
+        ;;
+      --global)
+        use_global=true
+        install_dir="/usr/local/bin"
+        shift
+        ;;
+      --help)
+        show_help
+        ;;
+      *)
+        log_error "Unknown option: $1"
+        echo "Use --help for usage information"
+        exit 1
+        ;;
+    esac
+  done
+
+  # Resolve version
+  if [ "$version" = "latest" ]; then
+    log_info "Fetching latest version..."
+    version=$(get_latest_version)
+    if [ -z "$version" ]; then
+      log_error "Failed to determine latest version"
+      exit 1
+    fi
+  fi
 
   log_info "Installing claude-vm ${version} for ${platform}"
 
@@ -84,7 +177,14 @@ install_claude_vm() {
   # Download and extract
   if ! curl -fsSL "$download_url" | tar -xz -C "$tmp_dir"; then
     log_error "Failed to download claude-vm"
+    log_error "Please check that version ${version} exists"
     exit 1
+  fi
+
+  # Create install directory if it doesn't exist
+  if [ ! -d "$install_dir" ]; then
+    log_info "Creating directory ${install_dir}"
+    mkdir -p "$install_dir" 2>/dev/null || sudo mkdir -p "$install_dir"
   fi
 
   # Install binary
@@ -100,13 +200,22 @@ install_claude_vm() {
 
   log_success "claude-vm installed successfully!"
 
+  # Check if installation directory is in PATH
+  if ! check_path "$install_dir"; then
+    log_warning "Installation directory is not in your PATH"
+    echo ""
+    echo "Add this to your shell configuration file (~/.bashrc, ~/.zshrc, etc.):"
+    echo ""
+    echo "  export PATH=\"${install_dir}:\$PATH\""
+    echo ""
+  fi
+
   # Verify installation
   if command -v claude-vm &> /dev/null; then
     log_success "Version: $(claude-vm --version)"
   else
-    log_error "Installation succeeded but claude-vm not found in PATH"
-    log_info "You may need to add ${install_dir} to your PATH"
-    exit 1
+    log_warning "claude-vm installed but not found in PATH"
+    log_info "You may need to add ${install_dir} to your PATH or restart your shell"
   fi
 
   echo ""
@@ -119,6 +228,11 @@ install_claude_vm() {
 
 # Main
 main() {
+  # Check for help flag first
+  if [[ "$*" == *"--help"* ]]; then
+    show_help
+  fi
+
   echo ""
   log_info "claude-vm installer"
   echo ""

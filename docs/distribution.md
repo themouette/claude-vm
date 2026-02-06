@@ -14,24 +14,30 @@ This guide describes how to distribute Claude VM binaries and manage releases.
 
 ### 🚀 Recommended: Installation Script
 
-**Fastest and easiest:**
+**Fastest and easiest (installs to ~/.local/bin):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash
 ```
 
 **What it does:**
 - Detects your OS and architecture automatically
-- Downloads correct binary from GitHub Releases
-- Installs to `~/.local/bin`
-- Verifies installation
+- Downloads correct binary from GitHub Releases (latest version)
+- Installs to `~/.local/bin` by default (no sudo required)
+- Verifies installation and checks PATH configuration
 
-**Custom version or location:**
+**Installation options:**
 ```bash
-# Specific version
-curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- v0.3.0
+# Install specific version
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --version v0.3.0
 
-# Custom directory
-curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- latest ~/.local/bin
+# Install system-wide to /usr/local/bin
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --global
+
+# Install to custom directory
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --destination /opt/bin
+
+# Show help
+curl -fsSL https://raw.githubusercontent.com/themouette/claude-vm/main/install.sh | bash -s -- --help
 ```
 
 ### 🍺 macOS: Homebrew
