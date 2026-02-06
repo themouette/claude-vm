@@ -1,6 +1,7 @@
 pub mod clean;
 pub mod clean_all;
 pub mod config;
+pub mod helpers;
 pub mod info;
 pub mod list;
 pub mod run;

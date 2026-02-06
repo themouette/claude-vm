@@ -33,6 +33,10 @@ pub struct Config {
     #[serde(default)]
     pub update_check: UpdateCheckSettings,
 
+    /// Automatically create template if missing (default: false)
+    #[serde(default)]
+    pub auto_setup: bool,
+
     /// Verbose mode - show verbose output including Lima logs (not stored in config file)
     #[serde(skip)]
     pub verbose: bool,
@@ -481,6 +485,11 @@ impl Config {
 
         // Mount conversations (inverted: --no-conversations means mount_conversations = false)
         self.mount_conversations = !cli.no_conversations;
+
+        // Auto setup
+        if cli.auto_setup {
+            self.auto_setup = true;
+        }
 
         // Custom mounts from CLI (accumulate with config mounts)
         // Parse CLI mount specs immediately to validate and extract values

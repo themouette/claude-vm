@@ -141,6 +141,9 @@ fn show() -> Result<()> {
     println!("  enabled: {}", config.update_check.enabled);
     println!("  interval: {} hours", config.update_check.interval_hours);
 
+    println!("\nBehavior:");
+    println!("  auto_setup: {}", config.auto_setup);
+
     Ok(())
 }
 

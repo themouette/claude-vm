@@ -158,6 +158,31 @@ claude-vm --inherit-env PATH --inherit-env HOME shell echo \$PATH
 claude-vm --env-file .env --env API_KEY=secret --inherit-env USER shell npm start
 ```
 
+**Auto-setup on missing template:**
+
+If you try to run `claude-vm` or `claude-vm shell` without a template, you'll be prompted to create one:
+
+```bash
+# If template doesn't exist, you'll see:
+# No template found for project: /path/to/project
+# Template name: claude-tpl_myproject_abc123
+#
+# Would you like to create it now? [Y/n]:
+```
+
+To automatically create templates without prompting, use `--auto-setup`:
+
+```bash
+claude-vm --auto-setup "help me code"
+claude-vm --auto-setup shell
+```
+
+Or enable it permanently in your config file:
+
+```toml
+auto_setup = true
+```
+
 ### Project Information
 
 Show information about the current project's template:
@@ -313,6 +338,9 @@ scripts = [
 [defaults]
 # Additional arguments passed to Claude (--dangerously-skip-permissions is included by default)
 claude_args = ["--max-tokens", "4096"]
+
+# Automatically create template if missing (default: false)
+auto_setup = true
 
 # Custom mounts (optional)
 [[mounts]]

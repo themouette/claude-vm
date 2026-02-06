@@ -64,6 +64,10 @@ pub struct Cli {
     /// Inherit specific environment variables from host
     #[arg(long = "inherit-env", global = true)]
     pub inherit_env: Vec<String>,
+
+    /// Automatically create template if missing
+    #[arg(long = "auto-setup", global = true)]
+    pub auto_setup: bool,
 }
 
 #[derive(Subcommand, Debug)]
