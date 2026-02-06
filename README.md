@@ -66,11 +66,19 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 - Define VM resources, tools, and settings in `.claude-vm.toml`
 - Precedence system: CLI > Env > Project > Global > Defaults
 - No need to remember complex command-line flags
+- Pass environment variables via `--env`, `--env-file`, or `--inherit-env`
 
 **Git Worktree Support**
 
 - Automatically detects and mounts both worktree and main repository
 - Full git functionality in isolated VMs
+
+**Comprehensive Management Commands**
+
+- `shell` - Interactive shell or command execution in ephemeral VM (perfect for CI/CD)
+- `info` - Display project template status and configuration
+- `config` - Validate and inspect effective configuration
+- `list` - Find unused templates with disk usage information
 
 ## Installation
 
@@ -120,11 +128,65 @@ claude-vm "help me code"
 
 ### Shell Access
 
-Open a shell in the template VM:
+Open an interactive shell in an ephemeral VM:
 
 ```bash
 claude-vm shell
 ```
+
+Execute a single command and exit:
+
+```bash
+claude-vm shell npm test
+claude-vm shell ls -la
+claude-vm shell git status
+```
+
+Pass environment variables:
+
+```bash
+# Set individual variables
+claude-vm --env DATABASE_URL=postgres://localhost/db shell npm test
+
+# Load from file
+claude-vm --env-file .env.test shell npm test
+
+# Inherit from host
+claude-vm --inherit-env PATH --inherit-env HOME shell echo \$PATH
+
+# Combine multiple sources
+claude-vm --env-file .env --env API_KEY=secret --inherit-env USER shell npm start
+```
+
+### Project Information
+
+Show information about the current project's template:
+
+```bash
+claude-vm info
+```
+
+This displays:
+- Project path and template name
+- Template status (running, stopped, not created)
+- Configuration (disk, memory, capabilities)
+- Configured mounts and runtime scripts
+
+### Configuration Management
+
+Validate configuration files:
+
+```bash
+claude-vm config validate
+```
+
+Show effective configuration after merging all sources:
+
+```bash
+claude-vm config show
+```
+
+This displays the final configuration after applying precedence rules: CLI flags > Environment variables > Project config > Global config > Defaults.
 
 ### List Templates
 
@@ -132,6 +194,18 @@ List all claude-vm templates:
 
 ```bash
 claude-vm list
+```
+
+List templates with disk usage information:
+
+```bash
+claude-vm list --disk-usage
+```
+
+List only unused templates (not accessed in 30+ days):
+
+```bash
+claude-vm list --unused
 ```
 
 ### Clean Templates
@@ -146,6 +220,13 @@ Clean all templates:
 
 ```bash
 claude-vm clean-all
+```
+
+Both commands will prompt for confirmation before deleting. Skip the prompt with:
+
+```bash
+claude-vm clean --yes
+claude-vm clean-all --yes
 ```
 
 ### Update Claude VM
@@ -759,6 +840,9 @@ This shows:
 - `-A, --forward-ssh-agent` - Forward SSH agent to VM
 - `--no-conversations` - Don't mount Claude conversation folder in VM
 - `--mount <SPEC>` - Custom mount in docker-style format (can be used multiple times)
+- `--env KEY=VALUE` - Set environment variable in VM (can be used multiple times)
+- `--env-file <PATH>` - Load environment variables from file (can be used multiple times)
+- `--inherit-env VAR` - Inherit specific environment variable from host (can be used multiple times)
 - `-v, --verbose` - Show verbose output including Lima logs
 
 ### Setup Options

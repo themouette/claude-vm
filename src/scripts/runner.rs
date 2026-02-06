@@ -3,18 +3,14 @@ use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::utils::git;
+use crate::utils::shell::escape as shell_escape;
 use crate::vm::limactl::LimaCtl;
 use crate::vm::{mount, session::VmSession};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
-
-/// Escape a string for safe use in shell single quotes
-/// Converts: foo'bar -> 'foo'\''bar'
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', r"'\''"))
-}
 
 /// Sanitize a filename to contain only safe characters
 /// Allows: alphanumeric, dash, underscore, dot
@@ -239,6 +235,7 @@ fn generate_base_context(config: &Config) -> Result<String> {
 ///     &["--help"]
 /// )?;
 /// ```
+#[allow(clippy::too_many_arguments)]
 pub fn execute_command_with_runtime_scripts(
     vm_name: &str,
     _project: &Project,
@@ -247,6 +244,7 @@ pub fn execute_command_with_runtime_scripts(
     workdir: Option<&Path>,
     cmd: &str,
     args: &[&str],
+    env_vars: &HashMap<String, String>,
 ) -> Result<()> {
     // Collect all runtime scripts
     let mut scripts = Vec::new();
@@ -318,6 +316,17 @@ pub fn execute_command_with_runtime_scripts(
 
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
+
+    // Export environment variables if any
+    if !env_vars.is_empty() {
+        entrypoint.push_str("# Export environment variables\n");
+        for (key, value) in env_vars {
+            // Escape single quotes in the value
+            let escaped_value = value.replace('\'', "'\\''");
+            entrypoint.push_str(&format!("export {}='{}'\n", key, escaped_value));
+        }
+        entrypoint.push('\n');
+    }
 
     // Create context directory for runtime scripts
     entrypoint.push_str("# Create context directory for runtime scripts\n");
@@ -470,28 +479,6 @@ fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_shell_escape_basic() {
-        assert_eq!(shell_escape("simple"), "'simple'");
-        assert_eq!(shell_escape("with space"), "'with space'");
-    }
-
-    #[test]
-    fn test_shell_escape_single_quote() {
-        // Single quote should be escaped as '\''
-        assert_eq!(shell_escape("foo'bar"), "'foo'\\''bar'");
-        assert_eq!(shell_escape("it's"), "'it'\\''s'");
-    }
-
-    #[test]
-    fn test_shell_escape_injection_attempt() {
-        // Attempt to inject commands
-        let malicious = "'; rm -rf /; echo '";
-        let escaped = shell_escape(malicious);
-        assert_eq!(escaped, "''\\''; rm -rf /; echo '\\'''");
-        // When used in bash 'command', this will be treated as a literal string
-    }
 
     #[test]
     fn test_sanitize_filename_safe() {

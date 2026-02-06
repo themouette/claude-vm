@@ -6,12 +6,45 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **info command**: New `claude-vm info` command displays project information including template status, configuration, enabled capabilities, mounts, and runtime scripts
+- **config commands**: New `claude-vm config` subcommands for configuration management
+  - `claude-vm config validate` - Validates configuration files without creating a VM
+  - `claude-vm config show` - Shows effective configuration after merging all sources (CLI > Env > Project > Global > Defaults)
+- **list command improvements**: Enhanced template listing with filtering and disk usage
+  - `--unused` flag filters templates not accessed in 30+ days
+  - `--disk-usage` flag shows disk space usage and last access time for each template
+- **Confirmation prompts**: Added safety prompts to destructive operations
+  - `claude-vm clean` and `claude-vm clean-all` now prompt before deleting templates
+  - Use `--yes` or `-y` flag to skip prompts in scripts or automation
+- **shell command enhancement**: The `shell` command now accepts optional command arguments
+  - Without arguments: Opens interactive shell (`claude-vm shell`)
+  - With arguments: Executes command and exits (`claude-vm shell ls -la`)
+  - Unified interface replaces the separate `exec` command
+  - Creates ephemeral VM with full mounts and runtime scripts
+  - Properly escapes arguments and propagates exit codes
+- **Environment variable support**: Pass environment variables to VM commands
+  - `--env KEY=VALUE` sets individual variables
+  - `--env-file path` loads variables from a file
+  - `--inherit-env VAR` inherits specific variables from host
+  - Works with all VM commands (exec, shell, run)
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)
   - Dirty working tree indicated with `.dirty` suffix (e.g., `0.3.0-dev+a1b2c3d4.dirty`)
   - Enables safe parallel usage of development and release builds without template conflicts
   - Automatic detection based on build profile (`cargo build` vs `cargo build --release`)
+
+### Fixed
+
+- **shell command shell escaping**: Command arguments are now properly escaped using single quotes to prevent word splitting and command injection. Commands with spaces, quotes, or special characters now work correctly (e.g., `claude-vm shell echo "hello world"`)
+- **shell command exit code propagation**: When executing commands, the shell command now exits with the same exit code as the executed command, enabling proper error detection in scripts and automation (e.g., `claude-vm shell false && echo ok` will not print "ok")
+- **shell command mounts**: The shell command now always creates an ephemeral VM with proper mounts and runtime scripts, whether in interactive or command mode
+- **Environment variable consistency**: Environment variables (`--env`, `--env-file`, `--inherit-env`) now work consistently across all commands (shell, run)
+
+### Changed
+
+- **Template module refactoring**: Consolidated template metadata functions (`get_disk_usage`, `get_last_access_time`, `format_last_used`, `is_unused`) into `template.rs` for better code organization and reusability across commands
+- **Environment variable handling**: Simplified environment variable collection using a centralized `collect_env_vars()` helper function for consistency across all commands
 
 ## [0.3.0] - 2026-02-05
 

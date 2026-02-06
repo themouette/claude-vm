@@ -1,6 +1,18 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Validate configuration files
+    Validate {
+        /// Optional path to a specific config file to validate
+        file: Option<PathBuf>,
+    },
+
+    /// Show effective configuration after merging all sources
+    Show,
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
@@ -40,6 +52,18 @@ pub struct Cli {
     /// Custom mount in docker-style format: /host/path[:vm/path][:ro|rw]
     #[arg(long = "mount", global = true)]
     pub mounts: Vec<String>,
+
+    /// Set environment variable (KEY=VALUE)
+    #[arg(long = "env", global = true)]
+    pub env: Vec<String>,
+
+    /// Load environment variables from file
+    #[arg(long = "env-file", global = true)]
+    pub env_file: Vec<PathBuf>,
+
+    /// Inherit specific environment variables from host
+    #[arg(long = "inherit-env", global = true)]
+    pub inherit_env: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -95,17 +119,49 @@ pub enum Commands {
         mounts: Vec<String>,
     },
 
-    /// Open a shell in the template VM
-    Shell,
+    /// Open a shell or execute a command in an ephemeral VM
+    ///
+    /// Without arguments: Opens an interactive shell
+    /// With arguments: Executes the command and exits
+    Shell {
+        /// Command to execute (optional, opens interactive shell if not provided)
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+
+    /// Show information about the current project's template
+    Info,
+
+    /// Configuration management commands
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
 
     /// List all claude-vm templates
-    List,
+    List {
+        /// Show only unused templates (not used in 30 days)
+        #[arg(long)]
+        unused: bool,
+
+        /// Show disk usage information
+        #[arg(long)]
+        disk_usage: bool,
+    },
 
     /// Clean the template for this project
-    Clean,
+    Clean {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 
     /// Clean all claude-vm templates
-    CleanAll,
+    CleanAll {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 
     /// Check claude-vm version and updates
     Version {

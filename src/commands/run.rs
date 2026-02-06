@@ -1,10 +1,17 @@
+use crate::cli::Cli;
 use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
 use crate::scripts::runner;
+use crate::utils::env as env_utils;
 use crate::vm::{session::VmSession, template};
 
-pub fn execute(project: &Project, config: &Config, claude_args: &[String]) -> Result<()> {
+pub fn execute(
+    project: &Project,
+    config: &Config,
+    cli: &Cli,
+    claude_args: &[String],
+) -> Result<()> {
     // Verify template exists
     template::verify(project.template_name())?;
 
@@ -36,6 +43,9 @@ pub fn execute(project: &Project, config: &Config, claude_args: &[String]) -> Re
 
     println!("Running Claude in VM: {}", session.name());
 
+    // Collect environment variables
+    let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
+
     // Execute Claude with runtime scripts using entrypoint pattern
     // This runs runtime scripts first, then execs Claude in a single shell invocation
     let current_dir = std::env::current_dir()?;
@@ -48,6 +58,7 @@ pub fn execute(project: &Project, config: &Config, claude_args: &[String]) -> Re
         workdir,
         "claude",
         &args,
+        &env_vars,
     )?;
 
     Ok(())
