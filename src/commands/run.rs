@@ -1,10 +1,11 @@
 use crate::cli::Cli;
+use crate::commands::helpers;
 use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
 use crate::scripts::runner;
 use crate::utils::env as env_utils;
-use crate::vm::{session::VmSession, template};
+use crate::vm::session::VmSession;
 
 pub fn execute(
     project: &Project,
@@ -12,8 +13,8 @@ pub fn execute(
     cli: &Cli,
     claude_args: &[String],
 ) -> Result<()> {
-    // Verify template exists
-    template::verify(project.template_name())?;
+    // Ensure template exists (create if missing and user confirms)
+    helpers::ensure_template_exists(project, config)?;
 
     if !config.verbose {
         println!("Starting ephemeral VM session...");

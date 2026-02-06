@@ -1,15 +1,16 @@
 use crate::cli::Cli;
+use crate::commands::helpers;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
 use crate::utils::env as env_utils;
 use crate::utils::shell as shell_utils;
-use crate::vm::{session::VmSession, template};
+use crate::vm::session::VmSession;
 
 pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]) -> Result<()> {
-    // Verify template exists
-    template::verify(project.template_name())?;
+    // Ensure template exists (create if missing and user confirms)
+    helpers::ensure_template_exists(project, config)?;
 
     let is_interactive = command.is_empty();
 

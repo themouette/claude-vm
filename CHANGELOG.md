@@ -27,6 +27,11 @@ All notable changes to claude-vm will be documented in this file.
   - `--env-file path` loads variables from a file
   - `--inherit-env VAR` inherits specific variables from host
   - Works with all VM commands (exec, shell, run)
+- **Auto-setup on missing template**: `run` and `shell` commands now offer to create templates automatically
+  - Prompts user to create template if missing (no more cryptic error messages)
+  - `--auto-setup` flag automatically creates templates without prompting
+  - `auto_setup = true` in config file enables auto-creation by default
+  - Improves first-run experience and reduces friction for new projects
 - **Development build indicators**: Development builds now clearly distinguish themselves from release builds
   - Template names include `-dev` suffix in debug builds (e.g., `claude-tpl_project_hash-dev`)
   - Version string includes git commit hash in debug builds (e.g., `0.3.0-dev+a1b2c3d4`)
