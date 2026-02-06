@@ -6,51 +6,77 @@ use std::path::PathBuf;
 
 pub fn execute(command: &ConfigCommands) -> Result<()> {
     match command {
-        ConfigCommands::Validate => validate(),
+        ConfigCommands::Validate { file } => validate(file.as_deref()),
         ConfigCommands::Show => show(),
     }
 }
 
-fn validate() -> Result<()> {
-    let project = Project::detect()?;
-    let project_config = project.root().join(".claude-vm.toml");
-    let global_config = std::env::var("HOME")
-        .ok()
-        .map(|h| PathBuf::from(h).join(".claude-vm.toml"))
-        .unwrap_or_else(|| PathBuf::from("~/.claude-vm.toml"));
+fn validate(file: Option<&std::path::Path>) -> Result<()> {
+    // If a specific file is provided, validate only that file
+    if let Some(path) = file {
+        println!("Validating configuration file: {}\n", path.display());
 
-    println!("Validating configuration files...\n");
-
-    // Check if files exist
-    if global_config.exists() {
-        println!("  Global config: {}", global_config.display());
-    } else {
-        println!(
-            "  Global config: {} - not found (optional)",
-            global_config.display()
-        );
-    }
-
-    if project_config.exists() {
-        println!("  Project config: {}", project_config.display());
-    } else {
-        println!(
-            "  Project config: {} - not found (optional)",
-            project_config.display()
-        );
-    }
-
-    // Try to load merged config - this will validate all files
-    println!("\nLoading and validating configuration...");
-    match Config::load(project.root()) {
-        Ok(_) => {
-            println!("✓ Configuration is valid!");
-            Ok(())
+        if !path.exists() {
+            println!("✗ File not found: {}", path.display());
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "File not found: {}",
+                path.display()
+            )));
         }
-        Err(e) => {
-            println!("✗ Configuration is invalid!");
-            println!("  Error: {}", e);
-            Err(e)
+
+        match Config::from_file(path) {
+            Ok(_) => {
+                println!("✓ Configuration is valid!");
+                Ok(())
+            }
+            Err(e) => {
+                println!("✗ Configuration is invalid!");
+                println!("  Error: {}", e);
+                Err(e)
+            }
+        }
+    } else {
+        // Validate all config files in the standard locations
+        let project = Project::detect()?;
+        let project_config = project.root().join(".claude-vm.toml");
+        let global_config = std::env::var("HOME")
+            .ok()
+            .map(|h| PathBuf::from(h).join(".claude-vm.toml"))
+            .unwrap_or_else(|| PathBuf::from("~/.claude-vm.toml"));
+
+        println!("Validating configuration files...\n");
+
+        // Check if files exist
+        if global_config.exists() {
+            println!("  Global config: {}", global_config.display());
+        } else {
+            println!(
+                "  Global config: {} - not found (optional)",
+                global_config.display()
+            );
+        }
+
+        if project_config.exists() {
+            println!("  Project config: {}", project_config.display());
+        } else {
+            println!(
+                "  Project config: {} - not found (optional)",
+                project_config.display()
+            );
+        }
+
+        // Try to load merged config - this will validate all files
+        println!("\nLoading and validating configuration...");
+        match Config::load(project.root()) {
+            Ok(_) => {
+                println!("✓ Configuration is valid!");
+                Ok(())
+            }
+            Err(e) => {
+                println!("✗ Configuration is invalid!");
+                println!("  Error: {}", e);
+                Err(e)
+            }
         }
     }
 }
@@ -130,7 +156,10 @@ mod tests {
 
         // We can't actually run these without a project setup,
         // but we can verify the match statement compiles correctly
-        let _validate = ConfigCommands::Validate;
+        let _validate = ConfigCommands::Validate { file: None };
+        let _validate_with_file = ConfigCommands::Validate {
+            file: Some(PathBuf::from("/tmp/test.toml")),
+        };
         let _show = ConfigCommands::Show;
     }
 

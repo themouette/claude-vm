@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     // Parse CLI arguments
     let cli = Cli::parse();
 
-    // Handle commands that don't need project detection first
+    // Handle commands that truly don't need project or config
     match &cli.command {
         Some(Commands::Version { check }) => {
             commands::version::execute(*check)?;
@@ -26,6 +26,53 @@ fn main() -> Result<()> {
             commands::update::execute(*check, version.clone(), *yes)?;
             return Ok(());
         }
+        _ => {}
+    }
+
+    // Try to detect project (most commands need it)
+    // If we're in a project, load config to validate it (even if command doesn't use it)
+    let project_result = Project::detect();
+
+    // For commands that must have a project, fail if not found
+    let requires_project = matches!(
+        &cli.command,
+        Some(Commands::Setup { .. })
+            | Some(Commands::Shell { .. })
+            | Some(Commands::Info)
+            | Some(Commands::Clean { .. })
+            | None // run command
+    );
+
+    let (project, config) = if requires_project {
+        // Must have project
+        let proj = project_result.map_err(|e| match e {
+            ClaudeVmError::ProjectDetection(msg) => {
+                eprintln!("Error: {}", msg);
+                std::process::exit(1);
+            }
+            _ => e,
+        })?;
+        let cfg = Config::load(proj.root())?.with_cli_overrides(&cli);
+        (Some(proj), Some(cfg))
+    } else if let Ok(proj) = project_result {
+        // Optional project, but if we have one, validate config
+        match Config::load(proj.root()) {
+            Ok(cfg) => {
+                let cfg = cfg.with_cli_overrides(&cli);
+                (Some(proj), Some(cfg))
+            }
+            Err(e) => {
+                // Config is invalid - fail even for optional-project commands
+                return Err(e.into());
+            }
+        }
+    } else {
+        // No project, and that's OK for these commands
+        (None, None)
+    };
+
+    // Handle commands that don't strictly need project but benefit from config validation
+    match &cli.command {
         Some(Commands::List { unused, disk_usage }) => {
             commands::list::execute(*unused, *disk_usage)?;
             return Ok(());
@@ -41,17 +88,9 @@ fn main() -> Result<()> {
         _ => {}
     }
 
-    // Detect project for commands that need it
-    let project = Project::detect().map_err(|e| match e {
-        ClaudeVmError::ProjectDetection(msg) => {
-            eprintln!("Error: {}", msg);
-            std::process::exit(1);
-        }
-        _ => e,
-    })?;
-
-    // Load configuration with precedence
-    let config = Config::load(project.root())?.with_cli_overrides(&cli);
+    // At this point, we must have project and config
+    let project = project.unwrap();
+    let config = config.unwrap();
 
     // Check for updates only on run command (default command)
     if cli.command.is_none() {

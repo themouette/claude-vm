@@ -4,7 +4,10 @@ use std::path::PathBuf;
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommands {
     /// Validate configuration files
-    Validate,
+    Validate {
+        /// Optional path to a specific config file to validate
+        file: Option<PathBuf>,
+    },
 
     /// Show effective configuration after merging all sources
     Show,

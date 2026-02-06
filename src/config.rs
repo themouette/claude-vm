@@ -310,7 +310,7 @@ impl Config {
     }
 
     /// Load configuration from a TOML file
-    fn from_file(path: &Path) -> Result<Self> {
+    pub fn from_file(path: &Path) -> Result<Self> {
         let contents = std::fs::read_to_string(path)?;
         let config: Config = toml::from_str(&contents)?;
         Ok(config)
