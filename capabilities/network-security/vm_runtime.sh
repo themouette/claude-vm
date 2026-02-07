@@ -178,9 +178,9 @@ if [ -n "${BYPASS_DOMAINS:-}" ]; then
     IGNORE_HOSTS_ARG="--set ignore_hosts=${IGNORE_LIST}"
 fi
 
-# Start mitmproxy in background
+# Start mitmdump in background (non-interactive version of mitmproxy)
 echo "  Starting HTTP/HTTPS filtering proxy..."
-mitmproxy \
+mitmdump \
   --mode regular@8080 \
   --set confdir=~/.mitmproxy \
   --set block_global=false \
