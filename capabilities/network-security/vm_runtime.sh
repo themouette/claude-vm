@@ -9,20 +9,10 @@ fi
 
 echo "Enforcing network security policies..."
 
-# Cleanup function to kill proxy on exit
-cleanup() {
-    if [ -f /tmp/mitmproxy.pid ]; then
-        PROXY_PID=$(cat /tmp/mitmproxy.pid)
-        if kill -0 "$PROXY_PID" 2>/dev/null; then
-            echo "Cleaning up proxy process..."
-            kill "$PROXY_PID" 2>/dev/null || true
-        fi
-        rm -f /tmp/mitmproxy.pid
-    fi
-}
-
-# Set trap to cleanup on script failure
-trap cleanup EXIT ERR
+# Note: No cleanup trap because this script is sourced (not executed).
+# The proxy process should live for the entire VM session lifetime.
+# When the VM is destroyed, the proxy process terminates naturally.
+# If manual cleanup is needed, use: kill $(cat /tmp/mitmproxy.pid)
 
 # Generate mitmproxy filter script from configuration
 cat > /tmp/mitmproxy_filter.py << 'FILTER_SCRIPT_EOF'
