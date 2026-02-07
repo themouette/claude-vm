@@ -96,6 +96,28 @@ claude-vm clean
 claude-vm clean-all
 ```
 
+### Skipping Agent Installation for Faster Testing
+
+When developing and testing claude-vm, you may want to skip the Claude Code agent installation to speed up template creation. This is especially useful when testing VM configuration, capabilities, or other features that don't require the agent itself.
+
+The `--no-agent-install` flag is available **only in debug builds** (compiled with `cargo build`):
+
+```bash
+# Create template without installing Claude Code agent (debug builds only)
+./target/debug/claude-vm setup --all --no-agent-install
+```
+
+This flag:
+- Skips Claude Code agent installation
+- Skips agent authentication
+- Skips MCP server configuration
+- Significantly reduces setup time for development testing
+- **Only available in debug builds** - removed from release builds via conditional compilation
+- Not shown in release build help output
+- Release builds will reject the flag with an error if attempted
+
+**Note:** Templates created with `--no-agent-install` will not have the Claude Code agent available. This flag should only be used during development when testing aspects of claude-vm that don't require the agent itself.
+
 ## Architecture
 
 ```

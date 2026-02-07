@@ -531,6 +531,8 @@ impl Config {
             memory,
             setup_scripts,
             mounts,
+            #[cfg(debug_assertions)]
+                no_agent_install: _,
         }) = &cli.command
         {
             if *all {

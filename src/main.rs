@@ -103,8 +103,17 @@ fn main() -> Result<()> {
 
     // Execute command
     match &cli.command {
-        Some(Commands::Setup { .. }) => {
-            commands::setup::execute(&project, &config)?;
+        Some(Commands::Setup {
+            #[cfg(debug_assertions)]
+            no_agent_install,
+            ..
+        }) => {
+            #[cfg(debug_assertions)]
+            let skip_install = *no_agent_install;
+            #[cfg(not(debug_assertions))]
+            let skip_install = false;
+
+            commands::setup::execute(&project, &config, skip_install)?;
         }
         Some(Commands::Shell { command }) => {
             commands::shell::execute(&project, &config, &cli, command)?;
