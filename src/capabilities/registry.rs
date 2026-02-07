@@ -135,6 +135,11 @@ impl CapabilityRegistry {
 
     /// Check if a capability is enabled in the config
     fn is_enabled(&self, id: &str, config: &Config) -> bool {
+        // Special case: network-security is configured via [security.network].enabled
+        if id == "network-security" {
+            return config.security.network.enabled;
+        }
+
         config.tools.is_enabled(id)
     }
 
