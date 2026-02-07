@@ -330,7 +330,7 @@ pub fn execute_command_with_runtime_scripts(
 
     // Create context directory for runtime scripts
     entrypoint.push_str("# Create context directory for runtime scripts\n");
-    entrypoint.push_str("mkdir -p ~/.claude-vm/context ~/.claude\n\n");
+    entrypoint.push_str("mkdir -p ~/.claude-vm/context\n\n");
 
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
@@ -357,61 +357,65 @@ pub fn execute_command_with_runtime_scripts(
         entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
     }
 
-    // Generate final CLAUDE.md with runtime context
-    entrypoint.push_str("# Generate final CLAUDE.md with runtime context\n");
+    // Generate final CLAUDE.md with runtime context (only if Claude Code is installed)
+    entrypoint.push_str(
+        "# Generate final CLAUDE.md with runtime context (skip if Claude not installed)\n",
+    );
+    entrypoint.push_str("if command -v claude >/dev/null 2>&1; then\n");
     entrypoint.push_str(&format!(
-        "cp {} ~/.claude/CLAUDE.md.new\n\n",
+        "  cp {} ~/.claude/CLAUDE.md.new\n\n",
         vm_context_path
     ));
 
-    entrypoint.push_str("# Add runtime script results if any exist\n");
-    entrypoint.push_str("if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
-    entrypoint.push_str("  # Insert runtime context section header\n");
-    entrypoint.push_str("  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
+    entrypoint.push_str("  # Add runtime script results if any exist\n");
+    entrypoint.push_str("  if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
+    entrypoint.push_str("    # Insert runtime context section header\n");
+    entrypoint.push_str("    sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
 
-    entrypoint.push_str("  # Add each context file\n");
-    entrypoint.push_str("  for context_file in ~/.claude-vm/context/*.txt; do\n");
-    entrypoint.push_str("    if [ -f \"$context_file\" ]; then\n");
-    entrypoint.push_str("      name=$(basename \"$context_file\" .txt)\n");
-    entrypoint.push_str("      # Insert subsection header\n");
-    entrypoint.push_str("      sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      # Insert file contents\n");
-    entrypoint.push_str("      sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      # Add blank line after content\n");
-    entrypoint.push_str("      sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("    # Add each context file\n");
+    entrypoint.push_str("    for context_file in ~/.claude-vm/context/*.txt; do\n");
+    entrypoint.push_str("      if [ -f \"$context_file\" ]; then\n");
+    entrypoint.push_str("        name=$(basename \"$context_file\" .txt)\n");
+    entrypoint.push_str("        # Insert subsection header\n");
+    entrypoint.push_str("        sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("        # Insert file contents\n");
+    entrypoint.push_str("        sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("        # Add blank line after content\n");
+    entrypoint.push_str("        sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
+    entrypoint.push_str("      fi\n");
+    entrypoint.push_str("    done\n");
+    entrypoint.push_str("  fi\n\n");
+
+    entrypoint.push_str("  # Remove the placeholder marker\n");
+    entrypoint.push_str(
+        "  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
+    );
+
+    entrypoint.push_str("  # Merge with existing CLAUDE.md if present\n");
+    entrypoint.push_str("  if [ -f ~/.claude/CLAUDE.md ]; then\n");
+    entrypoint
+        .push_str("    if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
+    entrypoint
+        .push_str("      # Replace content between markers, preserving user content position\n");
+    entrypoint.push_str("      awk '\n");
+    entrypoint.push_str("        /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
+    entrypoint.push_str("        /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
+    entrypoint.push_str("        !skip\n");
+    entrypoint.push_str("      ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
+    entrypoint.push_str(
+        "      cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md\n",
+    );
+    entrypoint.push_str("    else\n");
+    entrypoint.push_str("      # Append our context to existing content\n");
+    entrypoint.push_str(
+        "      cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
+    );
+    entrypoint.push_str("      mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
     entrypoint.push_str("    fi\n");
-    entrypoint.push_str("  done\n");
-    entrypoint.push_str("fi\n\n");
-
-    entrypoint.push_str("# Remove the placeholder marker\n");
-    entrypoint.push_str(
-        "sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
-    );
-
-    entrypoint.push_str("# Merge with existing CLAUDE.md if present\n");
-    entrypoint.push_str("if [ -f ~/.claude/CLAUDE.md ]; then\n");
-    entrypoint
-        .push_str("  if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
-    entrypoint
-        .push_str("    # Replace content between markers, preserving user content position\n");
-    entrypoint.push_str("    awk '\n");
-    entrypoint.push_str("      /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
-    entrypoint.push_str("      /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
-    entrypoint.push_str("      !skip\n");
-    entrypoint.push_str("    ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
-    entrypoint.push_str(
-        "    cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md\n",
-    );
     entrypoint.push_str("  else\n");
-    entrypoint.push_str("    # Append our context to existing content\n");
-    entrypoint.push_str(
-        "    cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
-    );
-    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
+    entrypoint.push_str("    # No existing file, use our generated context\n");
+    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
     entrypoint.push_str("  fi\n");
-    entrypoint.push_str("else\n");
-    entrypoint.push_str("  # No existing file, use our generated context\n");
-    entrypoint.push_str("  mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
     entrypoint.push_str("fi\n\n");
 
     entrypoint.push_str("# Cleanup temporary files\n");
