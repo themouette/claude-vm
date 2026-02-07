@@ -20,6 +20,7 @@ from mitmproxy import http
 import os
 import json
 import time
+import fcntl
 from pathlib import Path
 
 # Read configuration from environment variables
@@ -40,20 +41,36 @@ stats = {
 # Load existing stats if available
 if STATS_FILE.exists():
     try:
-        stats = json.loads(STATS_FILE.read_text())
+        # Use file locking when reading to prevent reading partial writes
+        with open(STATS_FILE, 'r') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)  # Shared lock for reading
+            try:
+                stats = json.load(f)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except (json.JSONDecodeError, OSError, ValueError) as e:
         # Use default stats if file is corrupted or unreadable
         import sys
         print(f"Warning: Failed to load stats file: {e}", file=sys.stderr)
 
 def update_stats():
-    """Write stats to file atomically"""
+    """Write stats to file with file locking to prevent corruption"""
     try:
         stats["last_update"] = int(time.time())
-        # Write to temp file first, then rename for atomicity
-        temp_file = Path("/tmp/mitmproxy_stats.json.tmp")
-        temp_file.write_text(json.dumps(stats))
-        temp_file.rename(STATS_FILE)
+
+        # Use file locking to prevent concurrent writes from corrupting JSON
+        # Open/create the stats file with write access
+        with open(STATS_FILE, 'w') as f:
+            # Acquire exclusive lock (blocks until available)
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                # Write stats while holding the lock
+                json.dump(stats, f)
+                f.flush()
+                os.fsync(f.fileno())  # Ensure written to disk
+            finally:
+                # Release lock (automatically released on close, but explicit is better)
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
     except (OSError, IOError) as e:
         # Ignore write errors - stats are not critical for security
         pass
