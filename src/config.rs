@@ -28,6 +28,9 @@ pub struct Config {
     pub context: ContextConfig,
 
     #[serde(default)]
+    pub security: SecurityConfig,
+
+    #[serde(default)]
     pub mounts: Vec<MountEntry>,
 
     #[serde(default)]
@@ -98,6 +101,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub git: bool,
+
+    #[serde(default)]
+    pub network_security: bool,
 }
 
 impl ToolsConfig {
@@ -111,6 +117,7 @@ impl ToolsConfig {
             "gpg" => self.gpg,
             "gh" => self.gh,
             "git" => self.git,
+            "network-security" => self.network_security,
             _ => false,
         }
     }
@@ -125,6 +132,7 @@ impl ToolsConfig {
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
             "git" => self.git = true,
+            "network-security" => self.network_security = true,
             _ => {}
         }
     }
@@ -241,6 +249,216 @@ fn default_claude_args() -> Vec<String> {
     vec!["--dangerously-skip-permissions".to_string()]
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SecurityConfig {
+    #[serde(default)]
+    pub network: NetworkSecurityConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkSecurityConfig {
+    /// Network policy mode: allowlist or denylist
+    #[serde(default = "default_policy_mode")]
+    pub mode: PolicyMode,
+
+    /// Block private networks (10.0.0.0/8, 192.168.0.0/16, etc.)
+    #[serde(default = "default_true")]
+    pub block_private_networks: bool,
+
+    /// Block cloud metadata services (169.254.169.254)
+    #[serde(default = "default_true")]
+    pub block_metadata_services: bool,
+
+    /// Block non-HTTP protocols (raw TCP, UDP)
+    #[serde(default = "default_true")]
+    pub block_tcp_udp: bool,
+
+    /// Allowed domains (for denylist mode)
+    #[serde(default)]
+    pub allowed_domains: Vec<String>,
+
+    /// Blocked domains (for allowlist mode)
+    #[serde(default)]
+    pub blocked_domains: Vec<String>,
+
+    /// Bypass HTTPS inspection for these domains (certificate pinning)
+    #[serde(default)]
+    pub bypass_domains: Vec<String>,
+
+    /// Enable network filtering
+    #[serde(default)]
+    pub enabled: bool,
+}
+
+impl Default for NetworkSecurityConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_policy_mode(),
+            block_private_networks: true,
+            block_metadata_services: true,
+            block_tcp_udp: true,
+            allowed_domains: vec![],
+            blocked_domains: vec![],
+            bypass_domains: vec![],
+            enabled: false, // Opt-in for backward compatibility
+        }
+    }
+}
+
+impl NetworkSecurityConfig {
+    /// Validate configuration and return warnings (not errors - config is still usable)
+    pub fn validate(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        // Skip validation if network security is disabled
+        if !self.enabled {
+            return warnings;
+        }
+
+        // 1. Check for empty allowlist in allowlist mode
+        if self.mode == PolicyMode::Allowlist && self.allowed_domains.is_empty() {
+            warnings.push(
+                "Network security is in 'allowlist' mode but no domains are allowed. \
+                This will block ALL network access (only DNS and localhost allowed)."
+                    .to_string(),
+            );
+        }
+
+        // 2. Validate domain patterns
+        let all_domains: Vec<(&str, &str)> = self
+            .allowed_domains
+            .iter()
+            .map(|d| (d.as_str(), "allowed_domains"))
+            .chain(
+                self.blocked_domains
+                    .iter()
+                    .map(|d| (d.as_str(), "blocked_domains")),
+            )
+            .chain(
+                self.bypass_domains
+                    .iter()
+                    .map(|d| (d.as_str(), "bypass_domains")),
+            )
+            .collect();
+
+        for (domain, list_name) in all_domains {
+            if let Some(warning) = Self::validate_domain_pattern(domain) {
+                warnings.push(format!(
+                    "Invalid domain in {}: '{}' - {}",
+                    list_name, domain, warning
+                ));
+            }
+        }
+
+        // 3. Check for conflicting domains
+        for allowed in &self.allowed_domains {
+            if self.blocked_domains.contains(allowed) {
+                warnings.push(format!(
+                    "Domain '{}' appears in both allowed_domains and blocked_domains. \
+                    It will be treated as ALLOWED (allowed_domains takes precedence).",
+                    allowed
+                ));
+            }
+        }
+
+        warnings
+    }
+
+    /// Validate a single domain pattern
+    fn validate_domain_pattern(domain: &str) -> Option<String> {
+        if domain.is_empty() {
+            return Some("domain cannot be empty".to_string());
+        }
+
+        // Check for invalid characters (only alphanumeric, dots, hyphens, asterisk allowed)
+        if domain
+            .chars()
+            .any(|c| !c.is_alphanumeric() && c != '.' && c != '-' && c != '*')
+        {
+            return Some(
+                "domain contains invalid characters (only alphanumeric, '.', '-', '*' allowed)"
+                    .to_string(),
+            );
+        }
+
+        // Check wildcard usage
+        if domain.contains('*') {
+            // Wildcard must be at the beginning as "*."
+            if !domain.starts_with("*.") {
+                return Some(
+                    "wildcard (*) can only be used as a prefix in the form '*.domain.com'"
+                        .to_string(),
+                );
+            }
+
+            // Only one wildcard allowed
+            if domain.matches('*').count() > 1 {
+                return Some("only one wildcard (*) is allowed per domain".to_string());
+            }
+
+            // Check the part after "*."
+            let suffix = &domain[2..];
+            if suffix.is_empty() {
+                return Some(
+                    "wildcard pattern '*.' must be followed by a domain (e.g., '*.example.com')"
+                        .to_string(),
+                );
+            }
+
+            // The suffix should be a valid domain (no wildcards)
+            if suffix.contains('*') {
+                return Some("only one wildcard (*) is allowed per domain".to_string());
+            }
+        }
+
+        // Check for consecutive dots
+        if domain.contains("..") {
+            return Some("domain cannot contain consecutive dots".to_string());
+        }
+
+        // Check if domain starts or ends with dot (except after wildcard)
+        let check_domain = domain.strip_prefix("*.").unwrap_or(domain);
+
+        if check_domain.starts_with('.') || check_domain.ends_with('.') {
+            return Some("domain cannot start or end with a dot".to_string());
+        }
+
+        // Check for consecutive hyphens or invalid hyphen placement
+        if check_domain.starts_with('-') || check_domain.ends_with('-') {
+            return Some("domain cannot start or end with a hyphen".to_string());
+        }
+
+        None
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PolicyMode {
+    /// Block all except explicitly allowed domains
+    Allowlist,
+    /// Allow all except explicitly blocked domains (default)
+    Denylist,
+}
+
+impl PolicyMode {
+    /// Get the string representation for environment variables
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PolicyMode::Allowlist => "allowlist",
+            PolicyMode::Denylist => "denylist",
+        }
+    }
+}
+
+fn default_policy_mode() -> PolicyMode {
+    PolicyMode::Denylist
+}
+
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MountEntry {
     pub location: String,
@@ -338,6 +556,7 @@ impl Config {
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
         self.tools.git = self.tools.git || other.tools.git;
+        self.tools.network_security = self.tools.network_security || other.tools.network_security;
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);
@@ -364,6 +583,35 @@ impl Config {
         if !other.context.instructions_file.is_empty() {
             self.context.instructions_file = other.context.instructions_file;
         }
+
+        // Security config
+        // Enable if other enables it
+        self.security.network.enabled =
+            self.security.network.enabled || other.security.network.enabled;
+
+        // Mode: other takes precedence if network security is enabled in other
+        if other.security.network.enabled {
+            self.security.network.mode = other.security.network.mode;
+            self.security.network.block_private_networks =
+                other.security.network.block_private_networks;
+            self.security.network.block_metadata_services =
+                other.security.network.block_metadata_services;
+            self.security.network.block_tcp_udp = other.security.network.block_tcp_udp;
+        }
+
+        // Domain lists: accumulate (extend)
+        self.security
+            .network
+            .allowed_domains
+            .extend(other.security.network.allowed_domains);
+        self.security
+            .network
+            .blocked_domains
+            .extend(other.security.network.blocked_domains);
+        self.security
+            .network
+            .bypass_domains
+            .extend(other.security.network.bypass_domains);
 
         // Update check settings (other takes precedence)
         self.update_check = other.update_check;
@@ -472,6 +720,66 @@ impl Config {
             }
         }
 
+        // Network security environment variables
+        if let Ok(enabled) = std::env::var("NETWORK_SECURITY_ENABLED") {
+            if let Ok(enabled) = enabled.parse::<bool>() {
+                self.security.network.enabled = enabled;
+            }
+        }
+
+        if let Ok(mode) = std::env::var("POLICY_MODE") {
+            match mode.to_lowercase().as_str() {
+                "allowlist" => self.security.network.mode = PolicyMode::Allowlist,
+                "denylist" => self.security.network.mode = PolicyMode::Denylist,
+                _ => {}
+            }
+        }
+
+        if let Ok(domains) = std::env::var("ALLOWED_DOMAINS") {
+            let domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.security.network.allowed_domains.extend(domains);
+        }
+
+        if let Ok(domains) = std::env::var("BLOCKED_DOMAINS") {
+            let domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.security.network.blocked_domains.extend(domains);
+        }
+
+        if let Ok(domains) = std::env::var("BYPASS_DOMAINS") {
+            let domains: Vec<String> = domains
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.security.network.bypass_domains.extend(domains);
+        }
+
+        if let Ok(block) = std::env::var("BLOCK_TCP_UDP") {
+            if let Ok(block) = block.parse::<bool>() {
+                self.security.network.block_tcp_udp = block;
+            }
+        }
+
+        if let Ok(block) = std::env::var("BLOCK_PRIVATE_NETWORKS") {
+            if let Ok(block) = block.parse::<bool>() {
+                self.security.network.block_private_networks = block;
+            }
+        }
+
+        if let Ok(block) = std::env::var("BLOCK_METADATA_SERVICES") {
+            if let Ok(block) = block.parse::<bool>() {
+                self.security.network.block_metadata_services = block;
+            }
+        }
+
         self
     }
 
@@ -526,6 +834,7 @@ impl Config {
             gpg,
             gh,
             git,
+            network_security,
             all,
             disk,
             memory,
@@ -543,6 +852,7 @@ impl Config {
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
                 self.tools.enable("git");
+                self.tools.enable("network-security");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -564,6 +874,10 @@ impl Config {
                 }
                 if *git {
                     self.tools.enable("git");
+                }
+                if *network_security {
+                    self.tools.enable("network-security");
+                    self.security.network.enabled = true;
                 }
             }
 
@@ -1046,5 +1360,177 @@ mod tests {
 
         // Verify base instructions_file is preserved when override is empty
         assert_eq!(merged.context.instructions_file, "~/.global-context.md");
+    }
+
+    // Network security configuration tests
+    #[test]
+    fn test_network_security_default_config() {
+        let config = NetworkSecurityConfig::default();
+        assert!(!config.enabled);
+        assert_eq!(config.mode, PolicyMode::Denylist);
+        assert!(config.block_private_networks);
+        assert!(config.block_metadata_services);
+        assert!(config.block_tcp_udp);
+        assert!(config.allowed_domains.is_empty());
+        assert!(config.blocked_domains.is_empty());
+        assert!(config.bypass_domains.is_empty());
+    }
+
+    #[test]
+    fn test_network_security_validate_disabled() {
+        let config = NetworkSecurityConfig::default();
+        let warnings = config.validate();
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn test_network_security_validate_empty_allowlist() {
+        let mut config = NetworkSecurityConfig::default();
+        config.enabled = true;
+        config.mode = PolicyMode::Allowlist;
+        // No domains in allowlist
+
+        let warnings = config.validate();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("allowlist"));
+        assert!(warnings[0].contains("no domains are allowed"));
+    }
+
+    #[test]
+    fn test_network_security_domain_validation_valid() {
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com").is_none());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("api.example.com").is_none());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("*.example.com").is_none());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("my-api.example.com").is_none());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("api2.example.com").is_none());
+    }
+
+    #[test]
+    fn test_network_security_domain_validation_invalid() {
+        // Empty domain
+        assert!(NetworkSecurityConfig::validate_domain_pattern("").is_some());
+
+        // Invalid characters
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example$.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example com").is_some());
+
+        // Invalid wildcard usage
+        assert!(NetworkSecurityConfig::validate_domain_pattern("*example.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example.*.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("*.*.example.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("*.").is_some());
+
+        // Consecutive dots
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example..com").is_some());
+
+        // Leading/trailing dots
+        assert!(NetworkSecurityConfig::validate_domain_pattern(".example.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com.").is_some());
+
+        // Leading/trailing hyphens
+        assert!(NetworkSecurityConfig::validate_domain_pattern("-example.com").is_some());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com-").is_some());
+    }
+
+    #[test]
+    fn test_network_security_domain_conflict_warning() {
+        let mut config = NetworkSecurityConfig::default();
+        config.enabled = true;
+        config.allowed_domains = vec!["example.com".to_string()];
+        config.blocked_domains = vec!["example.com".to_string()];
+
+        let warnings = config.validate();
+        assert!(warnings
+            .iter()
+            .any(|w| w.contains("both allowed_domains and blocked_domains")));
+    }
+
+    #[test]
+    fn test_network_security_merge_enabled() {
+        let base = Config::default();
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.enabled = true;
+
+        let merged = base.merge(override_cfg);
+        assert!(merged.security.network.enabled);
+    }
+
+    #[test]
+    fn test_network_security_merge_domains() {
+        let mut base = Config::default();
+        base.security.network.allowed_domains = vec!["example.com".to_string()];
+        base.security.network.blocked_domains = vec!["bad.com".to_string()];
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.allowed_domains = vec!["api.example.com".to_string()];
+        override_cfg.security.network.blocked_domains = vec!["evil.com".to_string()];
+
+        let merged = base.merge(override_cfg);
+        assert_eq!(merged.security.network.allowed_domains.len(), 2);
+        assert!(merged
+            .security
+            .network
+            .allowed_domains
+            .contains(&"example.com".to_string()));
+        assert!(merged
+            .security
+            .network
+            .allowed_domains
+            .contains(&"api.example.com".to_string()));
+        assert_eq!(merged.security.network.blocked_domains.len(), 2);
+        assert!(merged
+            .security
+            .network
+            .blocked_domains
+            .contains(&"bad.com".to_string()));
+        assert!(merged
+            .security
+            .network
+            .blocked_domains
+            .contains(&"evil.com".to_string()));
+    }
+
+    #[test]
+    fn test_network_security_merge_mode() {
+        let mut base = Config::default();
+        base.security.network.mode = PolicyMode::Denylist;
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.enabled = true;
+        override_cfg.security.network.mode = PolicyMode::Allowlist;
+
+        let merged = base.merge(override_cfg);
+        assert_eq!(merged.security.network.mode, PolicyMode::Allowlist);
+    }
+
+    #[test]
+    fn test_network_security_merge_blocks() {
+        let mut base = Config::default();
+        base.security.network.block_tcp_udp = false;
+
+        let mut override_cfg = Config::default();
+        override_cfg.security.network.enabled = true;
+        override_cfg.security.network.block_tcp_udp = true;
+        override_cfg.security.network.block_private_networks = false;
+
+        let merged = base.merge(override_cfg);
+        assert!(merged.security.network.block_tcp_udp);
+        assert!(!merged.security.network.block_private_networks);
+    }
+
+    #[test]
+    fn test_policy_mode_as_str() {
+        assert_eq!(PolicyMode::Allowlist.as_str(), "allowlist");
+        assert_eq!(PolicyMode::Denylist.as_str(), "denylist");
+    }
+
+    #[test]
+    fn test_tools_config_network_security() {
+        let mut tools = ToolsConfig::default();
+        assert!(!tools.is_enabled("network-security"));
+
+        tools.enable("network-security");
+        assert!(tools.is_enabled("network-security"));
+        assert!(tools.network_security);
     }
 }
