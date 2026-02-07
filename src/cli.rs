@@ -102,6 +102,10 @@ pub enum Commands {
         #[arg(long)]
         git: bool,
 
+        /// Enable network security filtering
+        #[arg(long)]
+        network_security: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,
@@ -192,5 +196,32 @@ pub enum Commands {
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
         yes: bool,
+    },
+
+    /// Network security commands
+    Network {
+        #[command(subcommand)]
+        command: NetworkCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NetworkCommands {
+    /// Show network security status
+    Status,
+
+    /// View network security logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(short = 'n', long, default_value = "50")]
+        lines: usize,
+
+        /// Filter logs by pattern
+        #[arg(short = 'f', long)]
+        filter: Option<String>,
+
+        /// Show all logs (no line limit)
+        #[arg(long)]
+        all: bool,
     },
 }

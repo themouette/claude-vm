@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use claude_vm::cli::{Cli, Commands};
+use claude_vm::cli::{Cli, Commands, NetworkCommands};
 use claude_vm::config::Config;
 use claude_vm::project::Project;
 use claude_vm::{commands, error::ClaudeVmError};
@@ -40,6 +40,7 @@ fn main() -> Result<()> {
             | Some(Commands::Shell { .. })
             | Some(Commands::Info)
             | Some(Commands::Clean { .. })
+            | Some(Commands::Network { .. })
             | None // run command
     );
 
@@ -124,6 +125,14 @@ fn main() -> Result<()> {
         Some(Commands::Clean { yes }) => {
             commands::clean::execute(&project, *yes)?;
         }
+        Some(Commands::Network { command }) => match command {
+            NetworkCommands::Status => {
+                commands::network::status::execute(&project, &config)?;
+            }
+            NetworkCommands::Logs { lines, filter, all } => {
+                commands::network::logs::execute(&project, *lines, filter.as_deref(), *all)?;
+            }
+        },
         None => {
             // Default: run Claude with provided arguments
             commands::run::execute(&project, &config, &cli, &cli.claude_args)?;
