@@ -1385,9 +1385,11 @@ mod tests {
 
     #[test]
     fn test_network_security_validate_empty_allowlist() {
-        let mut config = NetworkSecurityConfig::default();
-        config.enabled = true;
-        config.mode = PolicyMode::Allowlist;
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            mode: PolicyMode::Allowlist,
+            ..Default::default()
+        };
         // No domains in allowlist
 
         let warnings = config.validate();
@@ -1437,10 +1439,12 @@ mod tests {
 
     #[test]
     fn test_network_security_domain_conflict_warning() {
-        let mut config = NetworkSecurityConfig::default();
-        config.enabled = true;
-        config.allowed_domains = vec!["example.com".to_string()];
-        config.blocked_domains = vec!["example.com".to_string()];
+        let config = NetworkSecurityConfig {
+            enabled: true,
+            allowed_domains: vec!["example.com".to_string()],
+            blocked_domains: vec!["example.com".to_string()],
+            ..Default::default()
+        };
 
         let warnings = config.validate();
         assert!(warnings

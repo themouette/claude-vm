@@ -6,18 +6,20 @@ use claude_vm::config::{Config, NetworkSecurityConfig, PolicyMode, SecurityConfi
 
 #[test]
 fn test_network_test_command_allowlist_allowed() {
-    let mut config = Config::default();
-    config.security = SecurityConfig {
-        network: NetworkSecurityConfig {
-            enabled: true,
-            mode: PolicyMode::Allowlist,
-            allowed_domains: vec!["example.com".to_string(), "*.api.com".to_string()],
-            blocked_domains: vec![],
-            bypass_domains: vec![],
-            block_tcp_udp: true,
-            block_private_networks: true,
-            block_metadata_services: true,
+    let config = Config {
+        security: SecurityConfig {
+            network: NetworkSecurityConfig {
+                enabled: true,
+                mode: PolicyMode::Allowlist,
+                allowed_domains: vec!["example.com".to_string(), "*.api.com".to_string()],
+                blocked_domains: vec![],
+                bypass_domains: vec![],
+                block_tcp_udp: true,
+                block_private_networks: true,
+                block_metadata_services: true,
+            },
         },
+        ..Default::default()
     };
 
     // Test exact match
@@ -33,18 +35,20 @@ fn test_network_test_command_allowlist_allowed() {
 
 #[test]
 fn test_network_test_command_denylist_blocked() {
-    let mut config = Config::default();
-    config.security = SecurityConfig {
-        network: NetworkSecurityConfig {
-            enabled: true,
-            mode: PolicyMode::Denylist,
-            allowed_domains: vec![],
-            blocked_domains: vec!["blocked.com".to_string(), "*.bad.com".to_string()],
-            bypass_domains: vec![],
-            block_tcp_udp: true,
-            block_private_networks: true,
-            block_metadata_services: true,
+    let config = Config {
+        security: SecurityConfig {
+            network: NetworkSecurityConfig {
+                enabled: true,
+                mode: PolicyMode::Denylist,
+                allowed_domains: vec![],
+                blocked_domains: vec!["blocked.com".to_string(), "*.bad.com".to_string()],
+                bypass_domains: vec![],
+                block_tcp_udp: true,
+                block_private_networks: true,
+                block_metadata_services: true,
+            },
         },
+        ..Default::default()
     };
 
     // Test exact match (should be blocked)
@@ -60,18 +64,20 @@ fn test_network_test_command_denylist_blocked() {
 
 #[test]
 fn test_network_test_command_bypass_always_allowed() {
-    let mut config = Config::default();
-    config.security = SecurityConfig {
-        network: NetworkSecurityConfig {
-            enabled: true,
-            mode: PolicyMode::Allowlist,
-            allowed_domains: vec![],
-            blocked_domains: vec![],
-            bypass_domains: vec!["bypass.com".to_string(), "*.localhost".to_string()],
-            block_tcp_udp: true,
-            block_private_networks: true,
-            block_metadata_services: true,
+    let config = Config {
+        security: SecurityConfig {
+            network: NetworkSecurityConfig {
+                enabled: true,
+                mode: PolicyMode::Allowlist,
+                allowed_domains: vec![],
+                blocked_domains: vec![],
+                bypass_domains: vec!["bypass.com".to_string(), "*.localhost".to_string()],
+                block_tcp_udp: true,
+                block_private_networks: true,
+                block_metadata_services: true,
+            },
         },
+        ..Default::default()
     };
 
     // Bypass domains are always allowed even in empty allowlist
@@ -84,18 +90,20 @@ fn test_network_test_command_bypass_always_allowed() {
 
 #[test]
 fn test_network_test_command_disabled() {
-    let mut config = Config::default();
-    config.security = SecurityConfig {
-        network: NetworkSecurityConfig {
-            enabled: false,
-            mode: PolicyMode::Allowlist,
-            allowed_domains: vec![],
-            blocked_domains: vec![],
-            bypass_domains: vec![],
-            block_tcp_udp: true,
-            block_private_networks: true,
-            block_metadata_services: true,
+    let config = Config {
+        security: SecurityConfig {
+            network: NetworkSecurityConfig {
+                enabled: false,
+                mode: PolicyMode::Allowlist,
+                allowed_domains: vec![],
+                blocked_domains: vec![],
+                bypass_domains: vec![],
+                block_tcp_udp: true,
+                block_private_networks: true,
+                block_metadata_services: true,
+            },
         },
+        ..Default::default()
     };
 
     // When disabled, all domains are allowed
@@ -146,8 +154,7 @@ fn matches_pattern(host: &str, pattern: &str) -> bool {
     if pattern.is_empty() {
         return false;
     }
-    if pattern.starts_with("*.") {
-        let domain = &pattern[2..];
+    if let Some(domain) = pattern.strip_prefix("*.") {
         host == domain || host.ends_with(&format!(".{}", domain))
     } else {
         host == pattern

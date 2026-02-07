@@ -49,7 +49,7 @@ pub fn execute(
     // Build the command to read logs
     let read_cmd = if follow {
         // Follow mode: use tail -f for real-time streaming
-        let mut cmd = format!("tail -f /tmp/mitmproxy.log");
+        let mut cmd = "tail -f /tmp/mitmproxy.log".to_string();
 
         // Add grep filter if specified
         if let Some(pattern) = filter {
@@ -95,7 +95,7 @@ pub fn execute(
         println!();
 
         let status = Command::new("limactl")
-            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
+            .args(["shell", instance_name, "sh", "-c", &read_cmd])
             .status()
             .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to follow logs: {}", e)))?;
 
@@ -107,7 +107,7 @@ pub fn execute(
     } else {
         // Static mode: read all at once
         let output = Command::new("limactl")
-            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
+            .args(["shell", instance_name, "sh", "-c", &read_cmd])
             .output()
             .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to read logs: {}", e)))?;
 

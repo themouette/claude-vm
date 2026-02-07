@@ -125,9 +125,8 @@ fn matches_pattern(host: &str, pattern: &str) -> bool {
     if pattern.is_empty() {
         return false;
     }
-    if pattern.starts_with("*.") {
+    if let Some(domain) = pattern.strip_prefix("*.") {
         // *.example.com matches api.example.com and example.com
-        let domain = &pattern[2..];
         host == domain || host.ends_with(&format!(".{}", domain))
     } else {
         host == pattern
