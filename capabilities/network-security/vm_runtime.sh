@@ -41,8 +41,10 @@ stats = {
 if STATS_FILE.exists():
     try:
         stats = json.loads(STATS_FILE.read_text())
-    except:
-        pass  # Use default stats if file is corrupted
+    except (json.JSONDecodeError, OSError, ValueError) as e:
+        # Use default stats if file is corrupted or unreadable
+        import sys
+        print(f"Warning: Failed to load stats file: {e}", file=sys.stderr)
 
 def update_stats():
     """Write stats to file atomically"""
@@ -52,8 +54,9 @@ def update_stats():
         temp_file = Path("/tmp/mitmproxy_stats.json.tmp")
         temp_file.write_text(json.dumps(stats))
         temp_file.rename(STATS_FILE)
-    except:
-        pass  # Ignore write errors
+    except (OSError, IOError) as e:
+        # Ignore write errors - stats are not critical for security
+        pass
 
 def matches_pattern(host, pattern):
     """Match domain with wildcard support (*.example.com)"""
