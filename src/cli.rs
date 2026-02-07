@@ -223,6 +223,10 @@ pub enum NetworkCommands {
         /// Show all logs (no line limit)
         #[arg(long)]
         all: bool,
+
+        /// Follow log output in real-time (like tail -f)
+        #[arg(long)]
+        follow: bool,
     },
 
     /// Test if a domain would be allowed or blocked

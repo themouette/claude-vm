@@ -129,8 +129,19 @@ fn main() -> Result<()> {
             NetworkCommands::Status => {
                 commands::network::status::execute(&project, &config)?;
             }
-            NetworkCommands::Logs { lines, filter, all } => {
-                commands::network::logs::execute(&project, *lines, filter.as_deref(), *all)?;
+            NetworkCommands::Logs {
+                lines,
+                filter,
+                all,
+                follow,
+            } => {
+                commands::network::logs::execute(
+                    &project,
+                    *lines,
+                    filter.as_deref(),
+                    *all,
+                    *follow,
+                )?;
             }
             NetworkCommands::Test { domain } => {
                 commands::network::test::execute(&config, domain)?;

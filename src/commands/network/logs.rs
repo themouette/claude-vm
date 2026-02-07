@@ -3,7 +3,13 @@ use crate::project::Project;
 use crate::utils::shell::escape as shell_escape;
 use std::process::Command;
 
-pub fn execute(project: &Project, lines: usize, filter: Option<&str>, all: bool) -> Result<()> {
+pub fn execute(
+    project: &Project,
+    lines: usize,
+    filter: Option<&str>,
+    all: bool,
+    follow: bool,
+) -> Result<()> {
     let instance_name = project.template_name();
 
     // Check if VM is running
@@ -40,76 +46,111 @@ pub fn execute(project: &Project, lines: usize, filter: Option<&str>, all: bool)
         return Ok(());
     }
 
-    // Read the log file
-    let mut cmd_args = vec!["shell", &instance_name];
-
     // Build the command to read logs
-    let mut read_cmd = String::new();
+    let read_cmd = if follow {
+        // Follow mode: use tail -f for real-time streaming
+        let mut cmd = format!("tail -f /tmp/mitmproxy.log");
 
-    if let Some(pattern) = filter {
-        // Use grep to filter (pattern is shell-escaped to prevent injection)
-        read_cmd.push_str(&format!("grep -i {} /tmp/mitmproxy.log", shell_escape(pattern)));
+        // Add grep filter if specified
+        if let Some(pattern) = filter {
+            cmd.push_str(&format!(" | grep --line-buffered -i {}", shell_escape(pattern)));
+        }
+
+        cmd
     } else {
-        read_cmd.push_str("cat /tmp/mitmproxy.log");
-    }
+        // Static read mode
+        let mut cmd = String::new();
 
-    // Apply line limit
-    if !all {
-        read_cmd.push_str(&format!(" | tail -n {}", lines));
-    }
+        if let Some(pattern) = filter {
+            // Use grep to filter (pattern is shell-escaped to prevent injection)
+            cmd.push_str(&format!("grep -i {} /tmp/mitmproxy.log", shell_escape(pattern)));
+        } else {
+            cmd.push_str("cat /tmp/mitmproxy.log");
+        }
 
-    cmd_args.push(&read_cmd);
+        // Apply line limit
+        if !all {
+            cmd.push_str(&format!(" | tail -n {}", lines));
+        }
+
+        cmd
+    };
 
     // Execute the command
-    let output = Command::new("limactl")
-        .args(&cmd_args)
-        .output()
-        .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to read logs: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ClaudeVmError::CommandFailed(format!(
-            "Failed to read logs: {}",
-            stderr
-        )));
-    }
-
-    let logs = String::from_utf8_lossy(&output.stdout);
-
-    if logs.trim().is_empty() {
-        if let Some(pattern) = filter {
-            println!("No logs matching filter: {}", pattern);
-        } else {
-            println!("No logs available yet.");
-            println!();
-            println!("Network security is enabled but no requests have been logged.");
-            println!("The proxy may still be starting up, or no network requests have been made.");
-        }
-    } else {
-        // Print header
-        println!("Network Security Logs");
+    if follow {
+        // Follow mode: stream output in real-time
+        println!("Network Security Logs (following)");
         println!("═════════════════════════════════════════════════════════════");
         if let Some(pattern) = filter {
             println!("Filter: {}", pattern);
         }
-        if !all {
-            println!("Showing last {} lines", lines);
+        println!("Press Ctrl+C to stop following");
+        println!("═════════════════════════════════════════════════════════════");
+        println!();
+
+        let status = Command::new("limactl")
+            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
+            .status()
+            .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to follow logs: {}", e)))?;
+
+        if !status.success() {
+            return Err(ClaudeVmError::CommandFailed(
+                "Log streaming terminated with error".to_string(),
+            ));
         }
-        println!("═════════════════════════════════════════════════════════════");
-        println!();
+    } else {
+        // Static mode: read all at once
+        let output = Command::new("limactl")
+            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
+            .output()
+            .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to read logs: {}", e)))?;
 
-        // Print logs
-        print!("{}", logs);
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(ClaudeVmError::CommandFailed(format!(
+                "Failed to read logs: {}",
+                stderr
+            )));
+        }
 
-        // Print footer with usage info
-        println!();
-        println!("═════════════════════════════════════════════════════════════");
-        println!("Options:");
-        println!("  --all          Show all logs (no line limit)");
-        println!("  -n <lines>     Show last N lines (default: 50)");
-        println!("  -f <pattern>   Filter logs by domain pattern");
-        println!();
-        println!("Log file: /tmp/mitmproxy.log (inside VM)");
+        let logs = String::from_utf8_lossy(&output.stdout);
+
+        if logs.trim().is_empty() {
+            if let Some(pattern) = filter {
+                println!("No logs matching filter: {}", pattern);
+            } else {
+                println!("No logs available yet.");
+                println!();
+                println!("Network security is enabled but no requests have been logged.");
+                println!("The proxy may still be starting up, or no network requests have been made.");
+            }
+        } else {
+            // Print header
+            println!("Network Security Logs");
+            println!("═════════════════════════════════════════════════════════════");
+            if let Some(pattern) = filter {
+                println!("Filter: {}", pattern);
+            }
+            if !all {
+                println!("Showing last {} lines", lines);
+            }
+            println!("═════════════════════════════════════════════════════════════");
+            println!();
+
+            // Print logs
+            print!("{}", logs);
+
+            // Print footer with usage info
+            println!();
+            println!("═════════════════════════════════════════════════════════════");
+            println!("Options:");
+            println!("  --all          Show all logs (no line limit)");
+            println!("  -n <lines>     Show last N lines (default: 50)");
+            println!("  -f <pattern>   Filter logs by domain pattern");
+            println!("  --follow       Follow log output in real-time");
+            println!();
+            println!("Log file: /tmp/mitmproxy.log (inside VM)");
+        }
     }
 
     Ok(())
