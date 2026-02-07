@@ -370,13 +370,13 @@ impl NetworkSecurityConfig {
             return Some("domain cannot be empty".to_string());
         }
 
-        // Check for invalid characters (only alphanumeric, dots, hyphens, asterisk allowed)
+        // Check for invalid characters (only alphanumeric, dots, hyphens, underscores, asterisk allowed)
         if domain
             .chars()
-            .any(|c| !c.is_alphanumeric() && c != '.' && c != '-' && c != '*')
+            .any(|c| !c.is_alphanumeric() && c != '.' && c != '-' && c != '_' && c != '*')
         {
             return Some(
-                "domain contains invalid characters (only alphanumeric, '.', '-', '*' allowed)"
+                "domain contains invalid characters (only alphanumeric, '.', '-', '_', '*' allowed)"
                     .to_string(),
             );
         }
@@ -1403,6 +1403,9 @@ mod tests {
         assert!(NetworkSecurityConfig::validate_domain_pattern("*.example.com").is_none());
         assert!(NetworkSecurityConfig::validate_domain_pattern("my-api.example.com").is_none());
         assert!(NetworkSecurityConfig::validate_domain_pattern("api2.example.com").is_none());
+        // Underscores are valid in DNS (RFC allows them)
+        assert!(NetworkSecurityConfig::validate_domain_pattern("my_api.example.com").is_none());
+        assert!(NetworkSecurityConfig::validate_domain_pattern("_service.example.com").is_none());
     }
 
     #[test]
