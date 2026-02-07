@@ -53,7 +53,10 @@ pub fn execute(
 
         // Add grep filter if specified
         if let Some(pattern) = filter {
-            cmd.push_str(&format!(" | grep --line-buffered -i {}", shell_escape(pattern)));
+            cmd.push_str(&format!(
+                " | grep --line-buffered -i {}",
+                shell_escape(pattern)
+            ));
         }
 
         cmd
@@ -63,7 +66,10 @@ pub fn execute(
 
         if let Some(pattern) = filter {
             // Use grep to filter (pattern is shell-escaped to prevent injection)
-            cmd.push_str(&format!("grep -i {} /tmp/mitmproxy.log", shell_escape(pattern)));
+            cmd.push_str(&format!(
+                "grep -i {} /tmp/mitmproxy.log",
+                shell_escape(pattern)
+            ));
         } else {
             cmd.push_str("cat /tmp/mitmproxy.log");
         }
@@ -122,7 +128,9 @@ pub fn execute(
                 println!("No logs available yet.");
                 println!();
                 println!("Network security is enabled but no requests have been logged.");
-                println!("The proxy may still be starting up, or no network requests have been made.");
+                println!(
+                    "The proxy may still be starting up, or no network requests have been made."
+                );
             }
         } else {
             // Print header
