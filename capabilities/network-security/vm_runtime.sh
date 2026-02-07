@@ -7,6 +7,14 @@ if [ "${NETWORK_SECURITY_ENABLED:-false}" != "true" ]; then
     return 0
 fi
 
+# Allow runtime override to disable network security (for emergency/debugging)
+# Usage: CLAUDE_VM_NETWORK_SECURITY_DISABLE=true claude-vm shell
+if [ "${CLAUDE_VM_NETWORK_SECURITY_DISABLE:-false}" = "true" ]; then
+    echo "⚠ Network security DISABLED via CLAUDE_VM_NETWORK_SECURITY_DISABLE=true"
+    echo "  This is intended for debugging only. Security policies are NOT enforced."
+    return 0
+fi
+
 echo "Enforcing network security policies..."
 
 # Note: No cleanup trap because this script is sourced (not executed).
