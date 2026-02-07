@@ -69,8 +69,17 @@ mkdir -p ~/.mitmproxy
 mitmdump --set confdir=~/.mitmproxy >/dev/null 2>&1 &
 MITM_PID=$!
 
-# Wait for certificate generation (usually happens within 1 second)
-sleep 2
+# Poll for certificate generation (usually happens within 1 second, timeout at 5s)
+echo -n "  Waiting for certificate generation"
+for i in {1..10}; do
+    if [ -f ~/.mitmproxy/mitmproxy-ca-cert.pem ]; then
+        echo " ✓"
+        break
+    fi
+    echo -n "."
+    sleep 0.5
+done
+echo ""
 
 # Kill the process
 kill $MITM_PID 2>/dev/null || true
@@ -78,7 +87,7 @@ wait $MITM_PID 2>/dev/null || true
 
 # Verify certificate was generated
 if [ ! -f ~/.mitmproxy/mitmproxy-ca-cert.pem ]; then
-    echo "ERROR: CA certificate not generated"
+    echo "ERROR: CA certificate not generated after 5 second timeout"
     echo "Certificate directory contents:"
     ls -la ~/.mitmproxy/ || echo "Directory not found"
     exit 1
