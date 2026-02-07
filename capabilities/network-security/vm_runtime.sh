@@ -208,37 +208,59 @@ export https_proxy="$HTTPS_PROXY"
 export NO_PROXY="127.0.0.1"
 export no_proxy="$NO_PROXY"
 
+# Helper function to add iptables rule only if it doesn't exist
+add_iptables_rule() {
+    local cmd="$1"
+    shift
+    # Check if rule exists (using -C instead of -A/-I)
+    if ! sudo "$cmd" -C OUTPUT "$@" 2>/dev/null; then
+        # Rule doesn't exist, add it
+        sudo "$cmd" -A OUTPUT "$@"
+    fi
+}
+
+# Helper function to insert iptables rule at beginning only if it doesn't exist
+insert_iptables_rule() {
+    local cmd="$1"
+    shift
+    # Check if rule exists
+    if ! sudo "$cmd" -C OUTPUT "$@" 2>/dev/null; then
+        # Rule doesn't exist, insert at beginning
+        sudo "$cmd" -I OUTPUT "$@"
+    fi
+}
+
 # Block raw TCP/UDP if configured
 if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     # IPv4 rules
     # Allow established connections
-    sudo iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    add_iptables_rule iptables -m state --state ESTABLISHED,RELATED -j ACCEPT
 
     # Allow DNS (required for proxy to resolve domains)
-    sudo iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-    sudo iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    add_iptables_rule iptables -p udp --dport 53 -j ACCEPT
+    add_iptables_rule iptables -p tcp --dport 53 -j ACCEPT
 
     # Allow localhost (proxy runs here)
-    sudo iptables -A OUTPUT -o lo -j ACCEPT
+    add_iptables_rule iptables -o lo -j ACCEPT
 
     # Block everything else
-    sudo iptables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
-    sudo iptables -A OUTPUT -p udp -j REJECT --reject-with icmp-port-unreachable
+    add_iptables_rule iptables -p tcp -j REJECT --reject-with tcp-reset
+    add_iptables_rule iptables -p udp -j REJECT --reject-with icmp-port-unreachable
 
     # IPv6 rules (same logic)
     # Allow established connections
-    sudo ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    add_iptables_rule ip6tables -m state --state ESTABLISHED,RELATED -j ACCEPT
 
     # Allow DNS
-    sudo ip6tables -A OUTPUT -p udp --dport 53 -j ACCEPT
-    sudo ip6tables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    add_iptables_rule ip6tables -p udp --dport 53 -j ACCEPT
+    add_iptables_rule ip6tables -p tcp --dport 53 -j ACCEPT
 
     # Allow localhost
-    sudo ip6tables -A OUTPUT -o lo -j ACCEPT
+    add_iptables_rule ip6tables -o lo -j ACCEPT
 
     # Block everything else
-    sudo ip6tables -A OUTPUT -p tcp -j REJECT --reject-with tcp-reset
-    sudo ip6tables -A OUTPUT -p udp -j REJECT --reject-with icmp6-port-unreachable
+    add_iptables_rule ip6tables -p tcp -j REJECT --reject-with tcp-reset
+    add_iptables_rule ip6tables -p udp -j REJECT --reject-with icmp6-port-unreachable
 
     echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
 fi
@@ -247,13 +269,13 @@ fi
 if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
     # IPv4 private networks
     # Insert at beginning to override later rules
-    sudo iptables -I OUTPUT -d 10.0.0.0/8 -j REJECT
-    sudo iptables -I OUTPUT -d 172.16.0.0/12 -j REJECT
-    sudo iptables -I OUTPUT -d 192.168.0.0/16 -j REJECT
+    insert_iptables_rule iptables -d 10.0.0.0/8 -j REJECT
+    insert_iptables_rule iptables -d 172.16.0.0/12 -j REJECT
+    insert_iptables_rule iptables -d 192.168.0.0/16 -j REJECT
 
     # IPv6 private networks
-    sudo ip6tables -I OUTPUT -d fc00::/7 -j REJECT      # Unique local addresses
-    sudo ip6tables -I OUTPUT -d fe80::/10 -j REJECT     # Link-local addresses
+    insert_iptables_rule ip6tables -d fc00::/7 -j REJECT      # Unique local addresses
+    insert_iptables_rule ip6tables -d fe80::/10 -j REJECT     # Link-local addresses
 
     echo "    ✓ Private networks blocked (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)"
 fi
@@ -261,10 +283,10 @@ fi
 # Block metadata services if configured
 if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
     # IPv4 metadata
-    sudo iptables -I OUTPUT -d 169.254.169.254 -j REJECT
+    insert_iptables_rule iptables -d 169.254.169.254 -j REJECT
 
     # IPv6 metadata (fe80::)
-    sudo ip6tables -I OUTPUT -d fe80::a9fe:a9fe -j REJECT  # IPv6-mapped 169.254.169.254
+    insert_iptables_rule ip6tables -d fe80::a9fe:a9fe -j REJECT  # IPv6-mapped 169.254.169.254
 
     echo "    ✓ Cloud metadata blocked (169.254.169.254)"
 fi
