@@ -154,16 +154,29 @@ mitmproxy \
   > /tmp/mitmproxy.log 2>&1 &
 
 PROXY_PID=$!
+
+# Check if process started successfully before writing PID
+sleep 0.2
+if ! kill -0 $PROXY_PID 2>/dev/null; then
+    echo "  ERROR: Proxy process died immediately (PID: $PROXY_PID)"
+    if [ -f /tmp/mitmproxy.log ]; then
+        echo "  Proxy log:"
+        tail -20 /tmp/mitmproxy.log
+    fi
+    exit 1
+fi
+
+# Process is alive, write PID file
 echo $PROXY_PID > /tmp/mitmproxy.pid
 
-# Wait for proxy to be ready
+# Wait for proxy to be ready (listening on port)
 for i in {1..20}; do
   if nc -z localhost 8080 2>/dev/null; then
     echo "  ✓ Proxy started (PID: $PROXY_PID) - Listening on localhost:8080"
     break
   fi
   if [ $i -eq 20 ]; then
-    echo "  ERROR: Proxy failed to start"
+    echo "  ERROR: Proxy started but not listening on port 8080"
     if [ -f /tmp/mitmproxy.log ]; then
       echo "  Proxy log:"
       tail -20 /tmp/mitmproxy.log
