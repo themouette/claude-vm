@@ -132,6 +132,9 @@ fn main() -> Result<()> {
             NetworkCommands::Logs { lines, filter, all } => {
                 commands::network::logs::execute(&project, *lines, filter.as_deref(), *all)?;
             }
+            NetworkCommands::Test { domain } => {
+                commands::network::test::execute(&config, domain)?;
+            }
         },
         None => {
             // Default: run Claude with provided arguments

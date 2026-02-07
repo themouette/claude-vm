@@ -224,4 +224,10 @@ pub enum NetworkCommands {
         #[arg(long)]
         all: bool,
     },
+
+    /// Test if a domain would be allowed or blocked
+    Test {
+        /// Domain to test (e.g., example.com or *.example.com)
+        domain: String,
+    },
 }
