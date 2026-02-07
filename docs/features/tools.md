@@ -23,6 +23,8 @@ Claude VM supports installing various development tools during template creation
 | `gpg`      | GPG agent forwarding, key sync | Signed commits, encryption     |
 | `gh`       | GitHub CLI, authentication     | GitHub operations              |
 
+**Note:** Network security is configured separately via `[security.network]` - see [Network Security](#network-security) below.
+
 ## Installing Tools
 
 ### During Setup
@@ -405,6 +407,81 @@ $ gh pr create                # Create pull request
 $ gh issue list               # List issues
 $ gh api /user                # Make API calls
 ```
+
+### Network Security
+
+**Installs:**
+
+- mitmproxy for HTTP/HTTPS filtering
+- iptables rules for protocol blocking
+- Domain-based policy enforcement
+
+**Configuration:**
+
+```toml
+[security.network]
+enabled = true
+mode = "denylist"  # or "allowlist"
+blocked_domains = ["example.com", "*.ads.com"]
+```
+
+**CLI:**
+
+```bash
+claude-vm setup --network-security
+```
+
+**What it does:**
+
+1. Installs mitmproxy from official binaries
+2. Generates and installs CA certificate
+3. Configures transparent HTTP/HTTPS proxy
+4. Sets up iptables rules for protocol blocking
+5. Enforces domain filtering policies
+
+**Context provided:**
+
+```markdown
+Network security is enabled with the following policies:
+
+- HTTP/HTTPS traffic: Filtered through in-VM proxy (localhost:8080)
+- Policy mode: denylist
+- Blocked domains: example.com, *.ads.com (2 patterns)
+- Raw TCP/UDP: Blocked
+- Private networks: Blocked
+- Cloud metadata: Blocked
+```
+
+**Usage:**
+
+```bash
+# Check status
+claude-vm network status
+
+# View logs
+claude-vm network logs
+claude-vm network logs -n 100
+claude-vm network logs -f "blocked"
+
+# Test a domain
+claude-vm network test example.com
+claude-vm network test api.github.com
+```
+
+**Policy Modes:**
+
+- **Allowlist**: Block all domains except explicitly allowed
+- **Denylist**: Allow all domains except explicitly blocked
+
+**Important:** Network security provides policy enforcement, not security isolation. See [Network Security documentation](network-security.md) for details on security model and limitations.
+
+**Use cases:**
+
+- Compliance requirements
+- Preventing accidental data leaks
+- API access restrictions
+- Internal security policies
+- Auditing and logging
 
 ## Tool Configuration
 
