@@ -198,7 +198,7 @@ if ! kill -0 $PROXY_PID 2>/dev/null; then
         echo "  Proxy log:"
         tail -20 /tmp/mitmproxy.log
     fi
-    exit 1
+    return 1
 fi
 
 # Process is alive, write PID file
@@ -216,7 +216,7 @@ for i in {1..20}; do
       echo "  Proxy log:"
       tail -20 /tmp/mitmproxy.log
     fi
-    exit 1
+    return 1
   fi
   sleep 0.5
 done
@@ -275,91 +275,122 @@ export NO_PROXY="$NO_PROXY_LIST"
 export no_proxy="$NO_PROXY"
 
 # Helper function to add iptables rule only if it doesn't exist
+# Returns 0 on success (rule exists or was added), 1 on failure
 add_iptables_rule() {
     local cmd="$1"
     shift
     # Check if rule exists (using -C instead of -A/-I)
     if ! sudo "$cmd" -C OUTPUT "$@" 2>/dev/null; then
         # Rule doesn't exist, add it
-        sudo "$cmd" -A OUTPUT "$@"
+        if ! sudo "$cmd" -A OUTPUT "$@" 2>&1; then
+            echo "ERROR: Failed to add $cmd rule: $*" >&2
+            return 1
+        fi
     fi
+    return 0
 }
 
 # Helper function to insert iptables rule at beginning only if it doesn't exist
+# Returns 0 on success (rule exists or was inserted), 1 on failure
 insert_iptables_rule() {
     local cmd="$1"
     shift
     # Check if rule exists
     if ! sudo "$cmd" -C OUTPUT "$@" 2>/dev/null; then
         # Rule doesn't exist, insert at beginning
-        sudo "$cmd" -I OUTPUT "$@"
+        if ! sudo "$cmd" -I OUTPUT "$@" 2>&1; then
+            echo "ERROR: Failed to insert $cmd rule: $*" >&2
+            return 1
+        fi
     fi
+    return 0
 }
 
 # Block raw TCP/UDP if configured
 if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
+    IPTABLES_FAILED=false
+
     # IPv4 rules
     # Allow established connections
-    add_iptables_rule iptables -m state --state ESTABLISHED,RELATED -j ACCEPT
+    add_iptables_rule iptables -m state --state ESTABLISHED,RELATED -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow DNS (required for proxy to resolve domains)
-    add_iptables_rule iptables -p udp --dport 53 -j ACCEPT
-    add_iptables_rule iptables -p tcp --dport 53 -j ACCEPT
+    add_iptables_rule iptables -p udp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
+    add_iptables_rule iptables -p tcp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow localhost (proxy runs here)
-    add_iptables_rule iptables -o lo -j ACCEPT
+    add_iptables_rule iptables -o lo -j ACCEPT || IPTABLES_FAILED=true
 
     # Block everything else
-    add_iptables_rule iptables -p tcp -j REJECT --reject-with tcp-reset
-    add_iptables_rule iptables -p udp -j REJECT --reject-with icmp-port-unreachable
+    add_iptables_rule iptables -p tcp -j REJECT --reject-with tcp-reset || IPTABLES_FAILED=true
+    add_iptables_rule iptables -p udp -j REJECT --reject-with icmp-port-unreachable || IPTABLES_FAILED=true
 
     # IPv6 rules (same logic)
     # Allow established connections
-    add_iptables_rule ip6tables -m state --state ESTABLISHED,RELATED -j ACCEPT
+    add_iptables_rule ip6tables -m state --state ESTABLISHED,RELATED -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow DNS
-    add_iptables_rule ip6tables -p udp --dport 53 -j ACCEPT
-    add_iptables_rule ip6tables -p tcp --dport 53 -j ACCEPT
+    add_iptables_rule ip6tables -p udp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
+    add_iptables_rule ip6tables -p tcp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow localhost
-    add_iptables_rule ip6tables -o lo -j ACCEPT
+    add_iptables_rule ip6tables -o lo -j ACCEPT || IPTABLES_FAILED=true
 
     # Block everything else
-    add_iptables_rule ip6tables -p tcp -j REJECT --reject-with tcp-reset
-    add_iptables_rule ip6tables -p udp -j REJECT --reject-with icmp6-port-unreachable
+    add_iptables_rule ip6tables -p tcp -j REJECT --reject-with tcp-reset || IPTABLES_FAILED=true
+    add_iptables_rule ip6tables -p udp -j REJECT --reject-with icmp6-port-unreachable || IPTABLES_FAILED=true
 
-    echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
+    if [ "$IPTABLES_FAILED" = "true" ]; then
+        echo "    ✗ Failed to configure TCP/UDP blocking rules" >&2
+        return 1
+    else
+        echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
+    fi
 fi
 
 # Block private networks if configured
 if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
+    IPTABLES_FAILED=false
+
     # IPv4 private networks
     # Insert at beginning to override later rules
-    insert_iptables_rule iptables -d 10.0.0.0/8 -j REJECT
-    insert_iptables_rule iptables -d 172.16.0.0/12 -j REJECT
-    insert_iptables_rule iptables -d 192.168.0.0/16 -j REJECT
+    insert_iptables_rule iptables -d 10.0.0.0/8 -j REJECT || IPTABLES_FAILED=true
+    insert_iptables_rule iptables -d 172.16.0.0/12 -j REJECT || IPTABLES_FAILED=true
+    insert_iptables_rule iptables -d 192.168.0.0/16 -j REJECT || IPTABLES_FAILED=true
 
     # IPv6 private networks
-    insert_iptables_rule ip6tables -d fc00::/7 -j REJECT      # Unique local addresses
-    insert_iptables_rule ip6tables -d fe80::/10 -j REJECT     # Link-local addresses
+    insert_iptables_rule ip6tables -d fc00::/7 -j REJECT || IPTABLES_FAILED=true      # Unique local addresses
+    insert_iptables_rule ip6tables -d fe80::/10 -j REJECT || IPTABLES_FAILED=true     # Link-local addresses
 
-    echo "    ✓ Private networks blocked (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)"
+    if [ "$IPTABLES_FAILED" = "true" ]; then
+        echo "    ✗ Failed to configure private network blocking rules" >&2
+        return 1
+    else
+        echo "    ✓ Private networks blocked (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)"
+    fi
 fi
 
 # Block metadata services if configured
 if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
+    IPTABLES_FAILED=false
+
     # IPv4 metadata
-    insert_iptables_rule iptables -d 169.254.169.254 -j REJECT
+    insert_iptables_rule iptables -d 169.254.169.254 -j REJECT || IPTABLES_FAILED=true
 
     # IPv6 metadata (fe80::)
-    insert_iptables_rule ip6tables -d fe80::a9fe:a9fe -j REJECT  # IPv6-mapped 169.254.169.254
+    insert_iptables_rule ip6tables -d fe80::a9fe:a9fe -j REJECT || IPTABLES_FAILED=true  # IPv6-mapped 169.254.169.254
 
-    echo "    ✓ Cloud metadata blocked (169.254.169.254)"
+    if [ "$IPTABLES_FAILED" = "true" ]; then
+        echo "    ✗ Failed to configure metadata service blocking rules" >&2
+        return 1
+    else
+        echo "    ✓ Cloud metadata blocked (169.254.169.254)"
+    fi
 fi
 
-# Write runtime context for Claude
-mkdir -p ~/.claude-vm/context
-cat > ~/.claude-vm/context/network-security.txt << EOF
+# Write runtime context for Claude (non-critical, ignore failures)
+if mkdir -p ~/.claude-vm/context 2>/dev/null; then
+    cat > ~/.claude-vm/context/network-security.txt 2>/dev/null << EOF || true
 Network security is enabled with the following policies:
 
 - HTTP/HTTPS traffic: Filtered through in-VM proxy (localhost:8080)
@@ -374,6 +405,7 @@ Network security is enabled with the following policies:
 You can only make HTTP/HTTPS requests. The proxy filters domains according to the policy.
 Raw TCP connections and UDP traffic are blocked for security.
 EOF
+fi
 
 echo ""
 echo "✓ Network security active - Use 'claude-vm network logs' to monitor requests"
