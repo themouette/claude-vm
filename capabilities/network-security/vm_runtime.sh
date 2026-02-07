@@ -131,12 +131,32 @@ export ALLOWED_DOMAINS="${ALLOWED_DOMAINS:-}"
 export BLOCKED_DOMAINS="${BLOCKED_DOMAINS:-}"
 export BYPASS_DOMAINS="${BYPASS_DOMAINS:-}"
 
+# Build mitmproxy ignore_hosts option for true bypass (no TLS interception)
+IGNORE_HOSTS_ARG=""
+if [ -n "${BYPASS_DOMAINS:-}" ]; then
+    # Convert comma-separated domains to Python list format for mitmproxy
+    # "a.com,b.com" -> "['a.com','b.com']"
+    IGNORE_LIST=$(echo "${BYPASS_DOMAINS}" | awk -F',' '{
+        printf "["
+        for (i=1; i<=NF; i++) {
+            gsub(/^[ \t]+|[ \t]+$/, "", $i)  # trim whitespace
+            if ($i != "") {
+                if (i > 1) printf ","
+                printf "'\''%s'\''", $i
+            }
+        }
+        printf "]"
+    }')
+    IGNORE_HOSTS_ARG="--set ignore_hosts=${IGNORE_LIST}"
+fi
+
 # Start mitmproxy in background
 echo "  Starting HTTP/HTTPS filtering proxy..."
 mitmproxy \
   --mode regular@8080 \
   --set confdir=~/.mitmproxy \
   --set block_global=false \
+  $IGNORE_HOSTS_ARG \
   -s /tmp/mitmproxy_filter.py \
   > /tmp/mitmproxy.log 2>&1 &
 
@@ -205,7 +225,12 @@ export HTTP_PROXY="http://localhost:8080"
 export HTTPS_PROXY="http://localhost:8080"
 export http_proxy="$HTTP_PROXY"
 export https_proxy="$HTTPS_PROXY"
-export NO_PROXY="127.0.0.1"
+
+# Build NO_PROXY list: localhost variants only
+# Note: Cannot add bypass_domains here because iptables blocks direct connections.
+# Bypass domains must still go through proxy, but mitmproxy will pass them through.
+NO_PROXY_LIST="127.0.0.1,localhost,::1,[::1]"
+export NO_PROXY="$NO_PROXY_LIST"
 export no_proxy="$NO_PROXY"
 
 # Helper function to add iptables rule only if it doesn't exist
