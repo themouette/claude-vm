@@ -52,7 +52,8 @@ pub fn ensure_template_exists(project: &Project, config: &Config) -> Result<()> 
 
 /// Create a template for the project
 fn create_template(project: &Project, config: &Config) -> Result<()> {
-    crate::commands::setup::execute(project, config)
+    // Auto-setup always installs the agent (no_agent_install = false)
+    crate::commands::setup::execute(project, config, false)
 }
 
 #[cfg(test)]

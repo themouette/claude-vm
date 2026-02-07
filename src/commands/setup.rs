@@ -6,7 +6,7 @@ use crate::scripts::runner;
 use crate::vm::{limactl::LimaCtl, mount, template};
 use std::path::Path;
 
-pub fn execute(project: &Project, config: &Config) -> Result<()> {
+pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Result<()> {
     // Check if Lima is installed
     if !LimaCtl::is_installed() {
         return Err(ClaudeVmError::LimaNotInstalled);
@@ -59,14 +59,18 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Install vm_runtime scripts into template
     capabilities::install_vm_runtime_scripts(project, config)?;
 
-    // Install Claude Code
-    install_claude(project)?;
+    // Install Claude Code (skip if --no-agent-install flag is set)
+    if !no_agent_install {
+        install_claude(project)?;
 
-    // Authenticate Claude
-    authenticate_claude(project)?;
+        // Authenticate Claude
+        authenticate_claude(project)?;
 
-    // Configure all MCP servers from capabilities
-    capabilities::configure_mcp_servers(project, config)?;
+        // Configure all MCP servers from capabilities
+        capabilities::configure_mcp_servers(project, config)?;
+    } else {
+        println!("Skipping Claude Code installation (--no-agent-install flag set)");
+    }
 
     // Run user-defined setup scripts
     run_setup_scripts(project, config)?;

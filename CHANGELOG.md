@@ -4,6 +4,15 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **No agent install flag**: New `--no-agent-install` flag for the `setup` command skips Claude Code agent installation during template creation
+  - **Only available in debug builds** (compiled with `cargo build`) via conditional compilation
+  - Completely removed from release builds - not shown in help and rejected with error if used
+  - Intended for development builds to speed up testing and iteration
+  - Skips agent installation, authentication, and MCP server configuration
+  - Documented in development guide for developer use only
+
 ## [0.4.0] - 2026-02-06
 
 ### Added

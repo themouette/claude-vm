@@ -121,6 +121,11 @@ pub enum Commands {
         /// Setup-only mounts (available during template creation only)
         #[arg(long = "mount")]
         mounts: Vec<String>,
+
+        /// Skip Claude Code agent installation (dev builds only)
+        #[cfg(debug_assertions)]
+        #[arg(long)]
+        no_agent_install: bool,
     },
 
     /// Open a shell or execute a command in an ephemeral VM
