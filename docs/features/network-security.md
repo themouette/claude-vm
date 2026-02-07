@@ -370,6 +370,10 @@ claude-vm network logs --all
 claude-vm network logs -f "github"
 claude-vm network logs -f "blocked"
 claude-vm network logs -f "403"
+
+# Follow logs in real-time (like tail -f)
+claude-vm network logs --follow
+claude-vm network logs --follow -f "github"  # Follow with filter
 ```
 
 ### Test Command
