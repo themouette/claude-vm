@@ -1,5 +1,6 @@
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
+use crate::utils::shell::escape as shell_escape;
 use std::process::Command;
 
 pub fn execute(project: &Project, lines: usize, filter: Option<&str>, all: bool) -> Result<()> {
@@ -46,8 +47,8 @@ pub fn execute(project: &Project, lines: usize, filter: Option<&str>, all: bool)
     let mut read_cmd = String::new();
 
     if let Some(pattern) = filter {
-        // Use grep to filter
-        read_cmd.push_str(&format!("grep -i '{}' /tmp/mitmproxy.log", pattern));
+        // Use grep to filter (pattern is shell-escaped to prevent injection)
+        read_cmd.push_str(&format!("grep -i {} /tmp/mitmproxy.log", shell_escape(pattern)));
     } else {
         read_cmd.push_str("cat /tmp/mitmproxy.log");
     }
