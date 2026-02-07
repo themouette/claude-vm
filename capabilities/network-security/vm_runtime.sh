@@ -141,6 +141,16 @@ export ALLOWED_DOMAINS="${ALLOWED_DOMAINS:-}"
 export BLOCKED_DOMAINS="${BLOCKED_DOMAINS:-}"
 export BYPASS_DOMAINS="${BYPASS_DOMAINS:-}"
 
+# Rotate log file if it exists and is too large (>10MB)
+# Prevents disk space issues from unbounded log growth
+if [ -f /tmp/mitmproxy.log ]; then
+    LOG_SIZE=$(stat -c%s /tmp/mitmproxy.log 2>/dev/null || stat -f%z /tmp/mitmproxy.log 2>/dev/null || echo 0)
+    if [ "$LOG_SIZE" -gt 10485760 ]; then
+        echo "  Rotating large log file ($(($LOG_SIZE / 1048576))MB)"
+        mv /tmp/mitmproxy.log /tmp/mitmproxy.log.old
+    fi
+fi
+
 # Build mitmproxy ignore_hosts option for true bypass (no TLS interception)
 IGNORE_HOSTS_ARG=""
 if [ -n "${BYPASS_DOMAINS:-}" ]; then
