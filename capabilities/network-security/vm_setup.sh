@@ -99,5 +99,39 @@ sudo cp ~/.mitmproxy/mitmproxy-ca-cert.pem \
     /usr/local/share/ca-certificates/mitmproxy-ca.crt
 sudo update-ca-certificates
 
+# WORKAROUND: update-ca-certificates creates symlinks but doesn't always add to bundle
+# Manually append certificate to the system CA bundle to ensure curl trusts it
+
+# Validate source certificate file
+if ! sudo grep -q "BEGIN CERTIFICATE" /usr/local/share/ca-certificates/mitmproxy-ca.crt 2>/dev/null; then
+    echo "ERROR: CA certificate file is invalid or empty"
+    exit 1
+fi
+
+# Validate system bundle exists
+if [ ! -f /etc/ssl/certs/ca-certificates.crt ]; then
+    echo "ERROR: System CA bundle does not exist"
+    exit 1
+fi
+
+echo "  Manually appending mitmproxy CA to system bundle..."
+
+# Extract a unique line from the certificate to check for duplicates
+# Use the second line of the base64 encoded part (unique enough)
+CERT_UNIQUE_LINE=$(sudo cat /usr/local/share/ca-certificates/mitmproxy-ca.crt | grep -A 2 "BEGIN CERTIFICATE" | tail -1)
+
+# Check if this certificate is already in the bundle
+if sudo grep -qF "$CERT_UNIQUE_LINE" /etc/ssl/certs/ca-certificates.crt 2>/dev/null; then
+    CERT_COUNT=$(sudo grep -c "BEGIN CERTIFICATE" /etc/ssl/certs/ca-certificates.crt)
+    echo "  ℹ Certificate already in bundle ($CERT_COUNT certs total)"
+else
+    # Append the certificate
+    CERTS_BEFORE=$(sudo grep -c "BEGIN CERTIFICATE" /etc/ssl/certs/ca-certificates.crt 2>/dev/null || echo "0")
+    echo "" | sudo tee -a /etc/ssl/certs/ca-certificates.crt > /dev/null
+    sudo cat /usr/local/share/ca-certificates/mitmproxy-ca.crt | sudo tee -a /etc/ssl/certs/ca-certificates.crt > /dev/null
+    CERTS_AFTER=$(sudo grep -c "BEGIN CERTIFICATE" /etc/ssl/certs/ca-certificates.crt 2>/dev/null || echo "0")
+    echo "  ✓ Certificate appended to bundle (${CERTS_BEFORE} -> ${CERTS_AFTER} certs)"
+fi
+
 echo "✓ CA certificate installed in system trust store"
 echo "✓ Network security VM setup complete"

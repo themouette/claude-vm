@@ -160,22 +160,32 @@ if [ -f /tmp/mitmproxy.log ]; then
 fi
 
 # Build mitmproxy ignore_hosts option for true bypass (no TLS interception)
+# ignore_hosts expects a REGEX pattern matching "host:port" format
+# Example: "^(localhost|127\.0\.0\.1):.*$"
 IGNORE_HOSTS_ARG=""
 if [ -n "${BYPASS_DOMAINS:-}" ]; then
-    # Convert comma-separated domains to Python list format for mitmproxy
-    # "a.com,b.com" -> "['a.com','b.com']"
-    IGNORE_LIST=$(echo "${BYPASS_DOMAINS}" | awk -F',' '{
-        printf "["
+    # Convert comma-separated domains to regex pattern
+    # "localhost,*.local" -> "^(localhost|.*\.local):.*$"
+    IGNORE_REGEX=$(echo "${BYPASS_DOMAINS}" | awk -F',' '{
+        printf "^("
         for (i=1; i<=NF; i++) {
             gsub(/^[ \t]+|[ \t]+$/, "", $i)  # trim whitespace
             if ($i != "") {
-                if (i > 1) printf ","
-                printf "'\''%s'\''", $i
+                if (i > 1) printf "|"
+
+                # Convert wildcard pattern to regex
+                # *.example.com -> .*\.example\.com
+                gsub(/\*/, ".*", $i)
+
+                # Escape dots for regex
+                gsub(/\./, "\\.", $i)
+
+                printf "%s", $i
             }
         }
-        printf "]"
+        printf "):.*$"
     }')
-    IGNORE_HOSTS_ARG="--set ignore_hosts=${IGNORE_LIST}"
+    IGNORE_HOSTS_ARG="--set ignore_hosts=${IGNORE_REGEX}"
 fi
 
 # Start mitmdump in background (non-interactive version of mitmproxy)
@@ -184,6 +194,7 @@ mitmdump \
   --mode regular@8080 \
   --set confdir=~/.mitmproxy \
   --set block_global=false \
+  --ssl-insecure \
   $IGNORE_HOSTS_ARG \
   -s /tmp/mitmproxy_filter.py \
   > /tmp/mitmproxy.log 2>&1 &
@@ -306,84 +317,87 @@ insert_iptables_rule() {
     return 0
 }
 
-# Block raw TCP/UDP if configured
+# Configure iptables rules
+# Order matters: rules are evaluated top to bottom, first match wins
+# Strategy: Insert high-priority allow rules at the beginning, append blocks at the end
 if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     IPTABLES_FAILED=false
+    PROXY_USER=$(whoami)
 
-    # IPv4 rules
+    # === HIGH PRIORITY ALLOW RULES (evaluated first) ===
+    # These must be at the top so they're evaluated before any blocks
+
+    # IPv4: Allow proxy user (needs to reach external servers even via private gateway)
+    insert_iptables_rule iptables -m owner --uid-owner "$PROXY_USER" -j ACCEPT || IPTABLES_FAILED=true
+
+    # IPv4: Allow systemd-resolved (needs to reach upstream DNS servers)
+    if id systemd-resolve &>/dev/null; then
+        insert_iptables_rule iptables -m owner --uid-owner systemd-resolve -j ACCEPT || IPTABLES_FAILED=true
+    fi
+
+    # IPv6: Allow proxy user
+    insert_iptables_rule ip6tables -m owner --uid-owner "$PROXY_USER" -j ACCEPT || IPTABLES_FAILED=true
+
+    # IPv6: Allow systemd-resolved
+    if id systemd-resolve &>/dev/null; then
+        insert_iptables_rule ip6tables -m owner --uid-owner systemd-resolve -j ACCEPT || IPTABLES_FAILED=true
+    fi
+
+    # === MEDIUM PRIORITY BLOCKS ===
+    # Block specific sensitive destinations (append after allow rules)
+
+    # Block private networks if configured
+    if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
+        add_iptables_rule iptables -d 10.0.0.0/8 -j REJECT || IPTABLES_FAILED=true
+        add_iptables_rule iptables -d 172.16.0.0/12 -j REJECT || IPTABLES_FAILED=true
+        add_iptables_rule iptables -d 192.168.0.0/16 -j REJECT || IPTABLES_FAILED=true
+        add_iptables_rule ip6tables -d fc00::/7 -j REJECT || IPTABLES_FAILED=true      # Unique local
+        add_iptables_rule ip6tables -d fe80::/10 -j REJECT || IPTABLES_FAILED=true     # Link-local
+    fi
+
+    # Block metadata services if configured
+    if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
+        add_iptables_rule iptables -d 169.254.169.254 -j REJECT || IPTABLES_FAILED=true
+        add_iptables_rule ip6tables -d fe80::a9fe:a9fe -j REJECT || IPTABLES_FAILED=true
+    fi
+
+    # === GENERAL ALLOW RULES ===
+    # Allow specific protocols/destinations (appended after specific blocks)
+
     # Allow established connections
     add_iptables_rule iptables -m state --state ESTABLISHED,RELATED -j ACCEPT || IPTABLES_FAILED=true
-
-    # Allow DNS (required for proxy to resolve domains)
-    add_iptables_rule iptables -p udp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
-    add_iptables_rule iptables -p tcp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
-
-    # Allow localhost (proxy runs here)
-    add_iptables_rule iptables -o lo -j ACCEPT || IPTABLES_FAILED=true
-
-    # Block everything else
-    add_iptables_rule iptables -p tcp -j REJECT --reject-with tcp-reset || IPTABLES_FAILED=true
-    add_iptables_rule iptables -p udp -j REJECT --reject-with icmp-port-unreachable || IPTABLES_FAILED=true
-
-    # IPv6 rules (same logic)
-    # Allow established connections
     add_iptables_rule ip6tables -m state --state ESTABLISHED,RELATED -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow DNS
+    add_iptables_rule iptables -p udp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
+    add_iptables_rule iptables -p tcp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
     add_iptables_rule ip6tables -p udp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
     add_iptables_rule ip6tables -p tcp --dport 53 -j ACCEPT || IPTABLES_FAILED=true
 
     # Allow localhost
+    add_iptables_rule iptables -o lo -j ACCEPT || IPTABLES_FAILED=true
     add_iptables_rule ip6tables -o lo -j ACCEPT || IPTABLES_FAILED=true
 
-    # Block everything else
+    # === DEFAULT DENY (evaluated last) ===
+    # Block everything that didn't match above rules
+
+    add_iptables_rule iptables -p tcp -j REJECT --reject-with tcp-reset || IPTABLES_FAILED=true
+    add_iptables_rule iptables -p udp -j REJECT --reject-with icmp-port-unreachable || IPTABLES_FAILED=true
     add_iptables_rule ip6tables -p tcp -j REJECT --reject-with tcp-reset || IPTABLES_FAILED=true
     add_iptables_rule ip6tables -p udp -j REJECT --reject-with icmp6-port-unreachable || IPTABLES_FAILED=true
 
     if [ "$IPTABLES_FAILED" = "true" ]; then
-        echo "    ✗ Failed to configure TCP/UDP blocking rules" >&2
+        echo "    ✗ Failed to configure network security rules" >&2
         return 1
-    else
-        echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
     fi
-fi
 
-# Block private networks if configured
-if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
-    IPTABLES_FAILED=false
-
-    # IPv4 private networks
-    # Insert at beginning to override later rules
-    insert_iptables_rule iptables -d 10.0.0.0/8 -j REJECT || IPTABLES_FAILED=true
-    insert_iptables_rule iptables -d 172.16.0.0/12 -j REJECT || IPTABLES_FAILED=true
-    insert_iptables_rule iptables -d 192.168.0.0/16 -j REJECT || IPTABLES_FAILED=true
-
-    # IPv6 private networks
-    insert_iptables_rule ip6tables -d fc00::/7 -j REJECT || IPTABLES_FAILED=true      # Unique local addresses
-    insert_iptables_rule ip6tables -d fe80::/10 -j REJECT || IPTABLES_FAILED=true     # Link-local addresses
-
-    if [ "$IPTABLES_FAILED" = "true" ]; then
-        echo "    ✗ Failed to configure private network blocking rules" >&2
-        return 1
-    else
+    # Display what was configured
+    echo "    ✓ Raw TCP/UDP blocked (IPv4 and IPv6)"
+    echo "    ✓ Proxy user ($PROXY_USER) allowed to connect"
+    if [ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ]; then
         echo "    ✓ Private networks blocked (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)"
     fi
-fi
-
-# Block metadata services if configured
-if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
-    IPTABLES_FAILED=false
-
-    # IPv4 metadata
-    insert_iptables_rule iptables -d 169.254.169.254 -j REJECT || IPTABLES_FAILED=true
-
-    # IPv6 metadata (fe80::)
-    insert_iptables_rule ip6tables -d fe80::a9fe:a9fe -j REJECT || IPTABLES_FAILED=true  # IPv6-mapped 169.254.169.254
-
-    if [ "$IPTABLES_FAILED" = "true" ]; then
-        echo "    ✗ Failed to configure metadata service blocking rules" >&2
-        return 1
-    else
+    if [ "${BLOCK_METADATA_SERVICES:-true}" = "true" ]; then
         echo "    ✓ Cloud metadata blocked (169.254.169.254)"
     fi
 fi
