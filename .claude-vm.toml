@@ -80,6 +80,17 @@ allowed_domains = [
   "*.debian.org",         # Debian package repositories
   "deb.debian.org",       # Debian packages
   "cli.github.com",       # GitHub CLI
+
+  # Required for development setup
+  "*.fastly.net",                          # Fastly CDN (used by Debian mirrors)
+  "debian.map.fastly.net",                 # Debian CDN
+  "*.cloudflare.com",                      # Cloudflare CDN (used by various services)
+  "*.rust-lang.org",                       # All Rust domains (not just static)
+  "crates.io",                             # Rust package registry
+  "*.crates.io",                           # Crates.io CDN
+  "github-releases.githubusercontent.com", # GitHub releases
+  "objects.githubusercontent.com",         # GitHub objects
+  "raw.githubusercontent.com",             # GitHub raw content
 ]
 
 # Domains that bypass the proxy (for certificate pinning issues)
