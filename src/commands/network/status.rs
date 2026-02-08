@@ -8,7 +8,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     let running_vms = super::find_running_vms(project)?;
 
     if running_vms.is_empty() {
-        println!("Network Security Status");
+        println!("Network Isolation Status");
         println!("═══════════════════════════════════════════════");
         println!();
         println!("Status: NO RUNNING VMS");
@@ -25,19 +25,19 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     // Select VM (prompts user if multiple)
     let instance_name = super::select_vm(&running_vms)?;
 
-    println!("Network Security Status");
+    println!("Network Isolation Status");
     println!("═══════════════════════════════════════════════");
     println!();
     println!("VM: {}", instance_name);
     println!();
 
-    // Check if network security is enabled in config
+    // Check if network isolation is enabled in config
     if !config.security.network.enabled {
         println!("Status: DISABLED");
         println!();
         println!("Network security is not enabled for this project.");
         println!();
-        println!("To enable network security:");
+        println!("To enable network isolation:");
         println!("  1. Add to .claude-vm.toml:");
         println!("     [security.network]");
         println!("     enabled = true");
@@ -45,7 +45,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
         println!("     claude-vm clean && claude-vm setup");
         println!();
         println!("Or use the CLI shortcut:");
-        println!("  claude-vm setup --network-security");
+        println!("  claude-vm setup --network-isolation");
         return Ok(());
     }
 
@@ -60,7 +60,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     if !check_pid.status.success() {
         println!("Status: INACTIVE (Proxy not started)");
         println!();
-        println!("The network security proxy has not been started yet.");
+        println!("The network isolation proxy has not been started yet.");
         println!("It will start automatically when you run:");
         println!("  claude-vm        # Run Claude");
         println!("  claude-vm shell  # Open shell");

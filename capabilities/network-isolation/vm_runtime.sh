@@ -1,21 +1,21 @@
 #!/bin/bash
-# Network security runtime script
+# Network isolation runtime script
 # Starts mitmproxy in the VM and enforces iptables rules
 
-# Check if network security is enabled
-if [ "${NETWORK_SECURITY_ENABLED:-false}" != "true" ]; then
+# Check if network isolation is enabled
+if [ "${NETWORK_ISOLATION_ENABLED:-false}" != "true" ]; then
     return 0
 fi
 
-# Allow runtime override to disable network security (for emergency/debugging)
-# Usage: CLAUDE_VM_NETWORK_SECURITY_DISABLE=true claude-vm shell
-if [ "${CLAUDE_VM_NETWORK_SECURITY_DISABLE:-false}" = "true" ]; then
-    echo "⚠ Network security DISABLED via CLAUDE_VM_NETWORK_SECURITY_DISABLE=true"
+# Allow runtime override to disable network isolation (for emergency/debugging)
+# Usage: CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true claude-vm shell
+if [ "${CLAUDE_VM_NETWORK_ISOLATION_DISABLE:-false}" = "true" ]; then
+    echo "⚠ Network isolation DISABLED via CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true"
     echo "  This is intended for debugging only. Security policies are NOT enforced."
     return 0
 fi
 
-echo "Enforcing network security policies..."
+echo "Enforcing network isolation policies..."
 
 # Note: No cleanup trap because this script is sourced (not executed).
 # The proxy process should live for the entire VM session lifetime.
@@ -387,7 +387,7 @@ if [ "${BLOCK_TCP_UDP:-true}" = "true" ]; then
     add_iptables_rule ip6tables -p udp -j REJECT --reject-with icmp6-port-unreachable || IPTABLES_FAILED=true
 
     if [ "$IPTABLES_FAILED" = "true" ]; then
-        echo "    ✗ Failed to configure network security rules" >&2
+        echo "    ✗ Failed to configure network isolation rules" >&2
         return 1
     fi
 
@@ -404,8 +404,8 @@ fi
 
 # Write runtime context for Claude (non-critical, ignore failures)
 if mkdir -p ~/.claude-vm/context 2>/dev/null; then
-    cat > ~/.claude-vm/context/network-security.txt 2>/dev/null << EOF || true
-Network security is enabled with the following policies:
+    cat > ~/.claude-vm/context/network-isolation.txt 2>/dev/null << EOF || true
+Network isolation is enabled with the following policies:
 
 - HTTP/HTTPS traffic: Filtered through in-VM proxy (localhost:8080)
 - Policy mode: ${POLICY_MODE:-denylist}
@@ -422,4 +422,4 @@ EOF
 fi
 
 echo ""
-echo "✓ Network security active - Use 'claude-vm network logs' to monitor requests"
+echo "✓ Network isolation active - Use 'claude-vm network logs' to monitor requests"

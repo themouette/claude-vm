@@ -23,7 +23,7 @@ Claude VM supports installing various development tools during template creation
 | `gpg`      | GPG agent forwarding, key sync | Signed commits, encryption     |
 | `gh`       | GitHub CLI, authentication     | GitHub operations              |
 
-**Note:** Network security is configured separately via `[security.network]` - see [Network Security](#network-security) below.
+**Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
 ## Installing Tools
 
@@ -408,7 +408,7 @@ $ gh issue list               # List issues
 $ gh api /user                # Make API calls
 ```
 
-### Network Security
+### Network Isolation
 
 **Installs:**
 
@@ -428,7 +428,7 @@ blocked_domains = ["example.com", "*.ads.com"]
 **CLI:**
 
 ```bash
-claude-vm setup --network-security
+claude-vm setup --network-isolation
 ```
 
 **What it does:**
@@ -442,7 +442,7 @@ claude-vm setup --network-security
 **Context provided:**
 
 ```markdown
-Network security is enabled with the following policies:
+Network isolation is enabled with the following policies:
 
 - HTTP/HTTPS traffic: Filtered through in-VM proxy (localhost:8080)
 - Policy mode: denylist
@@ -473,7 +473,7 @@ claude-vm network test api.github.com
 - **Allowlist**: Block all domains except explicitly allowed
 - **Denylist**: Allow all domains except explicitly blocked
 
-**Important:** Network security provides policy enforcement, not security isolation. See [Network Security documentation](network-security.md) for details on security model and limitations.
+**Important:** Network isolation provides policy enforcement, not security isolation. See [Network Isolation documentation](network-isolation.md) for details on security model and limitations.
 
 **Use cases:**
 

@@ -335,9 +335,9 @@ pub fn execute_command_with_runtime_scripts(
     // Export capability-specific environment variables
     entrypoint.push_str("# Export capability environment variables\n");
 
-    // Network security environment variables
+    // Network isolation environment variables
     if config.security.network.enabled {
-        entrypoint.push_str("export NETWORK_SECURITY_ENABLED=true\n");
+        entrypoint.push_str("export NETWORK_ISOLATION_ENABLED=true\n");
         let mode = match config.security.network.mode {
             crate::config::PolicyMode::Allowlist => "allowlist",
             crate::config::PolicyMode::Denylist => "denylist",

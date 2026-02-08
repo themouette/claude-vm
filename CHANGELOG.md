@@ -6,7 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
-- **Network Security Capability**: HTTP/HTTPS filtering and protocol blocking for policy enforcement
+- **Network Isolation Capability**: HTTP/HTTPS filtering and protocol blocking for policy enforcement
   - Transparent proxy with mitmproxy for HTTP/HTTPS traffic filtering
   - Two policy modes: Allowlist (block all except allowed) or Denylist (allow all except blocked)
   - Domain-based filtering with wildcard support (`*.example.com`)
@@ -16,8 +16,8 @@ All notable changes to claude-vm will be documented in this file.
   - CLI commands: `claude-vm network status` and `claude-vm network logs`
   - Multiple ephemeral VM support: automatically detects and selects from running VMs
   - Request statistics tracking with JSON output
-  - Enable with `[security.network] enabled = true` or `--network-security` flag
-  - See `docs/features/network-security.md` for full documentation
+  - Enable with `[security.network] enabled = true` or `--network-isolation` flag
+  - See `docs/features/network-isolation.md` for full documentation
   - **Important**: Provides policy enforcement, not security isolation
 - **No agent install flag**: New `--no-agent-install` flag for the `setup` command skips Claude Code agent installation during template creation
   - **Only available in debug builds** (compiled with `cargo build`) via conditional compilation

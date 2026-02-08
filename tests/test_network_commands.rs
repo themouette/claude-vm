@@ -1,14 +1,14 @@
-/// Integration tests for network security commands
+/// Integration tests for network isolation commands
 ///
 /// Note: Full integration tests (status, logs) require a running VM and are
 /// tested manually. These tests cover the testable logic without VM dependency.
-use claude_vm::config::{Config, NetworkSecurityConfig, PolicyMode, SecurityConfig};
+use claude_vm::config::{Config, NetworkIsolationConfig, PolicyMode, SecurityConfig};
 
 #[test]
 fn test_network_test_command_allowlist_allowed() {
     let config = Config {
         security: SecurityConfig {
-            network: NetworkSecurityConfig {
+            network: NetworkIsolationConfig {
                 enabled: true,
                 mode: PolicyMode::Allowlist,
                 allowed_domains: vec!["example.com".to_string(), "*.api.com".to_string()],
@@ -37,7 +37,7 @@ fn test_network_test_command_allowlist_allowed() {
 fn test_network_test_command_denylist_blocked() {
     let config = Config {
         security: SecurityConfig {
-            network: NetworkSecurityConfig {
+            network: NetworkIsolationConfig {
                 enabled: true,
                 mode: PolicyMode::Denylist,
                 allowed_domains: vec![],
@@ -66,7 +66,7 @@ fn test_network_test_command_denylist_blocked() {
 fn test_network_test_command_bypass_always_allowed() {
     let config = Config {
         security: SecurityConfig {
-            network: NetworkSecurityConfig {
+            network: NetworkIsolationConfig {
                 enabled: true,
                 mode: PolicyMode::Allowlist,
                 allowed_domains: vec![],
@@ -92,7 +92,7 @@ fn test_network_test_command_bypass_always_allowed() {
 fn test_network_test_command_disabled() {
     let config = Config {
         security: SecurityConfig {
-            network: NetworkSecurityConfig {
+            network: NetworkIsolationConfig {
                 enabled: false,
                 mode: PolicyMode::Allowlist,
                 allowed_domains: vec![],

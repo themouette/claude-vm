@@ -1,12 +1,12 @@
 #!/bin/bash
-# Network security VM setup
+# Network isolation VM setup
 # Installs mitmproxy from official binaries and generates CA certificate
 #
 # Note: netcat-openbsd is already installed via packages.system
 
 set -e
 
-echo "Setting up network security in VM..."
+echo "Setting up network isolation in VM..."
 
 # Mitmproxy version to install
 MITMPROXY_VERSION="12.2.1"

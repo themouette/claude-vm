@@ -1,7 +1,7 @@
-/// Integration tests for network security
+/// Integration tests for network isolation
 ///
 /// These tests require limactl to be installed and take significant time.
-/// Run with: cargo test --test test_network_security_integration -- --ignored --test-threads=1
+/// Run with: cargo test --test test_network_isolation_integration -- --ignored --test-threads=1
 ///
 /// Tests are run sequentially (test-threads=1) because they share VM templates.
 use assert_cmd::Command;
@@ -48,10 +48,10 @@ fn run_shell_command(
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_network_security_denylist_mode() {
+fn test_network_isolation_denylist_mode() {
     let config = r#"
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true
@@ -149,10 +149,10 @@ block_metadata_services = true
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_network_security_allowlist_mode() {
+fn test_network_isolation_allowlist_mode() {
     let config = r#"
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true
@@ -247,10 +247,10 @@ block_metadata_services = true
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_network_security_proxy_running() {
+fn test_network_isolation_proxy_running() {
     let config = r#"
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true
@@ -298,10 +298,10 @@ block_metadata_services = true
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_network_security_iptables_configured() {
+fn test_network_isolation_iptables_configured() {
     let config = r#"
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true
@@ -342,10 +342,10 @@ block_metadata_services = true
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_network_security_https_interception() {
+fn test_network_isolation_https_interception() {
     let config = r#"
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true

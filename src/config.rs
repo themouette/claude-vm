@@ -103,7 +103,7 @@ pub struct ToolsConfig {
     pub git: bool,
 
     #[serde(default)]
-    pub network_security: bool,
+    pub network_isolation: bool,
 }
 
 impl ToolsConfig {
@@ -117,7 +117,7 @@ impl ToolsConfig {
             "gpg" => self.gpg,
             "gh" => self.gh,
             "git" => self.git,
-            "network-security" => self.network_security,
+            "network-isolation" => self.network_isolation,
             _ => false,
         }
     }
@@ -132,7 +132,7 @@ impl ToolsConfig {
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
             "git" => self.git = true,
-            "network-security" => self.network_security = true,
+            "network-isolation" => self.network_isolation = true,
             _ => {}
         }
     }
@@ -252,11 +252,11 @@ fn default_claude_args() -> Vec<String> {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SecurityConfig {
     #[serde(default)]
-    pub network: NetworkSecurityConfig,
+    pub network: NetworkIsolationConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkSecurityConfig {
+pub struct NetworkIsolationConfig {
     /// Network policy mode: allowlist or denylist
     #[serde(default = "default_policy_mode")]
     pub mode: PolicyMode,
@@ -290,7 +290,7 @@ pub struct NetworkSecurityConfig {
     pub enabled: bool,
 }
 
-impl Default for NetworkSecurityConfig {
+impl Default for NetworkIsolationConfig {
     fn default() -> Self {
         Self {
             mode: default_policy_mode(),
@@ -305,12 +305,12 @@ impl Default for NetworkSecurityConfig {
     }
 }
 
-impl NetworkSecurityConfig {
+impl NetworkIsolationConfig {
     /// Validate configuration and return warnings (not errors - config is still usable)
     pub fn validate(&self) -> Vec<String> {
         let mut warnings = Vec::new();
 
-        // Skip validation if network security is disabled
+        // Skip validation if network isolation is disabled
         if !self.enabled {
             return warnings;
         }
@@ -318,7 +318,7 @@ impl NetworkSecurityConfig {
         // 1. Check for empty allowlist in allowlist mode
         if self.mode == PolicyMode::Allowlist && self.allowed_domains.is_empty() {
             warnings.push(
-                "Network security is in 'allowlist' mode but no domains are allowed. \
+                "Network isolation is in 'allowlist' mode but no domains are allowed. \
                 This will block ALL network access (only DNS and localhost allowed)."
                     .to_string(),
             );
@@ -556,7 +556,8 @@ impl Config {
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
         self.tools.git = self.tools.git || other.tools.git;
-        self.tools.network_security = self.tools.network_security || other.tools.network_security;
+        self.tools.network_isolation =
+            self.tools.network_isolation || other.tools.network_isolation;
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);
@@ -589,7 +590,7 @@ impl Config {
         self.security.network.enabled =
             self.security.network.enabled || other.security.network.enabled;
 
-        // Mode: other takes precedence if network security is enabled in other
+        // Mode: other takes precedence if network isolation is enabled in other
         if other.security.network.enabled {
             self.security.network.mode = other.security.network.mode;
             self.security.network.block_private_networks =
@@ -720,8 +721,8 @@ impl Config {
             }
         }
 
-        // Network security environment variables
-        if let Ok(enabled) = std::env::var("NETWORK_SECURITY_ENABLED") {
+        // Network isolation environment variables
+        if let Ok(enabled) = std::env::var("NETWORK_ISOLATION_ENABLED") {
             if let Ok(enabled) = enabled.parse::<bool>() {
                 self.security.network.enabled = enabled;
             }
@@ -834,7 +835,7 @@ impl Config {
             gpg,
             gh,
             git,
-            network_security,
+            network_isolation,
             all,
             disk,
             memory,
@@ -852,7 +853,7 @@ impl Config {
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
                 self.tools.enable("git");
-                self.tools.enable("network-security");
+                self.tools.enable("network-isolation");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -875,8 +876,8 @@ impl Config {
                 if *git {
                     self.tools.enable("git");
                 }
-                if *network_security {
-                    self.tools.enable("network-security");
+                if *network_isolation {
+                    self.tools.enable("network-isolation");
                     self.security.network.enabled = true;
                 }
             }
@@ -1362,10 +1363,10 @@ mod tests {
         assert_eq!(merged.context.instructions_file, "~/.global-context.md");
     }
 
-    // Network security configuration tests
+    // Network isolation configuration tests
     #[test]
-    fn test_network_security_default_config() {
-        let config = NetworkSecurityConfig::default();
+    fn test_network_isolation_default_config() {
+        let config = NetworkIsolationConfig::default();
         assert!(!config.enabled);
         assert_eq!(config.mode, PolicyMode::Denylist);
         assert!(config.block_private_networks);
@@ -1377,15 +1378,15 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_validate_disabled() {
-        let config = NetworkSecurityConfig::default();
+    fn test_network_isolation_validate_disabled() {
+        let config = NetworkIsolationConfig::default();
         let warnings = config.validate();
         assert!(warnings.is_empty());
     }
 
     #[test]
-    fn test_network_security_validate_empty_allowlist() {
-        let config = NetworkSecurityConfig {
+    fn test_network_isolation_validate_empty_allowlist() {
+        let config = NetworkIsolationConfig {
             enabled: true,
             mode: PolicyMode::Allowlist,
             ..Default::default()
@@ -1399,47 +1400,47 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_domain_validation_valid() {
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com").is_none());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("api.example.com").is_none());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("*.example.com").is_none());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("my-api.example.com").is_none());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("api2.example.com").is_none());
+    fn test_network_isolation_domain_validation_valid() {
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("api.example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("*.example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("my-api.example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("api2.example.com").is_none());
         // Underscores are valid in DNS (RFC allows them)
-        assert!(NetworkSecurityConfig::validate_domain_pattern("my_api.example.com").is_none());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("_service.example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("my_api.example.com").is_none());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("_service.example.com").is_none());
     }
 
     #[test]
-    fn test_network_security_domain_validation_invalid() {
+    fn test_network_isolation_domain_validation_invalid() {
         // Empty domain
-        assert!(NetworkSecurityConfig::validate_domain_pattern("").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("").is_some());
 
         // Invalid characters
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example$.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example$.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example com").is_some());
 
         // Invalid wildcard usage
-        assert!(NetworkSecurityConfig::validate_domain_pattern("*example.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example.*.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("*.*.example.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("*.").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("*example.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example.*.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("*.*.example.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("*.").is_some());
 
         // Consecutive dots
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example..com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example..com").is_some());
 
         // Leading/trailing dots
-        assert!(NetworkSecurityConfig::validate_domain_pattern(".example.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com.").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern(".example.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example.com.").is_some());
 
         // Leading/trailing hyphens
-        assert!(NetworkSecurityConfig::validate_domain_pattern("-example.com").is_some());
-        assert!(NetworkSecurityConfig::validate_domain_pattern("example.com-").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("-example.com").is_some());
+        assert!(NetworkIsolationConfig::validate_domain_pattern("example.com-").is_some());
     }
 
     #[test]
-    fn test_network_security_domain_conflict_warning() {
-        let config = NetworkSecurityConfig {
+    fn test_network_isolation_domain_conflict_warning() {
+        let config = NetworkIsolationConfig {
             enabled: true,
             allowed_domains: vec!["example.com".to_string()],
             blocked_domains: vec!["example.com".to_string()],
@@ -1453,7 +1454,7 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_merge_enabled() {
+    fn test_network_isolation_merge_enabled() {
         let base = Config::default();
         let mut override_cfg = Config::default();
         override_cfg.security.network.enabled = true;
@@ -1463,7 +1464,7 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_merge_domains() {
+    fn test_network_isolation_merge_domains() {
         let mut base = Config::default();
         base.security.network.allowed_domains = vec!["example.com".to_string()];
         base.security.network.blocked_domains = vec!["bad.com".to_string()];
@@ -1498,7 +1499,7 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_merge_mode() {
+    fn test_network_isolation_merge_mode() {
         let mut base = Config::default();
         base.security.network.mode = PolicyMode::Denylist;
 
@@ -1511,7 +1512,7 @@ mod tests {
     }
 
     #[test]
-    fn test_network_security_merge_blocks() {
+    fn test_network_isolation_merge_blocks() {
         let mut base = Config::default();
         base.security.network.block_tcp_udp = false;
 
@@ -1532,12 +1533,12 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_config_network_security() {
+    fn test_tools_config_network_isolation() {
         let mut tools = ToolsConfig::default();
-        assert!(!tools.is_enabled("network-security"));
+        assert!(!tools.is_enabled("network-isolation"));
 
-        tools.enable("network-security");
-        assert!(tools.is_enabled("network-security"));
-        assert!(tools.network_security);
+        tools.enable("network-isolation");
+        assert!(tools.is_enabled("network-isolation"));
+        assert!(tools.network_isolation);
     }
 }

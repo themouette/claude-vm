@@ -1,4 +1,4 @@
-# Network Security Capability - Security Model
+# Network Isolation Capability - Security Model
 
 ## ⚠️ Important: Security Guarantees and Limitations
 
@@ -182,7 +182,7 @@ blocked_domains = ["evil.com"]
 
 ### Testing Your Configuration
 
-After enabling network security, test your domain patterns:
+After enabling network isolation, test your domain patterns:
 
 ```bash
 # View filtering logs

@@ -1,6 +1,6 @@
-# Network Security
+# Network Isolation
 
-Network security provides HTTP/HTTPS filtering and protocol blocking for policy enforcement. It uses mitmproxy for transparent proxying and iptables for protocol-level controls.
+Network isolation provides HTTP/HTTPS filtering and protocol blocking for policy enforcement. It uses mitmproxy for transparent proxying and iptables for protocol-level controls.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ Network security provides HTTP/HTTPS filtering and protocol blocking for policy 
 
 ## Overview
 
-Network security filters network traffic based on configurable policies:
+Network isolation filters network traffic based on configurable policies:
 
 - **HTTP/HTTPS filtering**: Domain-based allow/block lists
 - **Protocol blocking**: Block raw TCP/UDP connections
@@ -36,7 +36,7 @@ Network security filters network traffic based on configurable policies:
 
 ## Security Model
 
-**⚠️ IMPORTANT**: Network security provides **policy enforcement**, not **security isolation**.
+**⚠️ IMPORTANT**: Network isolation provides **policy enforcement**, not **security isolation**.
 
 ### What It Protects Against
 
@@ -69,7 +69,7 @@ Network security filters network traffic based on configurable policies:
 
 ### Threat Model
 
-Network security is designed for:
+Network isolation is designed for:
 - **Preventing accidents**: Stop well-intentioned code from making mistakes
 - **Policy enforcement**: Ensure compliance with organizational rules
 - **Defense in depth**: Additional layer on top of VM isolation
@@ -79,14 +79,14 @@ It is NOT designed for:
 - **Untrusted code execution**: Use proper isolation
 - **Security research**: Requires stronger isolation
 
-See `capabilities/network-security/SECURITY.md` for detailed security analysis.
+See `capabilities/network-isolation/SECURITY.md` for detailed security analysis.
 
 ## Quick Start
 
 ### Enable During Setup
 
 ```bash
-claude-vm setup --network-security
+claude-vm setup --network-isolation
 ```
 
 ### Enable via Configuration
@@ -95,7 +95,7 @@ Add to `.claude-vm.toml`:
 
 ```toml
 [tools]
-network_security = true
+network_isolation = true
 
 [security.network]
 enabled = true
@@ -144,7 +144,7 @@ blocked_domains = ["bad.com", "*.ads.com"]
 
 ```toml
 [security.network]
-# Enable network security filtering
+# Enable network isolation filtering
 enabled = true
 
 # Policy mode: "allowlist" or "denylist"
@@ -340,7 +340,7 @@ block_metadata_services = false
 
 ### Status Command
 
-Show current network security status:
+Show current network isolation status:
 
 ```bash
 claude-vm network status
@@ -525,13 +525,13 @@ limactl shell <vm-name> ls -lh /tmp/mitmproxy.log*
 Temporarily disable without rebuilding VM:
 
 ```bash
-claude-vm shell --env CLAUDE_VM_NETWORK_SECURITY_DISABLE=true
+claude-vm shell --env CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true
 ```
 
 Or with --inherit-env:
 
 ```bash
-CLAUDE_VM_NETWORK_SECURITY_DISABLE=true claude-vm shell --inherit-env
+CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true claude-vm shell --inherit-env
 ```
 
 ## Limitations
@@ -636,7 +636,7 @@ allowed_domains = [
 
 ## Next Steps
 
-- **[Security Model](../capabilities/network-security/SECURITY.md)** - Detailed security analysis
+- **[Security Model](../capabilities/network-isolation/SECURITY.md)** - Detailed security analysis
 - **[Configuration](../configuration.md)** - Full configuration reference
 - **[Tools](tools.md)** - Other available capabilities
 - **[Troubleshooting](../advanced/troubleshooting.md)** - Advanced debugging

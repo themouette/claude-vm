@@ -100,7 +100,7 @@ fn show() -> Result<()> {
     println!("  gpg: {}", config.tools.gpg);
     println!("  gh: {}", config.tools.gh);
     println!("  git: {}", config.tools.git);
-    println!("  network_security: {}", config.tools.network_security);
+    println!("  network_isolation: {}", config.tools.network_isolation);
 
     if !config.mounts.is_empty() {
         println!("\nMounts:");
@@ -139,7 +139,7 @@ fn show() -> Result<()> {
     }
 
     if config.security.network.enabled {
-        println!("\nNetwork Security:");
+        println!("\nNetwork Isolation:");
         println!("  enabled: {}", config.security.network.enabled);
         println!("  mode: {}", config.security.network.mode.as_str());
         println!(

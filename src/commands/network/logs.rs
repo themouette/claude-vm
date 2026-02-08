@@ -15,7 +15,7 @@ pub fn execute(
 
     if running_vms.is_empty() {
         eprintln!("No ephemeral VMs are currently running for this project.");
-        eprintln!("Network security logs are only available while a VM is running.");
+        eprintln!("Network isolation logs are only available while a VM is running.");
         eprintln!();
         eprintln!("Start a VM with:");
         eprintln!("  claude-vm        # Run Claude");
@@ -26,17 +26,17 @@ pub fn execute(
     // Select VM (prompts user if multiple)
     let instance_name = super::select_vm(&running_vms)?;
 
-    // Check if network security is enabled by checking if the log file exists
+    // Check if network isolation is enabled by checking if the log file exists
     let check_log = Command::new("limactl")
         .args(["shell", &instance_name, "test", "-f", "/tmp/mitmproxy.log"])
         .output()
         .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to check log file: {}", e)))?;
 
     if !check_log.status.success() {
-        eprintln!("Network security logs not found.");
+        eprintln!("Network isolation logs not found.");
         eprintln!();
-        eprintln!("Network security may not be enabled for this VM.");
-        eprintln!("To enable network security:");
+        eprintln!("Network isolation may not be enabled for this VM.");
+        eprintln!("To enable network isolation:");
         eprintln!("  1. Add to .claude-vm.toml:");
         eprintln!("     [security.network]");
         eprintln!("     enabled = true");
@@ -83,7 +83,7 @@ pub fn execute(
     // Execute the command
     if follow {
         // Follow mode: stream output in real-time
-        println!("Network Security Logs (following)");
+        println!("Network Isolation Logs (following)");
         println!("═════════════════════════════════════════════════════════════");
         println!("VM: {}", instance_name);
         if let Some(pattern) = filter {
@@ -126,14 +126,14 @@ pub fn execute(
             } else {
                 println!("No logs available yet.");
                 println!();
-                println!("Network security is enabled but no requests have been logged.");
+                println!("Network isolation is enabled but no requests have been logged.");
                 println!(
                     "The proxy may still be starting up, or no network requests have been made."
                 );
             }
         } else {
             // Print header
-            println!("Network Security Logs");
+            println!("Network Isolation Logs");
             println!("═════════════════════════════════════════════════════════════");
             println!("VM: {}", instance_name);
             if let Some(pattern) = filter {

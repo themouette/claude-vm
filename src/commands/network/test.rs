@@ -1,20 +1,20 @@
 use crate::config::{Config, PolicyMode};
 use crate::error::Result;
 
-/// Test if a domain would be allowed or blocked by network security policies
+/// Test if a domain would be allowed or blocked by network isolation policies
 pub fn execute(config: &Config, domain: &str) -> Result<()> {
     println!("Testing domain: {}", domain);
     println!("════════════════════════════════════════════════════════════");
     println!();
 
-    // Check if network security is enabled
+    // Check if network isolation is enabled
     if !config.security.network.enabled {
         println!("Status: Network security is DISABLED");
         println!();
         println!("Network security is not enabled for this project.");
         println!("The domain would be allowed (no filtering active).");
         println!();
-        println!("To enable network security:");
+        println!("To enable network isolation:");
         println!("  1. Add to .claude-vm.toml:");
         println!("     [security.network]");
         println!("     enabled = true");

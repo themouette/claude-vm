@@ -165,9 +165,9 @@ Each enabled tool automatically provides context to Claude via `~/.claude/CLAUDE
 
 ## Security Configuration
 
-Configure network security policies for HTTP/HTTPS filtering and protocol blocking.
+Configure network isolation policies for HTTP/HTTPS filtering and protocol blocking.
 
-### Network Security
+### Network Isolation
 
 ```toml
 [security.network]
@@ -179,7 +179,7 @@ blocked_domains = ["example.com", "*.ads.com"]
 Enable with CLI flag:
 
 ```bash
-claude-vm setup --network-security
+claude-vm setup --network-isolation
 ```
 
 ### Policy Modes
@@ -226,7 +226,7 @@ block_private_networks = true
 block_metadata_services = true
 ```
 
-See [Network Security documentation](features/network-security.md) for detailed configuration and usage.
+See [Network Isolation documentation](features/network-isolation.md) for detailed configuration and usage.
 
 ## Custom Packages
 

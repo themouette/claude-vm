@@ -102,9 +102,9 @@ pub enum Commands {
         #[arg(long)]
         git: bool,
 
-        /// Enable network security filtering
+        /// Enable network isolation
         #[arg(long)]
-        network_security: bool,
+        network_isolation: bool,
 
         /// Install all tools
         #[arg(long)]
@@ -198,7 +198,7 @@ pub enum Commands {
         yes: bool,
     },
 
-    /// Network security commands
+    /// Network isolation commands
     Network {
         #[command(subcommand)]
         command: NetworkCommands,
@@ -207,10 +207,10 @@ pub enum Commands {
 
 #[derive(Subcommand, Debug)]
 pub enum NetworkCommands {
-    /// Show network security status
+    /// Show network isolation status
     Status,
 
-    /// View network security logs
+    /// View network isolation logs
     Logs {
         /// Number of lines to show (default: 50)
         #[arg(short = 'n', long, default_value = "50")]

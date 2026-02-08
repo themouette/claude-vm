@@ -91,8 +91,8 @@ impl CapabilityRegistry {
                 include_str!("../../capabilities/git/capability.toml"),
             ),
             (
-                "network-security",
-                include_str!("../../capabilities/network-security/capability.toml"),
+                "network-isolation",
+                include_str!("../../capabilities/network-isolation/capability.toml"),
             ),
         ];
 
@@ -135,8 +135,8 @@ impl CapabilityRegistry {
 
     /// Check if a capability is enabled in the config
     fn is_enabled(&self, id: &str, config: &Config) -> bool {
-        // Special case: network-security is configured via [security.network].enabled
-        if id == "network-security" {
+        // Special case: network-isolation is configured via [security.network].enabled
+        if id == "network-isolation" {
             return config.security.network.enabled;
         }
 

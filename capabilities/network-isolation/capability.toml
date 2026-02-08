@@ -1,6 +1,6 @@
 [capability]
-id = "network-security"
-name = "Network security filtering"
+id = "network-isolation"
+name = "Network isolation"
 description = "HTTP/HTTPS filtering proxy with domain policies and TCP/UDP blocking"
 
 # System packages
