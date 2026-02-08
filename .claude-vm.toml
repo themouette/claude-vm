@@ -4,7 +4,7 @@ gpg = true
 gh = true
 # Do not forward ssh agent, git interactions with remote repository should be
 # done from host
-ssh = false
+# ssh = false
 
 [setup]
 # ADDITIONAL setup scripts (run during template creation)
@@ -58,3 +58,27 @@ If something is missing, run this script again.
 SSH agent is not available in the VM so you cannot interact with the remote
 repository, but you can use `gh` to open and read pull requests or issues.
 """
+
+[security.network]
+enabled = true
+mode = "allowlist" # Block everything except allowed domains
+
+# Domains to allow (for testing allowlist mode)
+allowed_domains = [
+  "api.anthropic.com",
+  "*.github.com",      # Allow all GitHub subdomains
+  "github.com",        # Allow github.com
+  "static.rust-lang.org", # Rust installation
+  "sh.rustup.rs",      # Rustup installation script
+  "*.debian.org",      # Debian package repositories
+  "deb.debian.org",    # Debian packages
+  "cli.github.com",    # GitHub CLI
+]
+
+# Domains that bypass the proxy (for certificate pinning issues)
+bypass_domains = ["localhost", "127.0.0.1", "*.local"]
+
+# Protocol blocking (recommended for security)
+block_tcp_udp = true           # Block raw TCP/UDP connections
+block_private_networks = true  # Block 10.0.0.0/8, 192.168.0.0/16, etc.
+block_metadata_services = true # Block 169.254.169.254 (cloud metadata)
