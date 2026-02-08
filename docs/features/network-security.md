@@ -352,6 +352,11 @@ claude-vm network status
 - Protocol blocks enabled
 - Statistics (requests allowed/blocked)
 
+**Multiple VMs:**
+- Automatically detects all running ephemeral VMs for the project
+- Prompts to select a VM if multiple are running
+- Shows which VM the status is for
+
 ### Logs Command
 
 View mitmproxy logs:
@@ -375,6 +380,11 @@ claude-vm network logs -f "403"
 claude-vm network logs --follow
 claude-vm network logs --follow -f "github"  # Follow with filter
 ```
+
+**Multiple VMs:**
+- Automatically detects all running ephemeral VMs for the project
+- Prompts to select a VM if multiple are running
+- Displays the VM name in the log header
 
 ### Test Command
 

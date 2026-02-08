@@ -4,10 +4,31 @@ use crate::project::Project;
 use std::process::Command;
 
 pub fn execute(project: &Project, config: &Config) -> Result<()> {
-    let instance_name = project.template_name();
+    // Find running ephemeral VMs
+    let running_vms = super::find_running_vms(project)?;
+
+    if running_vms.is_empty() {
+        println!("Network Security Status");
+        println!("═══════════════════════════════════════════════");
+        println!();
+        println!("Status: NO RUNNING VMS");
+        println!();
+        println!("No ephemeral VMs are currently running for this project.");
+        println!("Network security status is only available while a VM is running.");
+        println!();
+        println!("Start a VM with:");
+        println!("  claude-vm        # Run Claude");
+        println!("  claude-vm shell  # Open shell");
+        return Ok(());
+    }
+
+    // Select VM (prompts user if multiple)
+    let instance_name = super::select_vm(&running_vms)?;
 
     println!("Network Security Status");
     println!("═══════════════════════════════════════════════");
+    println!();
+    println!("VM: {}", instance_name);
     println!();
 
     // Check if network security is enabled in config
@@ -28,29 +49,9 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
         return Ok(());
     }
 
-    // Check if VM is running
-    let status_output = Command::new("limactl")
-        .args(["list", "--format", "{{.Status}}", instance_name])
-        .output()
-        .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to check VM status: {}", e)))?;
-
-    let vm_status = String::from_utf8_lossy(&status_output.stdout)
-        .trim()
-        .to_string();
-
-    if vm_status != "Running" {
-        println!("Status: INACTIVE (VM not running)");
-        println!();
-        println!("VM Status: {}", vm_status);
-        println!();
-        println!("Start the VM first with:");
-        println!("  claude-vm shell");
-        return Ok(());
-    }
-
     // Check if proxy process is running
     let check_pid = Command::new("limactl")
-        .args(["shell", instance_name, "test", "-f", "/tmp/mitmproxy.pid"])
+        .args(["shell", &instance_name, "test", "-f", "/tmp/mitmproxy.pid"])
         .output()
         .map_err(|e| {
             ClaudeVmError::CommandFailed(format!("Failed to check proxy status: {}", e))
@@ -68,7 +69,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Read proxy PID
     let pid_output = Command::new("limactl")
-        .args(["shell", instance_name, "cat", "/tmp/mitmproxy.pid"])
+        .args(["shell", &instance_name, "cat", "/tmp/mitmproxy.pid"])
         .output()
         .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to read proxy PID: {}", e)))?;
 
@@ -78,7 +79,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Check if proxy process is actually running
     let check_running = Command::new("limactl")
-        .args(["shell", instance_name, "kill", "-0", &proxy_pid])
+        .args(["shell", &instance_name, "kill", "-0", &proxy_pid])
         .output()
         .map_err(|e| {
             ClaudeVmError::CommandFailed(format!("Failed to check proxy process: {}", e))
@@ -107,7 +108,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
     let uptime_output = Command::new("limactl")
         .args([
             "shell",
-            instance_name,
+            &instance_name,
             "ps",
             "-p",
             &proxy_pid,
@@ -184,7 +185,7 @@ pub fn execute(project: &Project, config: &Config) -> Result<()> {
 
     // Try to read statistics if available
     let stats_output = Command::new("limactl")
-        .args(["shell", instance_name, "cat", "/tmp/mitmproxy_stats.json"])
+        .args(["shell", &instance_name, "cat", "/tmp/mitmproxy_stats.json"])
         .output();
 
     if let Ok(output) = stats_output {

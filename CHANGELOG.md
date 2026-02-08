@@ -14,6 +14,7 @@ All notable changes to claude-vm will be documented in this file.
   - Protocol blocking: raw TCP/UDP, private networks, cloud metadata services
   - Full IPv6 support with iptables and ip6tables rules
   - CLI commands: `claude-vm network status` and `claude-vm network logs`
+  - Multiple ephemeral VM support: automatically detects and selects from running VMs
   - Request statistics tracking with JSON output
   - Enable with `[security.network] enabled = true` or `--network-security` flag
   - See `docs/features/network-security.md` for full documentation

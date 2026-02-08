@@ -10,27 +10,25 @@ pub fn execute(
     all: bool,
     follow: bool,
 ) -> Result<()> {
-    let instance_name = project.template_name();
+    // Find running ephemeral VMs
+    let running_vms = super::find_running_vms(project)?;
 
-    // Check if VM is running
-    let status_output = Command::new("limactl")
-        .args(["list", "--format", "{{.Status}}", instance_name])
-        .output()
-        .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to check VM status: {}", e)))?;
-
-    let status = String::from_utf8_lossy(&status_output.stdout)
-        .trim()
-        .to_string();
-
-    if status != "Running" {
-        eprintln!("Error: VM is not running (status: {})", status);
-        eprintln!("Start the VM first with: claude-vm shell");
-        return Err(ClaudeVmError::CommandFailed("VM not running".to_string()));
+    if running_vms.is_empty() {
+        eprintln!("No ephemeral VMs are currently running for this project.");
+        eprintln!("Network security logs are only available while a VM is running.");
+        eprintln!();
+        eprintln!("Start a VM with:");
+        eprintln!("  claude-vm        # Run Claude");
+        eprintln!("  claude-vm shell  # Open shell");
+        return Err(ClaudeVmError::CommandFailed("No running VMs".to_string()));
     }
+
+    // Select VM (prompts user if multiple)
+    let instance_name = super::select_vm(&running_vms)?;
 
     // Check if network security is enabled by checking if the log file exists
     let check_log = Command::new("limactl")
-        .args(["shell", instance_name, "test", "-f", "/tmp/mitmproxy.log"])
+        .args(["shell", &instance_name, "test", "-f", "/tmp/mitmproxy.log"])
         .output()
         .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to check log file: {}", e)))?;
 
@@ -87,6 +85,7 @@ pub fn execute(
         // Follow mode: stream output in real-time
         println!("Network Security Logs (following)");
         println!("═════════════════════════════════════════════════════════════");
+        println!("VM: {}", instance_name);
         if let Some(pattern) = filter {
             println!("Filter: {}", pattern);
         }
@@ -95,7 +94,7 @@ pub fn execute(
         println!();
 
         let status = Command::new("limactl")
-            .args(["shell", instance_name, "sh", "-c", &read_cmd])
+            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
             .status()
             .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to follow logs: {}", e)))?;
 
@@ -107,7 +106,7 @@ pub fn execute(
     } else {
         // Static mode: read all at once
         let output = Command::new("limactl")
-            .args(["shell", instance_name, "sh", "-c", &read_cmd])
+            .args(["shell", &instance_name, "sh", "-c", &read_cmd])
             .output()
             .map_err(|e| ClaudeVmError::CommandFailed(format!("Failed to read logs: {}", e)))?;
 
@@ -136,6 +135,7 @@ pub fn execute(
             // Print header
             println!("Network Security Logs");
             println!("═════════════════════════════════════════════════════════════");
+            println!("VM: {}", instance_name);
             if let Some(pattern) = filter {
                 println!("Filter: {}", pattern);
             }
