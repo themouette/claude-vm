@@ -101,9 +101,6 @@ claude-vm setup --network-isolation
 Add to `.claude-vm.toml`:
 
 ```toml
-[tools]
-network_isolation = true
-
 [security.network]
 enabled = true
 mode = "denylist"
