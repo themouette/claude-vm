@@ -100,6 +100,7 @@ fn show() -> Result<()> {
     println!("  gpg: {}", config.tools.gpg);
     println!("  gh: {}", config.tools.gh);
     println!("  git: {}", config.tools.git);
+    println!("  network_isolation: {}", config.tools.network_isolation);
 
     if !config.mounts.is_empty() {
         println!("\nMounts:");
@@ -135,6 +136,33 @@ fn show() -> Result<()> {
     if !config.context.instructions_file.is_empty() {
         println!("\nContext Instructions File:");
         println!("  {}", config.context.instructions_file);
+    }
+
+    if config.security.network.enabled {
+        println!("\nNetwork Isolation:");
+        println!("  enabled: {}", config.security.network.enabled);
+        println!("  mode: {}", config.security.network.mode.as_str());
+        println!(
+            "  allowed_domains: {} pattern(s)",
+            config.security.network.allowed_domains.len()
+        );
+        println!(
+            "  blocked_domains: {} pattern(s)",
+            config.security.network.blocked_domains.len()
+        );
+        println!(
+            "  bypass_domains: {} pattern(s)",
+            config.security.network.bypass_domains.len()
+        );
+        println!("  block_tcp_udp: {}", config.security.network.block_tcp_udp);
+        println!(
+            "  block_private_networks: {}",
+            config.security.network.block_private_networks
+        );
+        println!(
+            "  block_metadata_services: {}",
+            config.security.network.block_metadata_services
+        );
     }
 
     println!("\nUpdate Check:");

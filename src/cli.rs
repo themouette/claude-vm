@@ -102,6 +102,10 @@ pub enum Commands {
         #[arg(long)]
         git: bool,
 
+        /// Enable network isolation
+        #[arg(long)]
+        network_isolation: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,
@@ -192,5 +196,42 @@ pub enum Commands {
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
         yes: bool,
+    },
+
+    /// Network isolation commands
+    Network {
+        #[command(subcommand)]
+        command: NetworkCommands,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum NetworkCommands {
+    /// Show network isolation status
+    Status,
+
+    /// View network isolation logs
+    Logs {
+        /// Number of lines to show (default: 50)
+        #[arg(short = 'n', long, default_value = "50")]
+        lines: usize,
+
+        /// Filter logs by pattern
+        #[arg(short = 'f', long)]
+        filter: Option<String>,
+
+        /// Show all logs (no line limit)
+        #[arg(long)]
+        all: bool,
+
+        /// Follow log output in real-time (like tail -f)
+        #[arg(long)]
+        follow: bool,
+    },
+
+    /// Test if a domain would be allowed or blocked
+    Test {
+        /// Domain to test (e.g., example.com or *.example.com)
+        domain: String,
     },
 }

@@ -332,6 +332,48 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# Create context directory for runtime scripts\n");
     entrypoint.push_str("mkdir -p ~/.claude-vm/context\n\n");
 
+    // Export capability-specific environment variables
+    entrypoint.push_str("# Export capability environment variables\n");
+
+    // Network isolation environment variables
+    if config.security.network.enabled {
+        entrypoint.push_str("export NETWORK_ISOLATION_ENABLED=true\n");
+        let mode = match config.security.network.mode {
+            crate::config::PolicyMode::Allowlist => "allowlist",
+            crate::config::PolicyMode::Denylist => "denylist",
+        };
+        entrypoint.push_str(&format!("export POLICY_MODE={}\n", mode));
+
+        if !config.security.network.allowed_domains.is_empty() {
+            let allowed = config.security.network.allowed_domains.join(",");
+            entrypoint.push_str(&format!("export ALLOWED_DOMAINS='{}'\n", allowed));
+        }
+
+        if !config.security.network.blocked_domains.is_empty() {
+            let blocked = config.security.network.blocked_domains.join(",");
+            entrypoint.push_str(&format!("export BLOCKED_DOMAINS='{}'\n", blocked));
+        }
+
+        if !config.security.network.bypass_domains.is_empty() {
+            let bypass = config.security.network.bypass_domains.join(",");
+            entrypoint.push_str(&format!("export BYPASS_DOMAINS='{}'\n", bypass));
+        }
+
+        entrypoint.push_str(&format!(
+            "export BLOCK_TCP_UDP={}\n",
+            config.security.network.block_tcp_udp
+        ));
+        entrypoint.push_str(&format!(
+            "export BLOCK_PRIVATE_NETWORKS={}\n",
+            config.security.network.block_private_networks
+        ));
+        entrypoint.push_str(&format!(
+            "export BLOCK_METADATA_SERVICES={}\n",
+            config.security.network.block_metadata_services
+        ));
+    }
+    entrypoint.push('\n');
+
     // Source capability runtime scripts first
     entrypoint.push_str("# Source capability runtime scripts\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));

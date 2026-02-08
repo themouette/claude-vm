@@ -163,6 +163,71 @@ Each enabled tool automatically provides context to Claude via `~/.claude/CLAUDE
 - Availability status
 - Usage instructions
 
+## Security Configuration
+
+Configure network isolation policies for HTTP/HTTPS filtering and protocol blocking.
+
+### Network Isolation
+
+```toml
+[security.network]
+enabled = true
+mode = "denylist"  # or "allowlist"
+blocked_domains = ["example.com", "*.ads.com"]
+```
+
+Enable with CLI flag:
+
+```bash
+claude-vm setup --network-isolation
+```
+
+### Policy Modes
+
+**Allowlist mode** - Block all except allowed:
+
+```toml
+[security.network]
+enabled = true
+mode = "allowlist"
+allowed_domains = [
+  "github.com",
+  "*.api.company.com",
+]
+```
+
+**Denylist mode** - Allow all except blocked:
+
+```toml
+[security.network]
+enabled = true
+mode = "denylist"
+blocked_domains = [
+  "malicious.com",
+  "*.ads.com",
+]
+```
+
+### Full Configuration
+
+```toml
+[security.network]
+enabled = true
+mode = "denylist"
+
+# Domain filtering
+allowed_domains = ["github.com", "*.api.com"]
+blocked_domains = ["bad.com", "*.ads.com"]
+bypass_domains = ["*.internal.com"]  # No TLS interception
+
+# Protocol blocking (all default to true)
+block_tcp_udp = true
+block_private_networks = true
+block_metadata_services = true
+```
+
+See [Network Isolation documentation](features/network-isolation.md) for detailed configuration and usage.
+
 ## Custom Packages
 
 Install additional system packages.
