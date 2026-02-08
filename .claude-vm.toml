@@ -57,6 +57,13 @@ If something is missing, run this script again.
 
 SSH agent is not available in the VM so you cannot interact with the remote
 repository, but you can use `gh` to open and read pull requests or issues.
+
+## Testing
+
+To test behavior changes you can run the setup command with --no-agent-install.
+You should also remove the gh capability to avoid having to login interactively.
+
+With the new template you can run the shell command to check your changes.
 """
 
 [security.network]
@@ -66,13 +73,13 @@ mode = "allowlist" # Block everything except allowed domains
 # Domains to allow (for testing allowlist mode)
 allowed_domains = [
   "api.anthropic.com",
-  "*.github.com",      # Allow all GitHub subdomains
-  "github.com",        # Allow github.com
+  "*.github.com",         # Allow all GitHub subdomains
+  "github.com",           # Allow github.com
   "static.rust-lang.org", # Rust installation
-  "sh.rustup.rs",      # Rustup installation script
-  "*.debian.org",      # Debian package repositories
-  "deb.debian.org",    # Debian packages
-  "cli.github.com",    # GitHub CLI
+  "sh.rustup.rs",         # Rustup installation script
+  "*.debian.org",         # Debian package repositories
+  "deb.debian.org",       # Debian packages
+  "cli.github.com",       # GitHub CLI
 ]
 
 # Domains that bypass the proxy (for certificate pinning issues)
