@@ -4,6 +4,7 @@ pub mod config;
 pub mod helpers;
 pub mod info;
 pub mod list;
+pub mod network;
 pub mod run;
 pub mod setup;
 pub mod shell;

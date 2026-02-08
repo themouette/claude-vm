@@ -1,0 +1,18 @@
+[capability]
+id = "network-security"
+name = "Network security filtering"
+description = "HTTP/HTTPS filtering proxy with domain policies and TCP/UDP blocking"
+
+# System packages
+[packages]
+system = [
+    "netcat-openbsd",  # For checking if proxy is listening
+]
+
+# VM setup installs mitmproxy and CA certificate
+[vm_setup]
+script_file = "vm_setup.sh"
+
+# Runtime enforces iptables rules and proxy configuration
+[vm_runtime]
+script_file = "vm_runtime.sh"

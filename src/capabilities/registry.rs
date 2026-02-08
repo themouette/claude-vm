@@ -90,6 +90,10 @@ impl CapabilityRegistry {
                 "git",
                 include_str!("../../capabilities/git/capability.toml"),
             ),
+            (
+                "network-security",
+                include_str!("../../capabilities/network-security/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {
@@ -131,6 +135,11 @@ impl CapabilityRegistry {
 
     /// Check if a capability is enabled in the config
     fn is_enabled(&self, id: &str, config: &Config) -> bool {
+        // Special case: network-security is configured via [security.network].enabled
+        if id == "network-security" {
+            return config.security.network.enabled;
+        }
+
         config.tools.is_enabled(id)
     }
 
