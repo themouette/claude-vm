@@ -24,6 +24,7 @@ Each run starts from the same clean template and automatically cleans up when do
 **VM isolation is the only safe way to run Claude with `--dangerously-skip-permissions`.** Even if Claude executes unintended commands, the blast radius is limited to the disposable VM.
 
 Claude VM runs each session in an isolated Linux VM that:
+
 - Only mounts the current project directory
 - Has its own filesystem, network stack, and process space
 - Is automatically destroyed after each session
@@ -132,6 +133,7 @@ claude-vm clean
 - **[Templates](docs/features/templates.md)** - How template VMs work
 - **[Runtime Scripts](docs/features/runtime-scripts.md)** - Runtime scripts and context contribution
 - **[Custom Mounts](docs/features/custom-mounts.md)** - Mount additional directories
+- **[Network Isolation](docs/features/network-isolation.md)** - Prevent access to network
 - **[Tools](docs/features/tools.md)** - Available tools (Docker, Node.js, Python, etc.)
 
 ### Advanced Topics

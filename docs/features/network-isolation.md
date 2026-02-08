@@ -41,16 +41,19 @@ Network isolation filters network traffic based on configurable policies:
 ### What It Protects Against
 
 ✅ **Accidental data leaks**
+
 - Claude accidentally calling wrong APIs
 - Unintended connections to internal services
 - Mistakes in generated code
 
 ✅ **Policy violations by well-behaved code**
+
 - Enforcing allowed domain lists
 - Restricting API access
 - Preventing access to private networks
 
 ✅ **Compliance and auditing**
+
 - Logging all HTTP/HTTPS traffic
 - Recording domain access patterns
 - Demonstrating security controls
@@ -58,11 +61,13 @@ Network isolation filters network traffic based on configurable policies:
 ### What It Does NOT Protect Against
 
 ❌ **Determined attackers or malicious code**
+
 - Can bypass proxy settings
 - Can exploit vulnerabilities
 - Can use alternative protocols
 
 ❌ **Complete network isolation**
+
 - Not a firewall replacement
 - Not suitable for untrusted code
 - Not security sandboxing
@@ -70,11 +75,13 @@ Network isolation filters network traffic based on configurable policies:
 ### Threat Model
 
 Network isolation is designed for:
+
 - **Preventing accidents**: Stop well-intentioned code from making mistakes
 - **Policy enforcement**: Ensure compliance with organizational rules
 - **Defense in depth**: Additional layer on top of VM isolation
 
 It is NOT designed for:
+
 - **Malware analysis**: Use dedicated sandboxes
 - **Untrusted code execution**: Use proper isolation
 - **Security research**: Requires stronger isolation
@@ -152,6 +159,7 @@ mode = "denylist"
 
 # Allowed domains (for allowlist mode or denylist exceptions)
 allowed_domains = [
+  "api.anthropic.com", # Allow Claude API
   "github.com",
   "*.api.com",        # Wildcard: matches api.api.com, test.api.com
 ]
@@ -189,17 +197,20 @@ Block everything except explicitly allowed domains.
 [security.network]
 mode = "allowlist"
 allowed_domains = [
+  "api.anthropic.com", # Allow Claude API
   "github.com",
   "*.api.company.com",
 ]
 ```
 
 **Use when:**
+
 - You know exactly which APIs are needed
 - Maximum security is required
 - Compliance mandates explicit allow lists
 
 **Behavior:**
+
 - Blocks ALL domains by default
 - Only allows domains in `allowed_domains`
 - Bypass domains still work
@@ -218,11 +229,13 @@ blocked_domains = [
 ```
 
 **Use when:**
+
 - You want to block specific problematic domains
 - Most APIs should work normally
 - Flexibility is important
 
 **Behavior:**
+
 - Allows ALL domains by default
 - Blocks only domains in `blocked_domains`
 - Bypass domains still work
@@ -248,6 +261,7 @@ Matches: `api.example.com`, `test.example.com`, `example.com`
 Does NOT match: `example.org`, `notexample.com`
 
 **Rules:**
+
 - Wildcard must be at the beginning: `*.domain.com`
 - Only one wildcard per pattern
 - Matches the domain itself and all subdomains
@@ -255,12 +269,13 @@ Does NOT match: `example.org`, `notexample.com`
 ### Valid Characters
 
 Domain patterns can contain:
+
 - Letters (a-z, A-Z)
 - Numbers (0-9)
 - Hyphens (-)
 - Dots (.)
-- Underscores (_) - for SRV records like `_service.example.com`
-- Asterisk (*) - only as wildcard prefix
+- Underscores (\_) - for SRV records like `_service.example.com`
+- Asterisk (\*) - only as wildcard prefix
 
 ### Bypass Domains
 
@@ -271,6 +286,7 @@ bypass_domains = ["*.pinned.com"]
 ```
 
 **Use for:**
+
 - Certificate pinning (domains that reject MITM certificates)
 - Internal services with custom CA
 - Domains that detect proxy usage
@@ -286,11 +302,13 @@ block_tcp_udp = true  # Default
 ```
 
 Blocks all raw TCP and UDP connections except:
+
 - DNS (port 53)
 - Localhost
 - Established connections
 
 **Effect:**
+
 - Only HTTP/HTTPS work
 - No raw socket connections
 - No custom protocols
@@ -302,6 +320,7 @@ block_private_networks = true  # Default
 ```
 
 Blocks connections to:
+
 - 10.0.0.0/8
 - 172.16.0.0/12
 - 192.168.0.0/16
@@ -309,6 +328,7 @@ Blocks connections to:
 - fe80::/10 (IPv6 link-local)
 
 **Effect:**
+
 - No access to internal networks
 - No access to host machine
 - No access to other VMs
@@ -320,10 +340,12 @@ block_metadata_services = true  # Default
 ```
 
 Blocks connections to:
+
 - 169.254.169.254 (AWS, Azure, GCP metadata)
 - fe80::a9fe:a9fe (IPv6 equivalent)
 
 **Effect:**
+
 - Cannot access cloud instance metadata
 - Cannot retrieve instance credentials
 - Cannot access instance tags
@@ -347,12 +369,14 @@ claude-vm network status
 ```
 
 **Output:**
+
 - Proxy status (running/stopped)
 - Policy configuration
 - Protocol blocks enabled
 - Statistics (requests allowed/blocked)
 
 **Multiple VMs:**
+
 - Automatically detects all running ephemeral VMs for the project
 - Prompts to select a VM if multiple are running
 - Shows which VM the status is for
@@ -382,6 +406,7 @@ claude-vm network logs --follow -f "github"  # Follow with filter
 ```
 
 **Multiple VMs:**
+
 - Automatically detects all running ephemeral VMs for the project
 - Prompts to select a VM if multiple are running
 - Displays the VM name in the log header
@@ -397,6 +422,7 @@ claude-vm network test *.internal.com
 ```
 
 **Output:**
+
 - ✓ ALLOWED or ✗ BLOCKED
 - Explanation of why
 - Matching patterns
@@ -500,6 +526,7 @@ limactl shell <vm-name> cat /tmp/mitmproxy.log
 ```
 
 Common issues:
+
 - Port 8080 already in use
 - Certificate generation failed
 - Mitmproxy installation corrupted
@@ -548,6 +575,7 @@ CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true claude-vm shell --inherit-env
 ### Future Improvements
 
 Planned enhancements:
+
 - Configurable proxy port
 - Rate limiting per domain
 - Path-based filtering
