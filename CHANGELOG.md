@@ -4,6 +4,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-02-09
+
 ### Fixed
 
 - **works on linux and macos**: Lima commands now work on both Linux and macOS
@@ -277,7 +279,8 @@ All notable changes to claude-vm will be documented in this file.
 - **VM lifecycle management**: Basic commands for creating, starting, stopping, and destroying VMs
 - **Lima integration**: Leverages Lima (Linux virtual machines) for macOS to provide lightweight, fast VM creation
 
-[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/themouette/claude-vm/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/themouette/claude-vm/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/themouette/claude-vm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/themouette/claude-vm/compare/v0.2.3...v0.3.0
