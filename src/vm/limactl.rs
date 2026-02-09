@@ -6,6 +6,53 @@ use std::process::{Command, Stdio};
 
 pub struct LimaCtl;
 
+/// VM configuration based on the host operating system
+struct VmConfig {
+    vm_type: &'static str,
+    mount_type: &'static str,
+    use_rosetta: bool,
+}
+
+impl VmConfig {
+    fn for_current_os() -> Self {
+        #[cfg(target_os = "macos")]
+        {
+            Self {
+                vm_type: "vz",
+                mount_type: "virtiofs",
+                use_rosetta: std::env::consts::ARCH == "aarch64",
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            Self {
+                vm_type: "qemu",
+                mount_type: "reverse-sshfs",
+                use_rosetta: false,
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            Self {
+                vm_type: "qemu",
+                mount_type: "reverse-sshfs",
+                use_rosetta: false,
+            }
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+        {
+            Self {
+                vm_type: "qemu",
+                mount_type: "reverse-sshfs",
+                use_rosetta: false,
+            }
+        }
+    }
+}
+
 impl LimaCtl {
     /// Check if limactl is installed
     pub fn is_installed() -> bool {
@@ -31,13 +78,18 @@ impl LimaCtl {
             format!("template:{}", template)
         };
 
+        let vm_config = VmConfig::for_current_os();
+
         cmd.arg("create")
             .arg(format!("--name={}", name))
             .arg(&template_arg)
-            .arg("--vm-type=vz")
-            .arg("--mount-type=virtiofs")
-            .arg("--rosetta")
+            .arg(format!("--vm-type={}", vm_config.vm_type))
+            .arg(format!("--mount-type={}", vm_config.mount_type))
             .arg("--tty=false");
+
+        if vm_config.use_rosetta {
+            cmd.arg("--rosetta");
+        }
 
         // Build mounts JSON array (same format as clone)
         if !mounts.is_empty() {
