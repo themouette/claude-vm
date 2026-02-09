@@ -405,3 +405,72 @@ pub struct VmInfo {
     pub name: String,
     pub status: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vm_config_for_current_os() {
+        let config = VmConfig::for_current_os();
+
+        // vm_type must be a valid Lima VM type
+        assert!(
+            ["qemu", "vz", "wsl2"].contains(&config.vm_type),
+            "vm_type '{}' is not a valid Lima VM type",
+            config.vm_type
+        );
+
+        // mount_type must be a valid Lima mount type
+        assert!(
+            ["reverse-sshfs", "9p", "virtiofs"].contains(&config.mount_type),
+            "mount_type '{}' is not a valid Lima mount type",
+            config.mount_type
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_vm_config_linux() {
+        let config = VmConfig::for_current_os();
+
+        assert_eq!(config.vm_type, "qemu");
+        assert_eq!(config.mount_type, "reverse-sshfs");
+        assert!(!config.use_rosetta);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn test_vm_config_macos() {
+        let config = VmConfig::for_current_os();
+
+        assert_eq!(config.vm_type, "vz");
+        assert_eq!(config.mount_type, "virtiofs");
+
+        if std::env::consts::ARCH == "aarch64" {
+            assert!(config.use_rosetta);
+        } else {
+            assert!(!config.use_rosetta);
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_vm_config_windows() {
+        let config = VmConfig::for_current_os();
+
+        assert_eq!(config.vm_type, "qemu");
+        assert_eq!(config.mount_type, "reverse-sshfs");
+        assert!(!config.use_rosetta);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "macos"))]
+    fn test_vm_config_no_rosetta_on_non_macos() {
+        let config = VmConfig::for_current_os();
+        assert!(
+            !config.use_rosetta,
+            "Rosetta should only be enabled on macOS"
+        );
+    }
+}
