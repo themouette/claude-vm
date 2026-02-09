@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **works on linux and macos**: Lima commands now work on both Linux and macOS
+
 ## [0.5.0] - 2026-02-08
 
 ### Added
