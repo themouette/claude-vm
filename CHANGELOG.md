@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Rust capability**: Added support for Rust toolchain installation via Rustup. Includes stable toolchain with rustc, cargo, rustfmt, and clippy components. Available through `--rust` flag or `[tools] rust = true` in configuration.
+
 ### Changed
 
 - **Node.js capability now uses Volta**: Migrated from NodeSource repository installation to Volta for Node.js version management. Volta provides better toolchain management and allows users to easily switch Node.js versions per-project. The setup script now installs Volta and the latest stable Node.js version by default. Runtime context includes Volta version and all installed Node versions.

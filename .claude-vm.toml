@@ -2,9 +2,7 @@
 git = true
 gpg = true
 gh = true
-# Do not forward ssh agent, git interactions with remote repository should be
-# done from host
-# ssh = false
+rust = true
 
 [setup]
 # ADDITIONAL setup scripts (run during template creation)

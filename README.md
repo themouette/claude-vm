@@ -162,6 +162,7 @@ memory = 8     # GB
 [tools]
 docker = true
 node = true
+rust = true
 git = true
 ```
 
