@@ -2,12 +2,13 @@ name: Test
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
 
 jobs:
   test:
@@ -19,57 +20,57 @@ jobs:
         rust: [stable]
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561  # master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: rustfmt, clippy
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
 
-    - name: Cache cargo registry
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo registry
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Cache cargo index
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo index
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Cache cargo build
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo build
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Run tests
-      run: cargo test --all --verbose
+      - name: Run tests
+        run: cargo test --all --verbose
 
-    - name: Run clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-    - name: Check formatting
-      run: cargo fmt -- --check
+      - name: Check formatting
+        run: cargo fmt -- --check
 
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561  # stable
-      with:
-        toolchain: stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
+        with:
+          toolchain: stable
 
-    - name: Install cargo-audit
-      run: cargo install cargo-audit --locked
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
 
-    - name: Run security audit
-      run: cargo audit
+      - name: Run security audit
+        run: cargo audit
 
   build:
     name: Build
@@ -79,93 +80,98 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561  # stable
-      with:
-        toolchain: stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # stable
+        with:
+          toolchain: stable
 
-    - name: Cache cargo registry
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo registry
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Cache cargo index
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo index
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Cache cargo build
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo build
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Build release
-      run: cargo build --release --verbose
+      - name: Build release
+        run: cargo build --release --verbose
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
-      with:
-        name: claude-vm-${{ runner.os }}
-        path: |
-          target/release/claude-vm
-          target/release/claude-vm.exe
-        if-no-files-found: ignore
+      - name: Upload artifact
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: claude-vm-${{ runner.os }}
+          path: |
+            target/release/claude-vm
+            target/release/claude-vm.exe
+          if-no-files-found: ignore
 
   integration-vm:
     name: VM Integration Tests
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     # Only run on main branch after merge to save CI time
     if: github.ref == 'refs/heads/main'
 
     steps:
-    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561  # master
-      with:
-        toolchain: stable
-        components: rustfmt, clippy
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561 # master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
 
-    - name: Install Lima
-      run: |
-        brew install lima
-        limactl --version
+      - name: Setup Lima
+        uses: lima-vm/lima-actions/setup@v1
+        id: lima-setup
 
-    - name: Cache cargo registry
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache Lima downloads
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cache/lima
+          key: ${{ runner.os }}-lima-${{ steps.lima-setup.outputs.version }}
 
-    - name: Cache cargo index
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo registry
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Cache cargo build
-      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
-      with:
-        path: target
-        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cache cargo index
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Build test binary
-      run: cargo build --test integration_tests
+      - name: Cache cargo build
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Run VM integration tests
-      run: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --test-threads=1 --nocapture
-      timeout-minutes: 30
+      - name: Build test binary
+        run: cargo build --test integration_tests
 
-    - name: Cleanup VMs on failure
-      if: failure()
-      run: |
-        limactl list --format json | jq -r '.[].name' | while read vm; do
-          echo "Stopping VM: $vm"
-          limactl stop "$vm" || true
-          limactl delete "$vm" || true
-        done
+      - name: Run VM integration tests
+        run: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --test-threads=1 --nocapture
+        timeout-minutes: 30
+
+      - name: Cleanup VMs on failure
+        if: failure()
+        run: |
+          limactl list --format json | jq -r '.[].name' | while read vm; do
+            echo "Stopping VM: $vm"
+            limactl stop "$vm" || true
+            limactl delete "$vm" || true
+          done
