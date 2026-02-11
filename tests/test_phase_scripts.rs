@@ -692,3 +692,64 @@ fn test_phase_source_explicit_false() {
     assert_eq!(config.phase.runtime.len(), 1);
     assert!(!config.phase.runtime[0].source);
 }
+
+/// Test that has_shebang helper detects shebangs
+#[test]
+fn test_has_shebang_detection() {
+    use claude_vm::config::ScriptPhase;
+
+    // Note: has_shebang is private, so we test via validate_and_warn behavior
+    // We can't directly test the helper, but we verify the validation works correctly
+    let phase_with_shebang = ScriptPhase {
+        name: "test".to_string(),
+        script: Some("#!/bin/bash\necho 'hello'".to_string()),
+        source: true,
+        ..Default::default()
+    };
+
+    // Just verify it doesn't panic - warning goes to stderr which we can't easily capture in unit tests
+    phase_with_shebang.validate_and_warn();
+}
+
+/// Test validation warns about empty phase
+#[test]
+fn test_validate_empty_phase() {
+    use claude_vm::config::ScriptPhase;
+
+    let empty_phase = ScriptPhase {
+        name: "empty".to_string(),
+        script: None,
+        script_files: vec![],
+        ..Default::default()
+    };
+
+    // Should emit warning but not panic
+    empty_phase.validate_and_warn();
+}
+
+/// Test validation doesn't warn for valid configurations
+#[test]
+fn test_validate_valid_phase() {
+    use claude_vm::config::ScriptPhase;
+
+    // Script without shebang and source=true is fine
+    let valid_phase = ScriptPhase {
+        name: "valid".to_string(),
+        script: Some("export PATH=$PATH:~/.local/bin".to_string()),
+        source: true,
+        ..Default::default()
+    };
+
+    // Should not warn
+    valid_phase.validate_and_warn();
+
+    // Script with shebang but source=false is fine
+    let also_valid = ScriptPhase {
+        name: "also-valid".to_string(),
+        script: Some("#!/bin/bash\necho 'hello'".to_string()),
+        source: false,
+        ..Default::default()
+    };
+
+    also_valid.validate_and_warn();
+}

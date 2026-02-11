@@ -286,6 +286,9 @@ pub fn execute_command_with_runtime_scripts(
 
     // New phase-based runtime scripts
     for phase in &config.phase.runtime {
+        // Validate phase and emit warnings for potential issues
+        phase.validate_and_warn();
+
         // Check conditional execution
         if !phase.should_execute(vm_name)? {
             eprintln!(
@@ -299,8 +302,21 @@ pub fn execute_command_with_runtime_scripts(
         let scripts = match phase.get_scripts(project.root()) {
             Ok(s) => s,
             Err(e) => {
+                eprintln!(
+                    "\n❌ Failed to load scripts for runtime phase '{}'",
+                    phase.name
+                );
+                eprintln!("   Error: {}", e);
+                if !phase.script_files.is_empty() {
+                    eprintln!("   Script files:");
+                    for file in &phase.script_files {
+                        eprintln!("   - {}", file);
+                    }
+                    eprintln!("\n   Hint: Check that script files exist and are readable");
+                }
+
                 if phase.continue_on_error {
-                    eprintln!("⚠ Warning: Phase '{}' failed: {}", phase.name, e);
+                    eprintln!("   ℹ Continuing due to continue_on_error=true");
                     continue;
                 } else {
                     return Err(e);

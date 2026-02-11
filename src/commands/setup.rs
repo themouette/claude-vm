@@ -284,6 +284,9 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
     for phase in &config.phase.setup {
         println!("\n━━━ Setup Phase: {} ━━━", phase.name);
 
+        // Validate phase and emit warnings for potential issues
+        phase.validate_and_warn();
+
         // Check conditional execution
         if !phase.should_execute(vm_name)? {
             println!("⊘ Skipped (condition not met: {:?})", phase.when);
@@ -294,9 +297,18 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
         let scripts = match phase.get_scripts(project.root()) {
             Ok(s) => s,
             Err(e) => {
+                eprintln!("\n❌ Failed to load scripts for phase '{}'", phase.name);
+                eprintln!("   Error: {}", e);
+                if !phase.script_files.is_empty() {
+                    eprintln!("   Script files:");
+                    for file in &phase.script_files {
+                        eprintln!("   - {}", file);
+                    }
+                    eprintln!("\n   Hint: Check that script files exist and are readable");
+                }
+
                 if phase.continue_on_error {
-                    eprintln!("⚠ Warning: Phase '{}' failed: {}", phase.name, e);
-                    eprintln!("  Continuing due to continue_on_error=true");
+                    eprintln!("   ℹ Continuing due to continue_on_error=true");
                     continue;
                 } else {
                     return Err(e);
@@ -317,7 +329,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
                 .join("\n");
 
             let full_script = if env_setup.is_empty() {
-                content
+                content.clone()
             } else {
                 format!("{}\n\n{}", env_setup, content)
             };
@@ -325,10 +337,38 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             match runner::execute_script(vm_name, &full_script, &script_name) {
                 Ok(_) => println!("  ✓ Completed: {}", script_name),
                 Err(e) => {
+                    // Enhanced error message with context
+                    eprintln!("\n❌ Setup phase '{}' failed", phase.name);
+                    eprintln!("   Script: {}", script_name);
+                    eprintln!("   Error: {}", e);
+
+                    // Show condition if present
+                    if let Some(ref condition) = phase.when {
+                        eprintln!("   Condition: {}", condition);
+                    }
+
+                    // Show script preview for inline scripts
+                    if script_name.contains("-inline") {
+                        let preview = content.lines().take(3).collect::<Vec<_>>().join("\n");
+                        let lines = content.lines().count();
+                        eprintln!("   Script preview:");
+                        eprintln!("   {}", preview.replace('\n', "\n   "));
+                        if lines > 3 {
+                            eprintln!("   ... ({} more lines)", lines - 3);
+                        }
+                    }
+
+                    // Provide helpful hints
                     if phase.continue_on_error {
-                        eprintln!("  ⚠ Warning: Script '{}' failed: {}", script_name, e);
-                        eprintln!("    Continuing due to continue_on_error=true");
+                        eprintln!("   ℹ Continuing due to continue_on_error=true");
                     } else {
+                        eprintln!("\n   Hints:");
+                        eprintln!("   - Check if all required tools are available in the VM");
+                        eprintln!("   - Verify script syntax with: bash -n <script>");
+                        eprintln!(
+                            "   - Add 'continue_on_error = true' to make this phase optional"
+                        );
+                        eprintln!("   - Run 'claude-vm shell' to debug interactively");
                         return Err(e);
                     }
                 }

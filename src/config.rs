@@ -323,6 +323,38 @@ impl ScriptPhase {
             Ok(true) // No condition = always execute
         }
     }
+
+    /// Check if a script has a shebang line
+    fn has_shebang(content: &str) -> bool {
+        content.trim_start().starts_with("#!")
+    }
+
+    /// Validate phase configuration and emit warnings for potential issues
+    pub fn validate_and_warn(&self) {
+        // Warn if source=true with shebang
+        if self.source {
+            // Check inline script
+            if let Some(content) = &self.script {
+                if Self::has_shebang(content) {
+                    eprintln!(
+                        "⚠ Warning: Phase '{}' uses source=true with a shebang line",
+                        self.name
+                    );
+                    eprintln!("   When sourcing, the shebang is ignored and the script runs in the current bash shell");
+                    eprintln!("   Consider removing the shebang or setting source=false");
+                }
+            }
+        }
+
+        // Warn if phase has no scripts at all
+        if self.script.is_none() && self.script_files.is_empty() {
+            eprintln!(
+                "⚠ Warning: Phase '{}' has no script or script_files defined",
+                self.name
+            );
+            eprintln!("   This phase will do nothing");
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
