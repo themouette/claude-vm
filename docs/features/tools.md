@@ -19,6 +19,7 @@ Claude VM supports installing various development tools during template creation
 | `docker`   | Docker Engine, Docker Compose  | Containerized development      |
 | `node`     | Node.js LTS, npm               | JavaScript/TypeScript projects |
 | `python`   | Python 3, pip                  | Python development             |
+| `rust`     | Rust toolchain, cargo, clippy  | Rust development               |
 | `chromium` | Chromium browser, DevTools     | Web scraping, browser testing  |
 | `gpg`      | GPG agent forwarding, key sync | Signed commits, encryption     |
 | `gh`       | GitHub CLI, authentication     | GitHub operations              |
@@ -254,6 +255,80 @@ $ python3 --version           # Check Python version
 $ pip install -r requirements.txt  # Install packages
 $ python3 app.py              # Run Python scripts
 ```
+
+### Rust
+
+**Installs:**
+
+- Rustup (Rust toolchain manager)
+- Rust stable toolchain (rustc, cargo)
+- rustfmt (code formatter)
+- clippy (linter)
+
+**Configuration:**
+
+```toml
+[tools]
+rust = true
+```
+
+**CLI:**
+
+```bash
+claude-vm setup --rust
+```
+
+**What it does:**
+
+1. Installs Rustup via official installer (https://sh.rustup.rs)
+2. Installs stable Rust toolchain as default
+3. Adds rustfmt and clippy components
+4. Configures PATH to include `$CARGO_HOME/bin`
+
+**Context provided:**
+
+```markdown
+Rustup version: rustup 1.27.0 (2024-12-12)
+Rust version: rustc 1.83.0 (90b35a623 2024-11-26)
+Cargo version: cargo 1.83.0 (5ffbef321 2024-10-29)
+Rustfmt version: rustfmt 1.8.0-stable (90b35a623 2024-11-26)
+Clippy version: clippy 0.1.83 (90b35a62 2024-11-26)
+Installed toolchains: stable-aarch64-unknown-linux-gnu (default)
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+$ rustc --version              # Check Rust version
+$ cargo new my-project         # Create new Rust project
+$ cargo build                  # Build project
+$ cargo test                   # Run tests
+$ cargo fmt                    # Format code
+$ cargo clippy                 # Run linter
+```
+
+**Toolchain Management:**
+
+Rustup allows managing multiple Rust versions:
+
+```bash
+# Install nightly toolchain
+$ rustup toolchain install nightly
+
+# Use nightly for current directory
+$ rustup override set nightly
+
+# Update toolchains
+$ rustup update
+```
+
+**Notes:**
+
+- Rust is installed per-user in `~/.cargo` and `~/.rustup`
+- Installation is idempotent - running setup multiple times is safe
+- Stable toolchain is used by default, suitable for most development
+- The capability ensures rustfmt and clippy are always available
 
 ### Chromium
 

@@ -91,6 +91,9 @@ pub struct ToolsConfig {
     pub python: bool,
 
     #[serde(default)]
+    pub rust: bool,
+
+    #[serde(default)]
     pub chromium: bool,
 
     #[serde(default)]
@@ -113,6 +116,7 @@ impl ToolsConfig {
             "docker" => self.docker,
             "node" => self.node,
             "python" => self.python,
+            "rust" => self.rust,
             "chromium" => self.chromium,
             "gpg" => self.gpg,
             "gh" => self.gh,
@@ -128,6 +132,7 @@ impl ToolsConfig {
             "docker" => self.docker = true,
             "node" => self.node = true,
             "python" => self.python = true,
+            "rust" => self.rust = true,
             "chromium" => self.chromium = true,
             "gpg" => self.gpg = true,
             "gh" => self.gh = true,
@@ -570,6 +575,7 @@ impl Config {
         self.tools.docker = self.tools.docker || other.tools.docker;
         self.tools.node = self.tools.node || other.tools.node;
         self.tools.python = self.tools.python || other.tools.python;
+        self.tools.rust = self.tools.rust || other.tools.rust;
         self.tools.chromium = self.tools.chromium || other.tools.chromium;
         self.tools.gpg = self.tools.gpg || other.tools.gpg;
         self.tools.gh = self.tools.gh || other.tools.gh;
@@ -849,6 +855,7 @@ impl Config {
             docker,
             node,
             python,
+            rust,
             chromium,
             gpg,
             gh,
@@ -867,6 +874,7 @@ impl Config {
                 self.tools.enable("docker");
                 self.tools.enable("node");
                 self.tools.enable("python");
+                self.tools.enable("rust");
                 self.tools.enable("chromium");
                 self.tools.enable("gpg");
                 self.tools.enable("gh");
@@ -881,6 +889,9 @@ impl Config {
                 }
                 if *python {
                     self.tools.enable("python");
+                }
+                if *rust {
+                    self.tools.enable("rust");
                 }
                 if *chromium {
                     self.tools.enable("chromium");
@@ -1222,6 +1233,38 @@ mod tests {
         assert!(merged.tools.chromium);
         assert!(merged.tools.gpg);
         assert!(!merged.tools.gh); // Not enabled in either
+    }
+
+    #[test]
+    fn test_tools_merge_rust() {
+        // Create base config with rust enabled
+        let mut base = Config::default();
+        base.tools.rust = true;
+
+        // Create override config with docker enabled
+        let mut override_cfg = Config::default();
+        override_cfg.tools.docker = true;
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both tools are enabled
+        assert!(merged.tools.rust);
+        assert!(merged.tools.docker);
+    }
+
+    #[test]
+    fn test_rust_enable() {
+        let mut config = ToolsConfig::default();
+
+        // Rust should not be enabled by default
+        assert!(!config.is_enabled("rust"));
+
+        // Enable rust
+        config.enable("rust");
+
+        // Rust should now be enabled
+        assert!(config.is_enabled("rust"));
     }
 
     #[test]
