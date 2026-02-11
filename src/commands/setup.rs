@@ -243,7 +243,9 @@ fn authenticate_claude(project: &Project) -> Result<()> {
 // Removed: configure_chrome_mcp - now handled by capability system
 
 fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
-    // Standard setup script locations
+    let vm_name = project.template_name();
+
+    // 1. Auto-detected file-based scripts (unchanged)
     let standard_scripts = vec![
         format!(
             "{}/.claude-vm.setup.sh",
@@ -256,18 +258,121 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
         let script_path = Path::new(&script_path_str);
         if script_path.exists() {
             println!("Running setup script: {}", script_path.display());
-            runner::execute_script_file(project.template_name(), script_path)?;
+            runner::execute_script_file(vm_name, script_path)?;
         }
     }
 
-    // Custom setup scripts from config
-    for script_path_str in &config.setup.scripts {
-        let script_path = Path::new(script_path_str);
-        if script_path.exists() {
+    // 2. Legacy scripts (with deprecation warning)
+    if !config.setup.scripts.is_empty() {
+        eprintln!(
+            "⚠ Warning: [setup] scripts array is deprecated. Please migrate to [[phase.setup]]"
+        );
+        eprintln!("   See: docs/configuration.md");
+
+        for script_path_str in &config.setup.scripts {
+            let script_path = Path::new(script_path_str);
+            if !script_path.exists() {
+                eprintln!("⚠ Warning: Setup script not found: {}", script_path_str);
+                continue;
+            }
             println!("Running custom setup script: {}", script_path.display());
-            runner::execute_script_file(project.template_name(), script_path)?;
-        } else {
-            eprintln!("Warning: Setup script not found: {}", script_path_str);
+            runner::execute_script_file(vm_name, script_path)?;
+        }
+    }
+
+    // 3. New phase-based scripts
+    for phase in &config.phase.setup {
+        println!("\n━━━ Setup Phase: {} ━━━", phase.name);
+
+        // Validate phase and emit warnings for potential issues
+        phase.validate_and_warn();
+
+        // Check conditional execution
+        if !phase.should_execute(vm_name)? {
+            println!("⊘ Skipped (condition not met: {:?})", phase.when);
+            continue;
+        }
+
+        // Get all scripts for this phase
+        let scripts = match phase.get_scripts(project.root()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("\n❌ Failed to load scripts for phase '{}'", phase.name);
+                eprintln!("   Error: {}", e);
+                if !phase.script_files.is_empty() {
+                    eprintln!("   Script files:");
+                    for file in &phase.script_files {
+                        eprintln!("   - {}", file);
+                    }
+                    eprintln!("\n   Hint: Check that script files exist and are readable");
+                }
+
+                if phase.continue_on_error {
+                    eprintln!("   ℹ Continuing due to continue_on_error=true");
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
+        // Execute scripts in this phase
+        for (script_name, content) in scripts {
+            println!("  Running: {}", script_name);
+
+            // Create environment with phase-specific vars
+            let env_setup = phase
+                .env
+                .iter()
+                .map(|(k, v)| format!("export {}='{}'", k, v.replace('\'', "'\\''")))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            let full_script = if env_setup.is_empty() {
+                content.clone()
+            } else {
+                format!("{}\n\n{}", env_setup, content)
+            };
+
+            match runner::execute_script(vm_name, &full_script, &script_name) {
+                Ok(_) => println!("  ✓ Completed: {}", script_name),
+                Err(e) => {
+                    // Enhanced error message with context
+                    eprintln!("\n❌ Setup phase '{}' failed", phase.name);
+                    eprintln!("   Script: {}", script_name);
+                    eprintln!("   Error: {}", e);
+
+                    // Show condition if present
+                    if let Some(ref condition) = phase.when {
+                        eprintln!("   Condition: {}", condition);
+                    }
+
+                    // Show script preview for inline scripts
+                    if script_name.contains("-inline") {
+                        let preview = content.lines().take(3).collect::<Vec<_>>().join("\n");
+                        let lines = content.lines().count();
+                        eprintln!("   Script preview:");
+                        eprintln!("   {}", preview.replace('\n', "\n   "));
+                        if lines > 3 {
+                            eprintln!("   ... ({} more lines)", lines - 3);
+                        }
+                    }
+
+                    // Provide helpful hints
+                    if phase.continue_on_error {
+                        eprintln!("   ℹ Continuing due to continue_on_error=true");
+                    } else {
+                        eprintln!("\n   Hints:");
+                        eprintln!("   - Check if all required tools are available in the VM");
+                        eprintln!("   - Verify script syntax with: bash -n <script>");
+                        eprintln!(
+                            "   - Add 'continue_on_error = true' to make this phase optional"
+                        );
+                        eprintln!("   - Run 'claude-vm shell' to debug interactively");
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 

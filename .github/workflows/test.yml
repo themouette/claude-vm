@@ -115,3 +115,57 @@ jobs:
           target/release/claude-vm
           target/release/claude-vm.exe
         if-no-files-found: ignore
+
+  integration-vm:
+    name: VM Integration Tests
+    runs-on: macos-latest
+    # Only run on main branch after merge to save CI time
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@f7ccc83f9ed1e5b9c81d8a67d7ad1a747e22a561  # master
+      with:
+        toolchain: stable
+        components: rustfmt, clippy
+
+    - name: Install Lima
+      run: |
+        brew install lima
+        limactl --version
+
+    - name: Cache cargo registry
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v5.0.3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build test binary
+      run: cargo build --test integration_tests
+
+    - name: Run VM integration tests
+      run: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --test-threads=1 --nocapture
+      timeout-minutes: 30
+
+    - name: Cleanup VMs on failure
+      if: failure()
+      run: |
+        limactl list --format json | jq -r '.[].name' | while read vm; do
+          echo "Stopping VM: $vm"
+          limactl stop "$vm" || true
+          limactl delete "$vm" || true
+        done

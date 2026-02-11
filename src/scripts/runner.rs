@@ -238,7 +238,7 @@ fn generate_base_context(config: &Config) -> Result<String> {
 #[allow(clippy::too_many_arguments)]
 pub fn execute_command_with_runtime_scripts(
     vm_name: &str,
-    _project: &Project,
+    project: &Project,
     config: &Config,
     _session: &VmSession,
     workdir: Option<&Path>,
@@ -246,23 +246,97 @@ pub fn execute_command_with_runtime_scripts(
     args: &[&str],
     env_vars: &HashMap<String, String>,
 ) -> Result<()> {
-    // Collect all runtime scripts
-    let mut scripts = Vec::new();
+    // Collect all runtime scripts as (name, content, env_vars, source) tuples
+    let mut script_contents: Vec<(String, String, HashMap<String, String>, bool)> = Vec::new();
 
     // First, check for project-specific runtime script
     let runtime_script_path = find_runtime_script_path()?;
     if runtime_script_path.exists() {
-        scripts.push(runtime_script_path);
+        let content = std::fs::read_to_string(&runtime_script_path)?;
+        let name = runtime_script_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("runtime.sh")
+            .to_string();
+        script_contents.push((name, content, HashMap::new(), false)); // No env, not sourced
     }
 
-    // Then add custom runtime scripts from config
-    for script_path_str in &config.runtime.scripts {
-        let script_path = PathBuf::from(script_path_str);
-        if !script_path.exists() {
-            eprintln!("⚠ Warning: Runtime script not found: {}", script_path_str);
+    // Then add custom runtime scripts from config (legacy - with deprecation warning)
+    if !config.runtime.scripts.is_empty() {
+        eprintln!(
+            "⚠ Warning: [runtime] scripts array is deprecated. Please migrate to [[phase.runtime]]"
+        );
+        eprintln!("   See: docs/configuration.md");
+
+        for script_path_str in &config.runtime.scripts {
+            let script_path = PathBuf::from(script_path_str);
+            if !script_path.exists() {
+                eprintln!("⚠ Warning: Runtime script not found: {}", script_path_str);
+                continue;
+            }
+            let content = std::fs::read_to_string(&script_path)?;
+            let name = script_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("script.sh")
+                .to_string();
+            script_contents.push((name, content, HashMap::new(), false)); // Not sourced
+        }
+    }
+
+    // New phase-based runtime scripts
+    for phase in &config.phase.runtime {
+        // Validate phase and emit warnings for potential issues
+        phase.validate_and_warn();
+
+        // Check conditional execution
+        if !phase.should_execute(vm_name)? {
+            eprintln!(
+                "⊘ Skipping runtime phase '{}' (condition not met)",
+                phase.name
+            );
             continue;
         }
-        scripts.push(script_path);
+
+        // Get scripts for this phase
+        let scripts = match phase.get_scripts(project.root()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!(
+                    "\n❌ Failed to load scripts for runtime phase '{}'",
+                    phase.name
+                );
+                eprintln!("   Error: {}", e);
+                if !phase.script_files.is_empty() {
+                    eprintln!("   Script files:");
+                    for file in &phase.script_files {
+                        eprintln!("   - {}", file);
+                    }
+                    eprintln!("\n   Hint: Check that script files exist and are readable");
+                }
+
+                if phase.continue_on_error {
+                    eprintln!("   ℹ Continuing due to continue_on_error=true");
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        };
+
+        for (name, content) in scripts {
+            script_contents.push((name, content, phase.env.clone(), phase.source));
+        }
+    }
+
+    // Now convert script_contents to files and collect PathBufs for copying
+    let mut scripts = Vec::new();
+    let temp_dir = std::env::temp_dir();
+
+    for (i, (name, content, _env, _source)) in script_contents.iter().enumerate() {
+        let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, name));
+        std::fs::write(&local_temp, content)?;
+        scripts.push(local_temp);
     }
 
     // Generate and copy base context
@@ -391,12 +465,44 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        entrypoint.push_str(&format!(
-            "echo 'Running runtime script: {}'...\n",
-            scripts[i].display()
-        ));
-        // Use shell_escape to prevent injection attacks
-        entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
+        let (name, _content, script_env, source_script) = &script_contents[i];
+        entrypoint.push_str(&format!("echo 'Running runtime script: {}'...\n", name));
+
+        // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
+        let run_cmd = if *source_script { "." } else { "bash" };
+
+        // Set phase-specific environment variables if any
+        if !script_env.is_empty() {
+            entrypoint.push_str("# Phase-specific environment variables\n");
+
+            // Only use subshell if NOT sourcing (sourcing needs exports to persist)
+            if !*source_script {
+                entrypoint.push_str("(\n"); // Start subshell to isolate env vars
+            }
+
+            for (key, value) in script_env {
+                let escaped_value = value.replace('\'', "'\\''");
+                let indent = if *source_script { "" } else { "  " };
+                entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
+            }
+
+            // Use shell_escape to prevent injection attacks
+            let indent = if *source_script { "" } else { "  " };
+            entrypoint.push_str(&format!(
+                "{}{} {}\n",
+                indent,
+                run_cmd,
+                shell_escape(vm_path)
+            ));
+
+            if !*source_script {
+                entrypoint.push_str(")\n"); // End subshell
+            }
+            entrypoint.push('\n');
+        } else {
+            // Use shell_escape to prevent injection attacks
+            entrypoint.push_str(&format!("{} {}\n\n", run_cmd, shell_escape(vm_path)));
+        }
     }
 
     // Generate final CLAUDE.md with runtime context (only if Claude Code is installed)

@@ -314,9 +314,134 @@ See [Custom Packages](advanced/custom-packages.md) for more details.
 
 ## Scripts
 
-Configure setup and runtime scripts.
+Configure setup and runtime scripts using either the legacy format or the new phase-based format.
 
-### Setup Scripts
+### Phase-Based Scripts (Recommended)
+
+The new phase-based format provides better organization and control over script execution.
+
+#### Setup Phases
+
+Run during template creation (`claude-vm setup`):
+
+```toml
+# Verify system requirements
+[[phase.setup]]
+name = "verify-system"
+script = """
+#!/bin/bash
+echo 'Verifying system requirements'
+test $(nproc) -ge 2 || exit 1
+"""
+
+# Install Docker (only if not present)
+[[phase.setup]]
+name = "install-docker"
+when = "! command -v docker"  # Only run if docker not installed
+env = { DEBIAN_FRONTEND = "noninteractive" }
+script_files = ["./scripts/install-docker.sh"]
+
+# Configure tools
+[[phase.setup]]
+name = "configure"
+script = "echo 'Setup complete'"
+```
+
+#### Runtime Phases
+
+Run before each session (`claude-vm` or `claude-vm shell`):
+
+```toml
+# Start services
+[[phase.runtime]]
+name = "start-services"
+env = { DEBUG = "true", COMPOSE_PROJECT_NAME = "myapp" }
+script = "docker-compose up -d"
+
+# Wait for health check
+[[phase.runtime]]
+name = "wait-for-health"
+continue_on_error = false
+script = """
+until curl -sf http://localhost:3000/health; do
+  echo 'Waiting for service...'
+  sleep 1
+done
+echo '✓ Services ready'
+"""
+
+# Optional service (won't fail if it doesn't work)
+[[phase.runtime]]
+name = "optional-service"
+continue_on_error = true
+script_files = ["./scripts/start-optional.sh"]
+```
+
+#### Sourcing Scripts for Persistent Exports
+
+When you need exports (like PATH modifications) to persist across phases, use `source = true`:
+
+```toml
+# Add custom tools to PATH (exports persist)
+[[phase.runtime]]
+name = "setup-custom-path"
+source = true
+script = """
+export PATH="$HOME/.local/bin:$PATH"
+export CUSTOM_VAR="value"
+"""
+
+# This phase can now use the modified PATH
+[[phase.runtime]]
+name = "use-custom-tools"
+script = """
+#!/bin/bash
+# Can now use tools from ~/.local/bin
+custom-tool --version
+echo "CUSTOM_VAR=$CUSTOM_VAR"  # Variable is available
+"""
+```
+
+**When to use `source`:**
+- ✅ Adding directories to PATH
+- ✅ Exporting environment variables that should persist
+- ✅ Setting up shell functions or aliases (for runtime phases)
+
+**When NOT to use `source`:**
+- ❌ Default behavior (subprocess isolation is safer)
+- ❌ Scripts that modify the filesystem (no benefit from sourcing)
+- ❌ Long-running processes or background tasks
+
+#### Phase Fields
+
+| Field              | Type              | Required | Description                                          |
+| ------------------ | ----------------- | -------- | ---------------------------------------------------- |
+| `name`             | string            | Yes      | Phase name (for logging/debugging)                   |
+| `script`           | string            | No       | Inline script content                                |
+| `script_files`     | array of strings  | No       | File paths to execute (in order)                     |
+| `env`              | map               | No       | Phase-specific environment variables                 |
+| `continue_on_error`| boolean           | No       | Don't fail if phase fails (default: false)           |
+| `when` / `if`      | string            | No       | Conditional - only run if command succeeds (exit 0)  |
+| `source`           | boolean           | No       | Source script instead of running in subprocess (default: false). When true, exports persist to subsequent phases. |
+
+**Note:** At least one of `script` or `script_files` must be provided.
+
+#### Features
+
+- **Inline scripts**: Write scripts directly in the TOML file
+- **File scripts**: Reference external script files
+- **Mixed mode**: Combine inline and file scripts in the same phase
+- **Environment variables**: Set phase-specific env vars
+- **Conditional execution**: Run phases only when conditions are met
+- **Error handling**: Control whether failures stop execution
+- **Named phases**: Better logging and debugging output
+- **Script sourcing**: Source scripts to persist exports (like PATH modifications) across phases
+
+### Legacy Format (Deprecated)
+
+> ⚠️  **Deprecated**: The `[setup]` and `[runtime]` scripts arrays are deprecated. Please migrate to `[[phase.setup]]` and `[[phase.runtime]]`. The legacy format continues to work with deprecation warnings.
+
+#### Setup Scripts
 
 Run during template creation (`claude-vm setup`):
 
@@ -333,7 +458,7 @@ scripts = [
 - `~/.claude-vm.setup.sh` - Global setup script
 - `./.claude-vm.setup.sh` - Project setup script
 
-### Runtime Scripts
+#### Runtime Scripts
 
 Run before each session (`claude-vm` or `claude-vm shell`):
 
@@ -355,16 +480,268 @@ scripts = [
 
 1. Global setup script (`~/.claude-vm.setup.sh`)
 2. Project setup script (`./.claude-vm.setup.sh`)
-3. Config setup scripts (from `[setup] scripts`)
-4. CLI setup scripts (from `--setup-script`)
+3. Legacy config setup scripts (from `[setup] scripts`)
+4. Phase-based setup scripts (from `[[phase.setup]]`)
+5. CLI setup scripts (from `--setup-script`)
 
 **Runtime (before each session):**
 
 1. Project runtime script (`./.claude-vm.runtime.sh`)
-2. Config runtime scripts (from `[runtime] scripts`)
-3. CLI runtime scripts (from `--runtime-script`)
+2. Legacy config runtime scripts (from `[runtime] scripts`)
+3. Phase-based runtime scripts (from `[[phase.runtime]]`)
+4. CLI runtime scripts (from `--runtime-script`)
 
 See [Runtime Scripts](features/runtime-scripts.md) for detailed information.
+
+### Troubleshooting Phase Scripts
+
+#### Exports Don't Persist Across Phases
+
+**Problem**: Environment variables exported in one phase aren't available in the next phase.
+
+```toml
+[[phase.runtime]]
+name = "setup-path"
+script = "export PATH=$HOME/.local/bin:$PATH"
+
+[[phase.runtime]]
+name = "use-tool"
+script = "my-custom-tool"  # Command not found!
+```
+
+**Solution**: Add `source = true` to make exports persist:
+
+```toml
+[[phase.runtime]]
+name = "setup-path"
+source = true  # ← Exports now persist!
+script = "export PATH=$HOME/.local/bin:$PATH"
+```
+
+**Why**: By default, scripts run in a subprocess (subprocess isolation). Use `source = true` to run the script in the current shell context.
+
+#### Runtime Script Runs Multiple Times
+
+**Problem**: Runtime phases execute on **every** `claude-vm` command, causing duplicates:
+
+```bash
+# ❌ BAD: Appends every time
+echo "export PATH=..." >> ~/.profile  # ~/.profile grows infinitely!
+```
+
+**Solution**: Make runtime scripts idempotent (safe to run multiple times):
+
+```bash
+# ✅ GOOD: Check before adding
+if ! grep -q "my-custom-path" ~/.profile; then
+    echo "export PATH=..." >> ~/.profile
+fi
+
+# ✅ GOOD: Use absolute PATH (doesn't grow)
+export PATH="$HOME/.local/bin:$PATH"  # Safe to repeat
+```
+
+**Best Practice**: Runtime phases should be **fast** (<1 second) since they run on every command.
+
+#### Phase Fails Silently
+
+**Problem**: A phase fails but setup/runtime continues without error.
+
+**Solution**: Check the `continue_on_error` setting:
+
+```toml
+[[phase.setup]]
+name = "optional-tools"
+continue_on_error = true  # ← Phase failure won't stop execution
+script = "install-optional-tool"
+```
+
+Remove `continue_on_error` (or set to `false`) to fail-fast:
+
+```toml
+[[phase.setup]]
+name = "required-tools"
+# continue_on_error defaults to false
+script = "install-required-tool"  # Failure stops execution
+```
+
+#### Conditional Phase Doesn't Run
+
+**Problem**: Phase with `when` condition never executes.
+
+```toml
+[[phase.setup]]
+name = "install-docker"
+when = "! command -v docker"  # Never runs!
+script = "brew install docker"
+```
+
+**Solution**: Check the condition manually in a shell:
+
+```bash
+# In VM shell:
+claude-vm shell
+
+# Test condition:
+! command -v docker && echo "Would run" || echo "Would skip"
+```
+
+**Common Issues**:
+- Condition has wrong exit code (remember: 0 = true, non-zero = false)
+- Tool is already installed but in different location
+- Syntax error in condition
+
+#### Script Has Shebang But Uses Wrong Interpreter
+
+**Problem**: Script has `#!/usr/bin/python` but runs with bash when `source = true`.
+
+```toml
+[[phase.runtime]]
+name = "python-script"
+source = true  # ← Sourcing ignores shebang!
+script = """
+#!/usr/bin/python
+print("Hello")
+"""
+```
+
+**Solution**: When using `source = true`, the script runs in the current bash shell. The shebang is **ignored**.
+
+**Options**:
+1. Remove `source = true` to execute with shebang interpreter:
+```toml
+[[phase.runtime]]
+name = "python-script"
+# source = false (default) - respects shebang
+script = """
+#!/usr/bin/python
+print("Hello")
+"""
+```
+
+2. Use bash syntax if sourcing is required:
+```toml
+[[phase.runtime]]
+name = "setup-env"
+source = true
+script = """
+#!/bin/bash
+export MY_VAR="value"
+"""
+```
+
+#### Phase Environment Variables Not Available
+
+**Problem**: Env vars set in `env` field not available in subsequent phases.
+
+```toml
+[[phase.runtime]]
+name = "set-env"
+env = { DEBUG = "true" }
+script = "echo $DEBUG"  # Works here
+
+[[phase.runtime]]
+name = "use-env"
+script = "echo $DEBUG"  # Empty!
+```
+
+**Explanation**: Phase-specific env vars are isolated by default (subprocess).
+
+**Solution A**: Export from script with `source = true`:
+```toml
+[[phase.runtime]]
+name = "set-env"
+source = true
+script = "export DEBUG=true"
+```
+
+**Solution B**: Set env vars in each phase that needs them:
+```toml
+[[phase.runtime]]
+name = "use-env"
+env = { DEBUG = "true" }
+script = "echo $DEBUG"
+```
+
+#### Script Works Locally But Fails in VM
+
+**Problem**: Script succeeds when run directly but fails in phase.
+
+**Common Causes**:
+1. **Missing tools**: VM doesn't have same tools as host
+   ```bash
+   # Check what's available:
+   claude-vm shell
+   which my-tool
+   ```
+
+2. **Different PATH**: VM has different PATH
+   ```bash
+   # Debug in VM:
+   echo $PATH
+   ```
+
+3. **Working directory**: Script assumes specific directory
+   ```toml
+   # Solution: Use absolute paths
+   [[phase.setup]]
+   name = "install"
+   script = "cd /full/path && ./install.sh"
+   ```
+
+#### Performance: Runtime Phases Are Slow
+
+**Problem**: `claude-vm shell` takes 10+ seconds to start.
+
+**Cause**: Runtime phases execute on **every** command.
+
+**Solution**: Optimize runtime phases:
+
+```toml
+# ❌ BAD: Network calls in runtime
+[[phase.runtime]]
+name = "check-api"
+script = "curl -s https://api.example.com/status"  # Slow!
+
+# ✅ GOOD: Fast local checks only
+[[phase.runtime]]
+name = "check-local"
+script = "test -f ~/.configured && echo 'Ready'"
+
+# ✅ GOOD: Cache expensive operations
+[[phase.runtime]]
+name = "check-cached"
+script = """
+if [ ! -f /tmp/api-status ] || [ $(($(date +%s) - $(stat -f %m /tmp/api-status))) -gt 300 ]; then
+  curl -s https://api.example.com/status > /tmp/api-status
+fi
+cat /tmp/api-status
+"""
+```
+
+**Best Practices**:
+- Keep runtime phases under 1 second
+- Use setup phases for slow operations
+- Cache results when possible
+- Avoid network calls
+
+#### Getting More Debug Information
+
+Enable verbose output to see what phases are running:
+
+```bash
+# Setup with debug output:
+claude-vm setup --no-agent-install 2>&1 | tee setup.log
+
+# Runtime with debug:
+claude-vm shell bash -c 'set -x; env'
+```
+
+Check the generated entrypoint script:
+```bash
+# The entrypoint shows all phases
+claude-vm shell cat /tmp/entrypoint.sh
+```
 
 ## Default Arguments
 
@@ -644,13 +1021,36 @@ gpg = true
 [packages]
 system = ["postgresql-client", "jq", "htop"]
 
-# Setup scripts (run during template creation)
-[setup]
-scripts = ["./scripts/install-extras.sh"]
+# Setup phases (run during template creation)
+[[phase.setup]]
+name = "verify-requirements"
+script = """
+#!/bin/bash
+echo 'Verifying system requirements'
+test $(nproc) -ge 2 || exit 1
+"""
 
-# Runtime scripts (run before each session)
-[runtime]
-scripts = ["./scripts/start-services.sh"]
+[[phase.setup]]
+name = "install-extras"
+when = "test -f ./scripts/install-extras.sh"
+script_files = ["./scripts/install-extras.sh"]
+
+# Runtime phases (run before each session)
+[[phase.runtime]]
+name = "start-services"
+env = { COMPOSE_PROJECT_NAME = "myapp", DEBUG = "true" }
+script = "docker-compose up -d"
+
+[[phase.runtime]]
+name = "wait-for-db"
+continue_on_error = false
+script = """
+until pg_isready -h localhost -p 5432; do
+  echo 'Waiting for database...'
+  sleep 1
+done
+echo '✓ Database ready'
+"""
 
 # Default options
 [defaults]
