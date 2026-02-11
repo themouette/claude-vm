@@ -142,11 +142,8 @@ echo "DEBUG=$DEBUG" >> /tmp/env-test.txt
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/env-test.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/env-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("TEST_VAR=hello-from-phase"),
@@ -299,11 +296,8 @@ echo 'third' >> /tmp/error-test.txt
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed despite error");
 
     // Verify first and third phases ran
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/error-test.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/error-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("first"),
@@ -325,8 +319,11 @@ fn test_phase_mixed_inline_and_file() {
 
     // Create a script file
     let script_path = project_dir.path().join("extra.sh");
-    fs::write(&script_path, "#!/bin/bash\necho 'from-file' >> /tmp/mixed-test.txt\n")
-        .expect("Failed to write script file");
+    fs::write(
+        &script_path,
+        "#!/bin/bash\necho 'from-file' >> /tmp/mixed-test.txt\n",
+    )
+    .expect("Failed to write script file");
 
     // Create config with both inline and file scripts
     let config = format!(
@@ -349,18 +346,12 @@ script_files = ["{}"]
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
     // Verify both ran (inline first, then file)
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/mixed-test.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/mixed-test.txt")
+        .expect("Command should run");
 
     let lines: Vec<&str> = output.trim().lines().collect();
     assert_eq!(lines.len(), 2, "Should have 2 lines, got: {:?}", lines);
-    assert_eq!(
-        lines[0], "from-inline",
-        "Inline script should run first"
-    );
+    assert_eq!(lines[0], "from-inline", "Inline script should run first");
     assert_eq!(lines[1], "from-file", "File script should run second");
 }
 
@@ -549,6 +540,213 @@ echo "configured-$CONFIG" >> /tmp/workflow-test.txt
     assert!(
         output.contains("configured-production"),
         "Configure phase should run with env vars, got: {}",
+        output
+    );
+}
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_phase_source_exports_persist() {
+    let config = r#"
+[[phase.runtime]]
+name = "export-var"
+source = true
+script = """
+export TEST_VAR="hello from source"
+"""
+
+[[phase.runtime]]
+name = "use-var"
+script = """
+#!/bin/bash
+echo "TEST_VAR=$TEST_VAR" > /tmp/source-test.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(
+        &project_dir.path().to_path_buf(),
+        "cat /tmp/source-test.txt",
+    )
+    .expect("Command should run");
+
+    assert!(
+        output.contains("TEST_VAR=hello from source"),
+        "Sourced export should persist to next phase, got: {}",
+        output
+    );
+}
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_phase_source_path_modification() {
+    let config = r#"
+[[phase.runtime]]
+name = "add-to-path"
+source = true
+script = """
+mkdir -p ~/.local/bin
+echo '#!/bin/bash' > ~/.local/bin/custom-tool
+echo 'echo "custom tool works"' >> ~/.local/bin/custom-tool
+chmod +x ~/.local/bin/custom-tool
+export PATH="$HOME/.local/bin:$PATH"
+"""
+
+[[phase.runtime]]
+name = "use-custom-tool"
+script = """
+#!/bin/bash
+custom-tool > /tmp/path-test.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/path-test.txt")
+        .expect("Command should run");
+
+    assert!(
+        output.contains("custom tool works"),
+        "Custom tool from modified PATH should work, got: {}",
+        output
+    );
+}
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_phase_source_with_env_vars() {
+    let config = r#"
+[[phase.runtime]]
+name = "source-with-env"
+source = true
+env = { INITIAL_VALUE = "initial" }
+script = """
+export COMBINED_VAR="$INITIAL_VALUE-plus-more"
+"""
+
+[[phase.runtime]]
+name = "check-combined"
+script = """
+#!/bin/bash
+echo "COMBINED_VAR=$COMBINED_VAR" > /tmp/combined-test.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(
+        &project_dir.path().to_path_buf(),
+        "cat /tmp/combined-test.txt",
+    )
+    .expect("Command should run");
+
+    assert!(
+        output.contains("COMBINED_VAR=initial-plus-more"),
+        "Sourced script should have access to env vars and export should persist, got: {}",
+        output
+    );
+}
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_phase_no_source_exports_dont_persist() {
+    let config = r#"
+[[phase.runtime]]
+name = "export-without-source"
+source = false
+script = """
+#!/bin/bash
+export NO_PERSIST_VAR="should not persist"
+"""
+
+[[phase.runtime]]
+name = "check-var"
+script = """
+#!/bin/bash
+echo "NO_PERSIST_VAR=$NO_PERSIST_VAR" > /tmp/no-persist-test.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(
+        &project_dir.path().to_path_buf(),
+        "cat /tmp/no-persist-test.txt",
+    )
+    .expect("Command should run");
+
+    assert!(
+        output.contains("NO_PERSIST_VAR=") && !output.contains("should not persist"),
+        "Non-sourced export should NOT persist, got: {}",
+        output
+    );
+}
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_phase_source_multiple_exports() {
+    let config = r#"
+[[phase.runtime]]
+name = "export-multiple"
+source = true
+script = """
+export VAR1="value1"
+export VAR2="value2"
+export VAR3="value3"
+"""
+
+[[phase.runtime]]
+name = "use-all-vars"
+script = """
+#!/bin/bash
+echo "VAR1=$VAR1" > /tmp/multi-export-test.txt
+echo "VAR2=$VAR2" >> /tmp/multi-export-test.txt
+echo "VAR3=$VAR3" >> /tmp/multi-export-test.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(
+        &project_dir.path().to_path_buf(),
+        "cat /tmp/multi-export-test.txt",
+    )
+    .expect("Command should run");
+
+    assert!(
+        output.contains("VAR1=value1"),
+        "VAR1 should persist, got: {}",
+        output
+    );
+    assert!(
+        output.contains("VAR2=value2"),
+        "VAR2 should persist, got: {}",
+        output
+    );
+    assert!(
+        output.contains("VAR3=value3"),
+        "VAR3 should persist, got: {}",
         output
     );
 }

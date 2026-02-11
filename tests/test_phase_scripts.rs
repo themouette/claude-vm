@@ -161,6 +161,7 @@ fn test_get_scripts_inline() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let temp_dir = TempDir::new().unwrap();
@@ -191,6 +192,7 @@ fn test_get_scripts_files() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let scripts = phase.get_scripts(temp_dir.path()).unwrap();
@@ -217,6 +219,7 @@ fn test_get_scripts_mixed() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let scripts = phase.get_scripts(temp_dir.path()).unwrap();
@@ -239,6 +242,7 @@ fn test_get_scripts_missing_file() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let temp_dir = TempDir::new().unwrap();
@@ -262,6 +266,7 @@ fn test_get_scripts_relative_paths() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let scripts = phase.get_scripts(temp_dir.path()).unwrap();
@@ -412,6 +417,7 @@ fn test_phase_requires_script_or_files() {
         env: HashMap::new(),
         continue_on_error: false,
         when: None,
+        source: false,
     };
 
     let temp_dir = TempDir::new().unwrap();
@@ -563,7 +569,10 @@ test $(nproc) -ge 2 || exit 1
     let phase2 = &config.phase.setup[1];
     assert_eq!(phase2.name, "install-docker");
     assert_eq!(phase2.when, Some("! command -v docker".to_string()));
-    assert_eq!(phase2.env.get("DEBIAN_FRONTEND"), Some(&"noninteractive".to_string()));
+    assert_eq!(
+        phase2.env.get("DEBIAN_FRONTEND"),
+        Some(&"noninteractive".to_string())
+    );
 
     // Verify third phase
     let phase3 = &config.phase.setup[2];
@@ -617,4 +626,69 @@ echo '✓ Services ready'
     assert_eq!(phase3.name, "optional-service");
     assert!(phase3.continue_on_error);
     assert_eq!(phase3.script_files.len(), 1);
+}
+
+/// Test that source field is properly parsed
+#[test]
+fn test_phase_source_parsing() {
+    let toml = r#"
+        [[phase.runtime]]
+        name = "sourced-script"
+        source = true
+        script = "export PATH=\"$HOME/.local/bin:$PATH\""
+    "#;
+
+    let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
+    assert_eq!(config.phase.runtime.len(), 1);
+    assert!(config.phase.runtime[0].source);
+}
+
+/// Test that source defaults to false
+#[test]
+fn test_phase_source_defaults_false() {
+    let toml = r#"
+        [[phase.runtime]]
+        name = "regular-script"
+        script = "echo 'hello'"
+    "#;
+
+    let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
+    assert_eq!(config.phase.runtime.len(), 1);
+    assert!(!config.phase.runtime[0].source);
+}
+
+/// Test source with environment variables
+#[test]
+fn test_phase_source_with_env() {
+    let toml = r#"
+        [[phase.runtime]]
+        name = "sourced-with-env"
+        source = true
+        env = { DEBUG = "true" }
+        script = """
+export MY_VAR="hello"
+export PATH="$HOME/.local/bin:$PATH"
+"""
+    "#;
+
+    let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
+    let phase = &config.phase.runtime[0];
+    assert!(phase.source);
+    assert_eq!(phase.env.len(), 1);
+    assert!(phase.script.as_ref().unwrap().contains("export MY_VAR"));
+}
+
+/// Test source field explicitly set to false
+#[test]
+fn test_phase_source_explicit_false() {
+    let toml = r#"
+        [[phase.runtime]]
+        name = "not-sourced"
+        source = false
+        script = "echo 'test'"
+    "#;
+
+    let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
+    assert_eq!(config.phase.runtime.len(), 1);
+    assert!(!config.phase.runtime[0].source);
 }
