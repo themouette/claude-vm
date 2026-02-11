@@ -78,6 +78,10 @@ impl CapabilityRegistry {
                 include_str!("../../capabilities/python/capability.toml"),
             ),
             (
+                "rust",
+                include_str!("../../capabilities/rust/capability.toml"),
+            ),
+            (
                 "chromium",
                 include_str!("../../capabilities/chromium/capability.toml"),
             ),
