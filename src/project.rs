@@ -3,6 +3,13 @@ use crate::utils::git;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Maximum length for template names to avoid UNIX_PATH_MAX issues
+/// Lima creates socket paths like: ~/.lima/{vm-name}/ssh.sock.{random}
+/// With typical base paths (~30 chars) and socket suffix (~28 chars),
+/// and VM sessions adding process ID (~11 chars), we need to keep
+/// template names under 50 chars to stay well under the 104 char limit.
+const MAX_TEMPLATE_NAME_LENGTH: usize = 50;
+
 #[derive(Debug, Clone)]
 pub struct Project {
     /// Current working directory (worktree if in worktree, otherwise main repo)
@@ -80,6 +87,7 @@ impl Project {
     }
 
     /// Generate template name: claude-tpl_{sanitized-basename}_{8-char-md5-hash}[-dev]
+    /// Enforces MAX_TEMPLATE_NAME_LENGTH to avoid UNIX_PATH_MAX issues with socket paths
     fn generate_template_name(root: &Path) -> String {
         let basename = root
             .file_name()
@@ -101,7 +109,19 @@ impl Project {
         #[cfg(not(debug_assertions))]
         let suffix = "";
 
-        format!("claude-tpl_{}_{}{}", sanitized, short_hash, suffix)
+        // Calculate fixed overhead: "claude-tpl_" (11) + "_" (1) + hash (8) + suffix (0 or 4)
+        let prefix = "claude-tpl_";
+        let fixed_overhead = prefix.len() + 1 + short_hash.len() + suffix.len();
+
+        // Truncate sanitized name if necessary to stay within max length
+        let max_sanitized_len = MAX_TEMPLATE_NAME_LENGTH.saturating_sub(fixed_overhead);
+        let truncated = if sanitized.len() > max_sanitized_len {
+            &sanitized[..max_sanitized_len]
+        } else {
+            &sanitized
+        };
+
+        format!("{}{}_{}{}", prefix, truncated, short_hash, suffix)
     }
 
     /// Sanitize name: lowercase, alphanumeric + dash, collapse dashes
@@ -203,6 +223,102 @@ mod tests {
             !template_name.ends_with("-dev"),
             "Release build should not have -dev suffix: {}",
             template_name
+        );
+    }
+
+    #[test]
+    fn test_generate_template_name_length_limit() {
+        // Test that very long project names are truncated to stay within MAX_TEMPLATE_NAME_LENGTH
+        let long_name = "a".repeat(100); // 100 'a's
+        let path = PathBuf::from(format!("/home/user/{}", long_name));
+        let template_name = Project::generate_template_name(&path);
+
+        // Template name should not exceed the max length
+        assert!(
+            template_name.len() <= MAX_TEMPLATE_NAME_LENGTH,
+            "Template name too long: {} chars (max: {})",
+            template_name.len(),
+            MAX_TEMPLATE_NAME_LENGTH
+        );
+
+        // Should still have the correct format
+        assert!(template_name.starts_with("claude-tpl_"));
+
+        // Should contain the hash (8 chars before suffix)
+        #[cfg(debug_assertions)]
+        {
+            assert!(template_name.ends_with("-dev"));
+            // Hash should be 8 chars before "-dev"
+            let without_suffix = template_name.trim_end_matches("-dev");
+            assert!(without_suffix.len() >= 8);
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            assert!(!template_name.ends_with("-dev"));
+            // Hash should be last 8 chars
+            assert!(template_name.len() >= 8);
+        }
+    }
+
+    #[test]
+    fn test_generate_template_name_specific_long_example() {
+        // Test the specific case from the bug report
+        let path =
+            PathBuf::from("/home/user/claude-orchestrator-themouette-add-user-authentication");
+        let template_name = Project::generate_template_name(&path);
+
+        // Should be truncated
+        assert!(
+            template_name.len() <= MAX_TEMPLATE_NAME_LENGTH,
+            "Template name too long: {} chars (max: {})",
+            template_name.len(),
+            MAX_TEMPLATE_NAME_LENGTH
+        );
+
+        // Should start with the prefix and some of the project name
+        assert!(template_name.starts_with("claude-tpl_claude-orchestr"));
+
+        // Should contain hash
+        assert!(template_name.contains('_'));
+    }
+
+    #[test]
+    fn test_generate_template_name_short_unchanged() {
+        // Test that short names are not affected
+        let path = PathBuf::from("/home/user/my-app");
+        let template_name = Project::generate_template_name(&path);
+
+        // Should contain the full project name (not truncated)
+        assert!(template_name.contains("my-app"));
+
+        // Should be well under the limit
+        assert!(template_name.len() <= MAX_TEMPLATE_NAME_LENGTH);
+    }
+
+    #[test]
+    fn test_generate_template_name_ensures_vm_session_safety() {
+        // Test that template names leave enough room for VM session names
+        // VM session format: {template_name}-{process_id}
+        // Process IDs can be up to 10 digits, so we need ~11 extra chars (including dash)
+
+        let long_name = "very-long-project-name-that-should-be-truncated-safely";
+        let path = PathBuf::from(format!("/home/user/{}", long_name));
+        let template_name = Project::generate_template_name(&path);
+
+        // Simulate VM session name (template + "-" + max PID)
+        let vm_session_name = format!("{}-9999999999", template_name);
+
+        // VM session should fit within safe socket path limits
+        // Typical socket path: ~/.lima/{vm-name}/ssh.sock.{random}
+        // Base: ~30 chars, suffix: ~28 chars, total overhead: ~58 chars
+        // UNIX_PATH_MAX: 104 chars, so vm_name should be < 46 chars
+        const SAFE_VM_NAME_LENGTH: usize = 65; // Conservative limit
+        assert!(
+            vm_session_name.len() <= SAFE_VM_NAME_LENGTH,
+            "VM session name too long: {} chars (safe limit: {})",
+            vm_session_name.len(),
+            SAFE_VM_NAME_LENGTH
         );
     }
 }
