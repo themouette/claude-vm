@@ -75,6 +75,14 @@ fn save_cache(cache: &UpdateCheckCache) {
     }
 }
 
+/// Clear the update check cache
+/// This should be called after performing an update to reset the version check state
+pub fn clear_cache() {
+    if let Some(path) = cache_path() {
+        let _ = fs::remove_file(path);
+    }
+}
+
 /// Perform the actual version check against GitHub
 fn perform_version_check() -> Option<UpdateCheckCache> {
     let now = SystemTime::now()
@@ -338,5 +346,31 @@ mod tests {
 
         // Should handle gracefully with saturating_sub (elapsed = 0)
         assert!(!future_cache.is_stale(1));
+    }
+
+    #[test]
+    fn test_clear_cache() {
+        // Create a test cache
+        let cache = UpdateCheckCache {
+            last_check: 1234567890,
+            latest_version: Some("0.3.0".to_string()),
+            update_available: true,
+        };
+
+        // Save the cache
+        save_cache(&cache);
+
+        // Verify it exists
+        if let Some(path) = cache_path() {
+            assert!(path.exists(), "Cache file should exist after save");
+        }
+
+        // Clear the cache
+        clear_cache();
+
+        // Verify it's gone
+        if let Some(path) = cache_path() {
+            assert!(!path.exists(), "Cache file should not exist after clear");
+        }
     }
 }

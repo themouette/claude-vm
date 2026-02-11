@@ -1,4 +1,5 @@
 use crate::error::{ClaudeVmError, Result};
+use crate::update_check;
 use crate::version;
 use self_update::cargo_crate_version;
 
@@ -81,6 +82,10 @@ fn perform_update(target: Option<String>, skip_confirm: bool) -> Result<()> {
     };
 
     println!("\nSuccessfully updated to version {}", status.version());
+
+    // Clear the version check cache so next check will be fresh
+    update_check::clear_cache();
+
     Ok(())
 }
 
