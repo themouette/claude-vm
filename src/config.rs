@@ -1236,6 +1236,38 @@ mod tests {
     }
 
     #[test]
+    fn test_tools_merge_rust() {
+        // Create base config with rust enabled
+        let mut base = Config::default();
+        base.tools.rust = true;
+
+        // Create override config with docker enabled
+        let mut override_cfg = Config::default();
+        override_cfg.tools.docker = true;
+
+        // Merge configs
+        let merged = base.merge(override_cfg);
+
+        // Verify both tools are enabled
+        assert!(merged.tools.rust);
+        assert!(merged.tools.docker);
+    }
+
+    #[test]
+    fn test_rust_enable() {
+        let mut config = ToolsConfig::default();
+
+        // Rust should not be enabled by default
+        assert!(!config.is_enabled("rust"));
+
+        // Enable rust
+        config.enable("rust");
+
+        // Rust should now be enabled
+        assert!(config.is_enabled("rust"));
+    }
+
+    #[test]
     fn test_packages_system_merge() {
         // Create base config with system packages
         let mut base = Config::default();
