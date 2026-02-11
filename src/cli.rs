@@ -86,6 +86,10 @@ pub enum Commands {
         #[arg(long)]
         python: bool,
 
+        /// Install Rust toolchain
+        #[arg(long)]
+        rust: bool,
+
         /// Install Chromium for debugging
         #[arg(long)]
         chromium: bool,
