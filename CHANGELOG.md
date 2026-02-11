@@ -6,6 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **Template name length limit**: Enforced 50-character maximum for template names to prevent UNIX_PATH_MAX errors. Lima creates socket paths like `~/.lima/{vm-name}/ssh.sock.{random}` which must be under 104 characters. Long project names (e.g., "claude-orchestrator-themouette-add-user-authentication") could create template and session names exceeding this limit, causing errors like "instance name too long: socket path must be less than 104 characters". Template names are now truncated when necessary while preserving the MD5 hash for uniqueness.
 - **Setup failure cleanup**: Template VM is now properly stopped and deleted when setup fails, preventing partially configured templates from being left behind
 - **Git worktree template naming**: Fixed bug where worktrees created separate templates instead of sharing the main repository's template. All worktrees now correctly use the same template based on the main repository root. Configuration loading now checks both worktree and main repository for `.claude-vm.toml` files, with worktree config taking precedence.
 - **Version check cache after update**: Fixed bug where the version check cache was not being cleared after a successful update. The cached "latest_version" could remain set to what is now the current version, leading to stale update notifications. The cache file is now properly cleared after updates to ensure fresh version checks.
