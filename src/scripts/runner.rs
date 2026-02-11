@@ -266,6 +266,7 @@ pub fn execute_command_with_runtime_scripts(
         eprintln!(
             "⚠ Warning: [runtime] scripts array is deprecated. Please migrate to [[phase.runtime]]"
         );
+        eprintln!("   See: docs/configuration.md");
 
         for script_path_str in &config.runtime.scripts {
             let script_path = PathBuf::from(script_path_str);

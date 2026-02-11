@@ -267,7 +267,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
         eprintln!(
             "⚠ Warning: [setup] scripts array is deprecated. Please migrate to [[phase.setup]]"
         );
-        eprintln!("   See: https://github.com/themouette/claude-vm#migration-guide");
+        eprintln!("   See: docs/configuration.md");
 
         for script_path_str in &config.setup.scripts {
             let script_path = Path::new(script_path_str);
