@@ -1,0 +1,66 @@
+[capability]
+id = "rust"
+name = "Rust"
+description = "Rust toolchain with rustc, cargo, rustfmt, and clippy via Rustup"
+
+[packages]
+system = []
+setup_script = """
+#!/bin/bash
+set -e
+# Install Rustup and Rust toolchain (idempotent)
+
+# Check if Rustup is already installed
+if [ -d "$HOME/.rustup" ] && [ -x "$HOME/.cargo/bin/rustup" ]; then
+    echo "Rustup already installed"
+else
+    echo "Installing Rustup..."
+    # Download and execute official Rustup installation script
+    # Security: HTTPS (TLS) ensures authenticity via certificate validation
+    # -y flag for non-interactive installation
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+    echo "✓ Rustup installed"
+fi
+
+# Set up Rust environment
+export RUSTUP_HOME="$HOME/.rustup"
+export CARGO_HOME="$HOME/.cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
+
+# Ensure stable toolchain is installed and up-to-date
+if ! rustup toolchain list | grep -q "stable"; then
+    echo "Installing stable Rust toolchain..."
+    rustup toolchain install stable
+    echo "✓ Stable toolchain installed"
+else
+    echo "Stable Rust toolchain already installed"
+fi
+
+# Set stable as default
+rustup default stable
+
+# Install essential components if not already present
+echo "Ensuring rustfmt and clippy are installed..."
+rustup component add rustfmt clippy
+echo "✓ Rust toolchain ready"
+"""
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Set up Rust environment
+export RUSTUP_HOME="$HOME/.rustup"
+export CARGO_HOME="$HOME/.cargo"
+export PATH="$CARGO_HOME/bin:$PATH"
+
+# Write Rust context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/rust.txt <<EOF
+Rustup version: $(rustup --version 2>/dev/null || echo "not available")
+Rust version: $(rustc --version 2>/dev/null || echo "not available")
+Cargo version: $(cargo --version 2>/dev/null || echo "not available")
+Rustfmt version: $(rustfmt --version 2>/dev/null || echo "not available")
+Clippy version: $(cargo clippy --version 2>/dev/null || echo "not available")
+Installed toolchains: $(rustup toolchain list 2>/dev/null | tr '\n' ' ' || echo "none")
+EOF
+"""
