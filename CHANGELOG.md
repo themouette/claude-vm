@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Git worktree template naming**: Fixed bug where worktrees created separate templates instead of sharing the main repository's template. All worktrees now correctly use the same template based on the main repository root. Configuration loading now checks both worktree and main repository for `.claude-vm.toml` files, with worktree config taking precedence.
+
 ## [0.5.1] - 2026-02-09
 
 ### Fixed

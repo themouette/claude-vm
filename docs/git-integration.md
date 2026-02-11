@@ -19,14 +19,38 @@ Git worktrees allow you to check out multiple branches in different directories 
 
 When you run claude-vm from a git worktree directory, it automatically:
 
-1. **Mounts the worktree directory** (writable) - Your current working directory
-2. **Mounts the main repository** (writable) - The `.git` directory and parent repository
+1. **Shares the same template** - All worktrees of a repository use the same VM template (based on the main repository root)
+2. **Mounts the worktree directory** (writable) - Your current working directory
+3. **Mounts the main repository** (writable) - The `.git` directory and parent repository
+4. **Merges configurations** - Loads `.claude-vm.toml` from both worktree and main repo (worktree takes precedence)
 
 Both mounts are writable because git commands in worktrees require write access to the main repository's `.git` directory to:
 
 - Update refs (branches, tags)
 - Create commits
 - Perform git operations that modify repository state
+
+#### Template Naming
+
+All worktrees of the same repository share a single VM template. The template name is based on the main repository root, not the worktree path. This means:
+
+- **Efficient resource usage**: One template serves all worktrees
+- **Consistent environment**: Same VM configuration across all branches
+- **Shared setup**: Run `claude-vm setup` once, use in all worktrees
+
+#### Configuration Precedence
+
+When in a worktree, configuration files are loaded with this precedence (highest to lowest):
+
+1. **Worktree config**: `.claude-vm.toml` in the worktree directory
+2. **Main repo config**: `.claude-vm.toml` in the main repository
+3. **Global config**: `~/.claude-vm.toml` in your home directory
+4. **Built-in defaults**: Default VM settings
+
+This allows you to:
+- Define common settings in the main repository
+- Override specific settings per worktree (e.g., different memory limits, capabilities)
+- Test configuration changes in a worktree before merging to main
 
 ### Example
 
