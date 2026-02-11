@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Node.js capability now uses Volta**: Migrated from NodeSource repository installation to Volta for Node.js version management. Volta provides better toolchain management and allows users to easily switch Node.js versions per-project. The setup script now installs Volta and the latest stable Node.js version by default. Runtime context includes Volta version and all installed Node versions.
+
 ### Fixed
 
 - **Template name length limit**: Enforced 50-character maximum for template names to prevent UNIX_PATH_MAX errors. Lima creates socket paths like `~/.lima/{vm-name}/ssh.sock.{random}` which must be under 104 characters. Long project names (e.g., "claude-orchestrator-themouette-add-user-authentication") could create template and session names exceeding this limit, causing errors like "instance name too long: socket path must be less than 104 characters". Template names are now truncated when necessary while preserving the MD5 hash for uniqueness.

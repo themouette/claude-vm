@@ -1,36 +1,55 @@
 [capability]
 id = "node"
 name = "Node.js"
-description = "Node.js runtime and npm package manager"
+description = "Node.js runtime and npm package manager via Volta"
 
 [packages]
-system = ["nodejs"]
+system = []
 setup_script = """
 #!/bin/bash
 set -e
-# Add NodeSource repository for Node.js 22.x (idempotent)
+# Install Volta and latest stable Node.js (idempotent)
 
-# Check if NodeSource repository is already configured
-if grep -q "deb.nodesource.com" /etc/apt/sources.list.d/nodesource.list 2>/dev/null; then
-    echo "NodeSource repository already configured"
+# Check if Volta is already installed
+if [ -d "$HOME/.volta" ] && [ -x "$HOME/.volta/bin/volta" ]; then
+    echo "Volta already installed"
 else
-    echo "Adding NodeSource repository..."
-    # Download and execute official NodeSource setup script
+    echo "Installing Volta..."
+    # Download and execute official Volta installation script
     # Security: HTTPS (TLS) ensures authenticity via certificate validation
-    # The script handles GPG key download and verification internally
-    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-    echo "✓ NodeSource repository configured"
+    curl https://get.volta.sh | bash
+    echo "✓ Volta installed"
+fi
+
+# Set up Volta environment
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
+
+# Install latest stable Node.js if not already installed
+if ! volta list node 2>/dev/null | grep -q "node"; then
+    echo "Installing latest stable Node.js via Volta..."
+    volta install node
+    echo "✓ Node.js installed via Volta"
+else
+    echo "Node.js already installed via Volta"
+    # Update to latest stable
+    volta install node
 fi
 """
 
 [vm_runtime]
 script = """
 #!/bin/bash
+# Set up Volta environment
+export VOLTA_HOME="$HOME/.volta"
+export PATH="$VOLTA_HOME/bin:$PATH"
+
 # Write Node.js context for Claude
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/node.txt <<EOF
+Volta version: $(volta --version 2>/dev/null || echo "not available")
 Node.js version: $(node --version 2>/dev/null || echo "not available")
 npm version: $(npm --version 2>/dev/null || echo "not available")
-Global packages: $(npm list -g --depth=0 2>/dev/null | wc -l || echo "unknown")
+Installed Node versions: $(volta list node 2>/dev/null | grep -E "^\\s+v[0-9]" | tr '\\n' ' ' || echo "none")
 EOF
 """
