@@ -67,7 +67,7 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
 
         // Try to load merged config - this will validate all files
         println!("\nLoading and validating configuration...");
-        match Config::load(project.root()) {
+        match Config::load_with_main_repo(project.root(), project.main_repo_root()) {
             Ok(_) => {
                 println!("✓ Configuration is valid!");
                 Ok(())
@@ -83,7 +83,7 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
 
 fn show() -> Result<()> {
     let project = Project::detect()?;
-    let config = Config::load(project.root())?;
+    let config = Config::load_with_main_repo(project.root(), project.main_repo_root())?;
 
     println!("Effective Configuration:");
     println!("(CLI > Project config > Global config > Defaults)\n");

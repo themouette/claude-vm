@@ -64,6 +64,29 @@ Templates are named based on the project path:
 
 The hash ensures uniqueness even with identical project names.
 
+### Git Worktrees
+
+When working in git worktrees, **all worktrees share the same template**. The template name is based on the main repository root, not the worktree path:
+
+```bash
+# Main repository
+cd /Users/me/project
+claude-vm setup --docker
+# Creates: claude-tpl_project_a1b2c3d4
+
+# Worktree (shares same template)
+cd /Users/me/project-feature
+claude-vm shell
+# Uses: claude-tpl_project_a1b2c3d4 (same template!)
+```
+
+This ensures:
+- **Resource efficiency**: One template for all worktrees
+- **Consistent environment**: Same tools across all branches
+- **Shared setup**: Run setup once, use everywhere
+
+See [Git Integration](../git-integration.md) for more details on worktree support.
+
 ## Creating Templates
 
 ### Basic Creation

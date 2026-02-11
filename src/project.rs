@@ -1,28 +1,52 @@
 use crate::error::{ClaudeVmError, Result};
+use crate::utils::git;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct Project {
+    /// Current working directory (worktree if in worktree, otherwise main repo)
     root: PathBuf,
+    /// Main repository root (for template naming)
+    main_repo_root: PathBuf,
     template_name: String,
 }
 
 impl Project {
     /// Detect the current project and generate its template name
     pub fn detect() -> Result<Self> {
-        let root = Self::get_project_root()?;
-        let template_name = Self::generate_template_name(&root);
+        let (root, main_repo_root) = Self::get_project_roots()?;
+        let template_name = Self::generate_template_name(&main_repo_root);
         Ok(Self {
             root,
+            main_repo_root,
             template_name,
         })
     }
 
-    /// Get the project root directory
-    /// Priority: git worktree/repo root (via --show-toplevel), then current directory
-    fn get_project_root() -> Result<PathBuf> {
-        // Try git rev-parse --show-toplevel (returns worktree root if in worktree, main repo otherwise)
+    /// Get both the current project root and the main repository root
+    /// Returns (current_root, main_repo_root)
+    /// - current_root: worktree root if in worktree, otherwise main repo root
+    /// - main_repo_root: always the main repository root (used for template naming)
+    fn get_project_roots() -> Result<(PathBuf, PathBuf)> {
+        // Check if we're in a worktree
+        if git::is_worktree() {
+            // Get worktree root (current working location)
+            let worktree_root = Self::get_git_toplevel()?;
+
+            // Get main repo root from common git dir
+            let main_repo_root = Self::get_main_repo_root()?;
+
+            Ok((worktree_root, main_repo_root))
+        } else {
+            // Not in a worktree, use the same root for both
+            let root = Self::get_git_toplevel()?;
+            Ok((root.clone(), root))
+        }
+    }
+
+    /// Get the top-level directory (worktree root if in worktree, main repo otherwise)
+    fn get_git_toplevel() -> Result<PathBuf> {
         if let Ok(output) = Command::new("git")
             .args(["rev-parse", "--show-toplevel"])
             .output()
@@ -31,7 +55,6 @@ impl Project {
                 let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let root_path = PathBuf::from(root);
 
-                // Canonicalize to resolve any .. or symlinks
                 if let Ok(canonical) = root_path.canonicalize() {
                     return Ok(canonical);
                 }
@@ -42,6 +65,18 @@ impl Project {
         std::env::current_dir().map_err(|e| {
             ClaudeVmError::ProjectDetection(format!("Failed to get current directory: {}", e))
         })
+    }
+
+    /// Get the main repository root (parent of the common git dir)
+    fn get_main_repo_root() -> Result<PathBuf> {
+        let common_dir = git::get_git_common_dir()?
+            .ok_or_else(|| ClaudeVmError::Git("Not in a git repository".to_string()))?;
+
+        // The common dir is .git for the main repo, so parent is the main repo root
+        common_dir
+            .parent()
+            .ok_or_else(|| ClaudeVmError::Git("Invalid git common directory".to_string()))
+            .map(|p| p.to_path_buf())
     }
 
     /// Generate template name: claude-tpl_{sanitized-basename}_{8-char-md5-hash}[-dev]
@@ -92,8 +127,17 @@ impl Project {
         &self.root
     }
 
+    pub fn main_repo_root(&self) -> &Path {
+        &self.main_repo_root
+    }
+
     pub fn template_name(&self) -> &str {
         &self.template_name
+    }
+
+    /// Check if the project is in a worktree
+    pub fn is_worktree(&self) -> bool {
+        self.root != self.main_repo_root
     }
 }
 

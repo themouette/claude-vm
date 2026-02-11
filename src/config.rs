@@ -505,7 +505,17 @@ impl Config {
     /// 3. Project config (.claude-vm.toml in project root)
     /// 4. Global config (~/.claude-vm.toml)
     /// 5. Built-in defaults
+    ///
+    /// For worktrees, this method checks both the worktree and main repo.
+    /// Pass the worktree root as project_root and main repo root as main_repo_root.
     pub fn load(project_root: &Path) -> Result<Self> {
+        Self::load_with_main_repo(project_root, project_root)
+    }
+
+    /// Load configuration with support for worktrees
+    /// - main_repo_root: Main repository root (for fallback config)
+    /// - project_root: Current project root (worktree if in worktree)
+    pub fn load_with_main_repo(project_root: &Path, main_repo_root: &Path) -> Result<Self> {
         let mut config = Self::default();
 
         // 1. Load global config
@@ -516,16 +526,24 @@ impl Config {
             }
         }
 
-        // 2. Load project config
+        // 2. Load main repo config (if different from project root)
+        if main_repo_root != project_root {
+            let main_config = main_repo_root.join(".claude-vm.toml");
+            if main_config.exists() {
+                config = config.merge(Self::from_file(&main_config)?);
+            }
+        }
+
+        // 3. Load project config (worktree config if in worktree)
         let project_config = project_root.join(".claude-vm.toml");
         if project_config.exists() {
             config = config.merge(Self::from_file(&project_config)?);
         }
 
-        // 3. Apply environment variables
+        // 4. Apply environment variables
         config = config.merge_env();
 
-        // 4. Resolve context file if needed
+        // 5. Resolve context file if needed
         config = config.resolve_context_file()?;
 
         Ok(config)

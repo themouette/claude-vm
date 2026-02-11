@@ -6,6 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **Git worktree template naming**: Fixed bug where worktrees created separate templates instead of sharing the main repository's template. All worktrees now correctly use the same template based on the main repository root. Configuration loading now checks both worktree and main repository for `.claude-vm.toml` files, with worktree config taking precedence.
 - **Version check cache after update**: Fixed bug where the version check cache was not being cleared after a successful update. The cached "latest_version" could remain set to what is now the current version, leading to stale update notifications. The cache file is now properly cleared after updates to ensure fresh version checks.
 
 ## [0.5.1] - 2026-02-09

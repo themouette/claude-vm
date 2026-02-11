@@ -76,6 +76,24 @@ claude-vm setup --disk 40  # Uses disk=40 (CLI wins)
 claude-vm setup            # Uses disk=30 (project config)
 ```
 
+### Git Worktree Configuration
+
+When working in a git worktree, configuration is loaded from both the worktree and main repository:
+
+1. **Command-line flags** - Highest priority
+2. **Environment variables**
+3. **Worktree config** - `./.claude-vm.toml` in worktree directory
+4. **Main repo config** - `.claude-vm.toml` in main repository
+5. **Global config** - `~/.claude-vm.toml`
+6. **Built-in defaults** - Lowest priority
+
+This allows you to:
+- Define common settings in the main repository
+- Override settings per worktree (e.g., different memory for testing)
+- Share the same VM template across all worktrees
+
+See [Git Integration](git-integration.md) for more details.
+
 ## VM Settings
 
 Configure VM resources.
