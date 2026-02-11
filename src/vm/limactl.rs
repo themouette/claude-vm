@@ -68,11 +68,13 @@ impl LimaCtl {
     }
 
     /// Create a new Lima VM from template
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         name: &str,
         template: &str,
         disk: u32,
         memory: u32,
+        cpus: u32,
         port_forwards: &[PortForward],
         mounts: &[Mount],
         verbose: bool,
@@ -127,7 +129,8 @@ impl LimaCtl {
         }
 
         cmd.arg(format!("--disk={}", disk))
-            .arg(format!("--memory={}", memory));
+            .arg(format!("--memory={}", memory))
+            .arg(format!("--cpus={}", cpus));
 
         // Add port forwards using --set flags
         for (index, port_forward) in port_forwards.iter().enumerate() {

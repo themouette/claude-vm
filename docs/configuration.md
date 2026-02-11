@@ -58,11 +58,11 @@ See [`examples/.claude-vm.toml`](../examples/.claude-vm.toml) for a fully commen
 
 Configuration is merged in this order (highest to lowest priority):
 
-1. **Command-line flags** - `--disk 30 --memory 16`
-2. **Environment variables** - `CLAUDE_VM_DISK=30 CLAUDE_VM_MEMORY=16`
+1. **Command-line flags** - `--disk 30 --memory 16 --cpus 4`
+2. **Environment variables** - `CLAUDE_VM_DISK=30 CLAUDE_VM_MEMORY=16 CLAUDE_VM_CPUS=4`
 3. **Project config** - `./.claude-vm.toml`
 4. **Global config** - `~/.claude-vm.toml`
-5. **Built-in defaults** - `disk=20, memory=8`
+5. **Built-in defaults** - `disk=20, memory=8, cpus=4`
 
 **Example:**
 
@@ -102,17 +102,19 @@ Configure VM resources.
 [vm]
 disk = 20      # Disk size in GB (default: 20, range: 1-1000)
 memory = 8     # Memory size in GB (default: 8, range: 1-64)
+cpus = 4       # Number of CPUs (default: 4, range: 1-32)
 ```
 
 **Valid ranges:**
 
 - `disk`: 1-1000 GB
 - `memory`: 1-64 GB
+- `cpus`: 1-32
 
 **Override via CLI:**
 
 ```bash
-claude-vm --disk 30 --memory 16 setup --git
+claude-vm --disk 30 --memory 16 --cpus 4 setup --git
 ```
 
 **Override via environment:**
@@ -120,8 +122,18 @@ claude-vm --disk 30 --memory 16 setup --git
 ```bash
 export CLAUDE_VM_DISK=30
 export CLAUDE_VM_MEMORY=16
+export CLAUDE_VM_CPUS=4
 claude-vm setup --git
 ```
+
+**CI Environment Constraints:**
+
+When running in CI environments (GitHub Actions, GitLab CI, CircleCI), resource limits are automatically reduced to ensure compatibility with CI runners:
+
+- CPUs: 1 (instead of default 4)
+- Memory: 1 GB (instead of default 8 GB)
+
+This is automatically detected via `CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, or `CIRCLECI` environment variables. You can override these constraints using CLI flags or environment variables if your CI environment supports higher limits.
 
 ## Tools Configuration
 
@@ -921,6 +933,7 @@ Override configuration with environment variables.
 # VM resources
 export CLAUDE_VM_DISK=30
 export CLAUDE_VM_MEMORY=16
+export CLAUDE_VM_CPUS=4
 
 # Use in commands
 claude-vm setup --git

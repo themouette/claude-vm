@@ -134,6 +134,7 @@ fn create_base_template(project: &Project, config: &Config) -> Result<()> {
         "debian-13",
         config.vm.disk,
         config.vm.memory,
+        config.vm.cpus,
         &port_forwards,
         &setup_mounts,
         true, // Always verbose for setup

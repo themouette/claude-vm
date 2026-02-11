@@ -6,6 +6,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **CPU configuration**: Added `--cpus` flag and `CLAUDE_VM_CPUS` environment variable to control the number of CPUs allocated to VMs. Default is 4 CPUs. Configurable via CLI, environment variable, or `[vm] cpus = N` in configuration files.
 - **Rust capability**: Added support for Rust toolchain installation via Rustup. Includes stable toolchain with rustc, cargo, rustfmt, and clippy components. Available through `--rust` flag or `[tools] rust = true` in configuration.
 - **Phase-based scripts**: New `[[phase.setup]]` and `[[phase.runtime]]` configuration for better script organization:
   - Inline script support via `script` field
@@ -40,6 +41,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **GitHub Actions VM failures**: Fixed Lima VM startup failures in GitHub Actions by automatically applying resource constraints in CI environments. When running in CI (GitHub Actions, GitLab CI, CircleCI), VMs are now limited to 1 CPU and 1 GB memory to match Lima's own testing approach and work within GitHub Actions runner limitations with the VZ driver. This can be overridden with `--cpus` and `--memory` flags if needed.
 - **Template name length limit**: Enforced 50-character maximum for template names to prevent UNIX_PATH_MAX errors. Lima creates socket paths like `~/.lima/{vm-name}/ssh.sock.{random}` which must be under 104 characters. Long project names (e.g., "claude-orchestrator-themouette-add-user-authentication") could create template and session names exceeding this limit, causing errors like "instance name too long: socket path must be less than 104 characters". Template names are now truncated when necessary while preserving the MD5 hash for uniqueness.
 - **Setup failure cleanup**: Template VM is now properly stopped and deleted when setup fails, preventing partially configured templates from being left behind
 - **Git worktree template naming**: Fixed bug where worktrees created separate templates instead of sharing the main repository's template. All worktrees now correctly use the same template based on the main repository root. Configuration loading now checks both worktree and main repository for `.claude-vm.toml` files, with worktree config taking precedence.
