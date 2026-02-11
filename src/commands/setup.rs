@@ -27,6 +27,35 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
     // Create base template
     create_base_template(project, config)?;
 
+    // Run the setup process and clean up on failure
+    match run_setup_process(project, config, no_agent_install) {
+        Ok(()) => {
+            println!("\nTemplate ready for project: {}", project.root().display());
+            println!("Run 'claude-vm' in this project directory to use it.");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("\nSetup failed: {}", e);
+            eprintln!("Cleaning up template...");
+
+            // Try to stop the VM if it's running
+            if let Err(stop_err) = LimaCtl::stop(project.template_name(), false) {
+                eprintln!("Warning: Failed to stop template VM: {}", stop_err);
+            }
+
+            // Delete the template
+            if let Err(del_err) = template::delete(project.template_name()) {
+                eprintln!("Warning: Failed to delete template: {}", del_err);
+            } else {
+                eprintln!("Template cleaned up successfully.");
+            }
+
+            Err(e)
+        }
+    }
+}
+
+fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool) -> Result<()> {
     // Start the VM
     println!("Starting template VM...");
     LimaCtl::start(project.template_name(), true)?; // Always verbose for setup
@@ -78,9 +107,6 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
     // Stop template
     println!("Stopping template VM...");
     LimaCtl::stop(project.template_name(), true)?; // Always verbose for setup
-
-    println!("\nTemplate ready for project: {}", project.root().display());
-    println!("Run 'claude-vm' in this project directory to use it.");
 
     Ok(())
 }
