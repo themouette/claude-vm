@@ -1,6 +1,7 @@
 use crate::cli::{Cli, Commands};
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -20,6 +21,9 @@ pub struct Config {
 
     #[serde(default)]
     pub runtime: RuntimeConfig,
+
+    #[serde(default)]
+    pub phase: PhaseConfig,
 
     #[serde(default)]
     pub defaults: DefaultsConfig,
@@ -223,6 +227,107 @@ pub struct SetupConfig {
 pub struct RuntimeConfig {
     #[serde(default)]
     pub scripts: Vec<String>,
+}
+
+/// A phase of script execution with metadata and control options
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScriptPhase {
+    /// Phase name (for logging/debugging)
+    #[serde(default)]
+    pub name: String,
+
+    /// Inline script content (optional)
+    #[serde(default)]
+    pub script: Option<String>,
+
+    /// File-based scripts (optional)
+    #[serde(default)]
+    pub script_files: Vec<String>,
+
+    /// Phase-specific environment variables
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+
+    /// Continue execution if this phase fails
+    #[serde(default)]
+    pub continue_on_error: bool,
+
+    /// Conditional execution - run only if this command succeeds (exit 0)
+    /// Example: "command -v docker" or "test -f /usr/bin/tool"
+    #[serde(default, alias = "if")]
+    pub when: Option<String>,
+}
+
+impl ScriptPhase {
+    /// Get all script contents for this phase (inline + files)
+    pub fn get_scripts(&self, base_path: &Path) -> Result<Vec<(String, String)>> {
+        let mut scripts = Vec::new();
+
+        // Inline script first (if present)
+        if let Some(content) = &self.script {
+            let name = format!("{}-inline", self.name);
+            scripts.push((name, content.clone()));
+        }
+
+        // Then file-based scripts (in order)
+        for (i, file_path) in self.script_files.iter().enumerate() {
+            let path = Self::resolve_path(file_path, base_path)?;
+            if !path.exists() {
+                return Err(crate::error::ClaudeVmError::ScriptNotFound(path));
+            }
+            let content = std::fs::read_to_string(&path)?;
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(&format!("script-{}", i))
+                .to_string();
+            scripts.push((name, content));
+        }
+
+        Ok(scripts)
+    }
+
+    /// Resolve file path (handle ~, relative paths)
+    fn resolve_path(file: &str, base_path: &Path) -> Result<PathBuf> {
+        let path = if file.starts_with('~') {
+            crate::utils::path::expand_tilde(file).unwrap_or_else(|| PathBuf::from(file))
+        } else if file.starts_with("./") || file.starts_with("../") {
+            base_path.join(file)
+        } else {
+            PathBuf::from(file)
+        };
+        Ok(path)
+    }
+
+    /// Check if this phase should execute based on 'when' condition
+    pub fn should_execute(&self, vm_name: &str) -> Result<bool> {
+        if let Some(condition) = &self.when {
+            // Execute condition in VM and check exit code
+            match crate::vm::limactl::LimaCtl::shell(
+                vm_name,
+                None,
+                "bash",
+                &["-c", condition],
+                false,
+            ) {
+                Ok(_) => Ok(true),   // Exit 0 = condition met
+                Err(_) => Ok(false), // Non-zero = condition not met
+            }
+        } else {
+            Ok(true) // No condition = always execute
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PhaseConfig {
+    /// Setup phases (run during template creation)
+    #[serde(default)]
+    pub setup: Vec<ScriptPhase>,
+
+    /// Runtime phases (run before each session)
+    #[serde(default)]
+    pub runtime: Vec<ScriptPhase>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -593,6 +698,10 @@ impl Config {
         // Scripts (append)
         self.setup.scripts.extend(other.setup.scripts);
         self.runtime.scripts.extend(other.runtime.scripts);
+
+        // New phases: append (preserves order)
+        self.phase.setup.extend(other.phase.setup);
+        self.phase.runtime.extend(other.phase.runtime);
 
         // Mounts (append)
         self.mounts.extend(other.mounts);
@@ -1601,5 +1710,147 @@ mod tests {
         tools.enable("network-isolation");
         assert!(tools.is_enabled("network-isolation"));
         assert!(tools.network_isolation);
+    }
+
+    #[test]
+    fn test_phase_setup_inline() {
+        let toml = r#"
+        [[phase.setup]]
+        name = "test-phase"
+        script = "echo 'hello'"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.phase.setup.len(), 1);
+        assert_eq!(config.phase.setup[0].name, "test-phase");
+        assert_eq!(
+            config.phase.setup[0].script,
+            Some("echo 'hello'".to_string())
+        );
+    }
+
+    #[test]
+    fn test_phase_runtime_files() {
+        let toml = r#"
+        [[phase.runtime]]
+        name = "start"
+        script_files = ["./start.sh", "./check.sh"]
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.phase.runtime.len(), 1);
+        assert_eq!(config.phase.runtime[0].script_files.len(), 2);
+    }
+
+    #[test]
+    fn test_phase_with_env() {
+        let toml = r#"
+        [[phase.runtime]]
+        name = "test"
+        env = { DEBUG = "true", API_URL = "http://localhost" }
+        script = "echo $DEBUG"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(
+            config.phase.runtime[0].env.get("DEBUG"),
+            Some(&"true".to_string())
+        );
+    }
+
+    #[test]
+    fn test_phase_conditional() {
+        let toml = r#"
+        [[phase.setup]]
+        name = "docker"
+        when = "command -v docker"
+        script = "echo 'docker present'"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(
+            config.phase.setup[0].when,
+            Some("command -v docker".to_string())
+        );
+    }
+
+    #[test]
+    fn test_phase_continue_on_error() {
+        let toml = r#"
+        [[phase.runtime]]
+        name = "optional"
+        continue_on_error = true
+        script = "exit 1"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert!(config.phase.runtime[0].continue_on_error);
+    }
+
+    #[test]
+    fn test_backward_compat_coexist() {
+        let toml = r#"
+        [setup]
+        scripts = ["./old.sh"]
+
+        [[phase.setup]]
+        name = "new"
+        script = "echo 'new'"
+
+        [runtime]
+        scripts = ["./old-runtime.sh"]
+
+        [[phase.runtime]]
+        name = "new-runtime"
+        script = "echo 'new runtime'"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+
+        // Legacy
+        assert_eq!(config.setup.scripts.len(), 1);
+        assert_eq!(config.runtime.scripts.len(), 1);
+
+        // New
+        assert_eq!(config.phase.setup.len(), 1);
+        assert_eq!(config.phase.runtime.len(), 1);
+    }
+
+    #[test]
+    fn test_config_merge_phases() {
+        let mut base = Config::default();
+        base.phase.setup.push(ScriptPhase {
+            name: "base".to_string(),
+            script: Some("echo 'base'".to_string()),
+            ..Default::default()
+        });
+
+        let mut override_cfg = Config::default();
+        override_cfg.phase.setup.push(ScriptPhase {
+            name: "override".to_string(),
+            script: Some("echo 'override'".to_string()),
+            ..Default::default()
+        });
+
+        let merged = base.merge(override_cfg);
+        assert_eq!(merged.phase.setup.len(), 2);
+        assert_eq!(merged.phase.setup[0].name, "base");
+        assert_eq!(merged.phase.setup[1].name, "override");
+    }
+
+    #[test]
+    fn test_phase_if_alias() {
+        let toml = r#"
+        [[phase.setup]]
+        name = "docker"
+        if = "command -v docker"
+        script = "echo 'docker present'"
+        "#;
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(
+            config.phase.setup[0].when,
+            Some("command -v docker".to_string())
+        );
     }
 }
