@@ -6,7 +6,7 @@ use crate::vm::template;
 
 pub fn execute() -> Result<()> {
     let project = Project::detect()?;
-    let config = Config::load(project.root())?;
+    let config = Config::load_with_main_repo(project.root(), project.main_repo_root())?;
 
     println!("Project Information:");
     println!("  Path: {}", project.root().display());

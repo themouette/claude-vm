@@ -53,11 +53,12 @@ fn main() -> Result<()> {
             }
             _ => e,
         })?;
-        let cfg = Config::load(proj.root())?.with_cli_overrides(&cli);
+        let cfg = Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
+            .with_cli_overrides(&cli);
         (Some(proj), Some(cfg))
     } else if let Ok(proj) = project_result {
         // Optional project, but if we have one, validate config
-        match Config::load(proj.root()) {
+        match Config::load_with_main_repo(proj.root(), proj.main_repo_root()) {
             Ok(cfg) => {
                 let cfg = cfg.with_cli_overrides(&cli);
                 (Some(proj), Some(cfg))
