@@ -17,10 +17,18 @@ impl VmConfig {
     fn for_current_os() -> Self {
         #[cfg(target_os = "macos")]
         {
+            // Check if Rosetta should be disabled
+            // Disable in CI environments or if explicitly disabled via env var
+            let is_ci = std::env::var("CI").is_ok()
+                || std::env::var("GITHUB_ACTIONS").is_ok()
+                || std::env::var("GITLAB_CI").is_ok()
+                || std::env::var("CIRCLECI").is_ok();
+            let disable_rosetta = std::env::var("CLAUDE_VM_DISABLE_ROSETTA").is_ok() || is_ci;
+
             Self {
                 vm_type: "vz",
                 mount_type: "virtiofs",
-                use_rosetta: std::env::consts::ARCH == "aarch64",
+                use_rosetta: std::env::consts::ARCH == "aarch64" && !disable_rosetta,
             }
         }
 
@@ -447,7 +455,14 @@ mod tests {
         assert_eq!(config.vm_type, "vz");
         assert_eq!(config.mount_type, "virtiofs");
 
-        if std::env::consts::ARCH == "aarch64" {
+        // Rosetta is only enabled on ARM64 macOS when not in CI
+        let is_ci = std::env::var("CI").is_ok()
+            || std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::env::var("GITLAB_CI").is_ok()
+            || std::env::var("CIRCLECI").is_ok();
+        let disable_rosetta = std::env::var("CLAUDE_VM_DISABLE_ROSETTA").is_ok() || is_ci;
+
+        if std::env::consts::ARCH == "aarch64" && !disable_rosetta {
             assert!(config.use_rosetta);
         } else {
             assert!(!config.use_rosetta);
