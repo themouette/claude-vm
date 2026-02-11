@@ -119,8 +119,8 @@ jobs:
   integration-vm:
     name: VM Integration Tests
     runs-on: macos-latest
-    # Only run on main branch or PRs to main to save CI time
-    if: github.ref == 'refs/heads/main' || github.base_ref == 'main'
+    # Only run on main branch after merge to save CI time
+    if: github.ref == 'refs/heads/main'
 
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2

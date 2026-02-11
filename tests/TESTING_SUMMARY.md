@@ -170,7 +170,7 @@ The project uses GitHub Actions for CI with the following jobs:
 - **Tests**: Unit tests + CLI integration tests (no VM required)
 
 ### 2. VM Integration Tests (Slow)
-- **Runs on**: PRs to main and pushes to main branch only
+- **Runs on**: Main branch only (after merge)
 - **Platform**: macOS only (Lima works best on macOS)
 - **Duration**: ~10-15 minutes
 - **Tests**: All VM integration tests with actual VM creation
@@ -196,13 +196,13 @@ cargo test --test integration_tests integration::phase_scripts_vm -- --ignored -
 The CI pipeline (`.github/workflows/test.yml`) includes:
 
 1. **test** job - Fast unit and integration tests on Ubuntu/macOS
-2. **integration-vm** job - VM tests on macOS (only on main branch/PRs to main)
+2. **integration-vm** job - VM tests on macOS (only on main branch after merge)
 3. **security-audit** job - Dependency vulnerability scanning
 4. **build** job - Release builds on Ubuntu/macOS
 
 VM tests are automatically run on:
-- ✅ Pull requests targeting `main`
-- ✅ Pushes to `main` branch
+- ✅ Pushes to `main` branch (after PR merge)
+- ❌ Pull requests (contributors should run locally)
 - ❌ Feature branch pushes (to save CI time)
 
 ## Test Maintenance
@@ -258,7 +258,7 @@ While formal coverage tracking isn't set up, manual analysis shows:
 
 ## Verification Checklist
 
-Before merging to main:
+Before creating a PR that modifies phase scripts or VM behavior:
 
 - [ ] All Rust unit tests pass (`cargo test --lib`)
 - [ ] All CLI integration tests pass (`cargo test --test integration_tests`)
@@ -267,7 +267,7 @@ Before merging to main:
 - [ ] Code is formatted with rustfmt (`cargo fmt --check`)
 - [ ] Documentation is up to date
 
-**Note**: The VM integration tests are automatically run by CI on PRs to main, but you can run them locally before pushing for faster feedback.
+**Note**: VM integration tests are run automatically on main branch after merge, but **should be run locally before creating a PR** to catch issues early. Fast unit/integration tests run on all PRs.
 
 ## Known Limitations
 
