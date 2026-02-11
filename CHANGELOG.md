@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Version check cache after update**: Fixed bug where the version check cache was not being cleared after a successful update. The cached "latest_version" could remain set to what is now the current version, leading to stale update notifications. The cache file is now properly cleared after updates to ensure fresh version checks.
+
 ## [0.5.1] - 2026-02-09
 
 ### Fixed
