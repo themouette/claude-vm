@@ -377,6 +377,41 @@ continue_on_error = true
 script_files = ["./scripts/start-optional.sh"]
 ```
 
+#### Sourcing Scripts for Persistent Exports
+
+When you need exports (like PATH modifications) to persist across phases, use `source = true`:
+
+```toml
+# Add custom tools to PATH (exports persist)
+[[phase.runtime]]
+name = "setup-custom-path"
+source = true
+script = """
+export PATH="$HOME/.local/bin:$PATH"
+export CUSTOM_VAR="value"
+"""
+
+# This phase can now use the modified PATH
+[[phase.runtime]]
+name = "use-custom-tools"
+script = """
+#!/bin/bash
+# Can now use tools from ~/.local/bin
+custom-tool --version
+echo "CUSTOM_VAR=$CUSTOM_VAR"  # Variable is available
+"""
+```
+
+**When to use `source`:**
+- ✅ Adding directories to PATH
+- ✅ Exporting environment variables that should persist
+- ✅ Setting up shell functions or aliases (for runtime phases)
+
+**When NOT to use `source`:**
+- ❌ Default behavior (subprocess isolation is safer)
+- ❌ Scripts that modify the filesystem (no benefit from sourcing)
+- ❌ Long-running processes or background tasks
+
 #### Phase Fields
 
 | Field              | Type              | Required | Description                                          |
@@ -387,6 +422,7 @@ script_files = ["./scripts/start-optional.sh"]
 | `env`              | map               | No       | Phase-specific environment variables                 |
 | `continue_on_error`| boolean           | No       | Don't fail if phase fails (default: false)           |
 | `when` / `if`      | string            | No       | Conditional - only run if command succeeds (exit 0)  |
+| `source`           | boolean           | No       | Source script instead of running in subprocess (default: false). When true, exports persist to subsequent phases. |
 
 **Note:** At least one of `script` or `script_files` must be provided.
 
@@ -399,6 +435,7 @@ script_files = ["./scripts/start-optional.sh"]
 - **Conditional execution**: Run phases only when conditions are met
 - **Error handling**: Control whether failures stop execution
 - **Named phases**: Better logging and debugging output
+- **Script sourcing**: Source scripts to persist exports (like PATH modifications) across phases
 
 ### Legacy Format (Deprecated)
 

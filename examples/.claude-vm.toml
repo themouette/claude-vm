@@ -105,6 +105,24 @@ scripts = [
 #continue_on_error = true
 #script_files = ["./scripts/start-optional.sh"]
 
+# Example: Source script to persist exports (like PATH modifications)
+#[[phase.runtime]]
+#name = "setup-custom-path"
+#source = true  # Exports persist to subsequent phases
+#script = """
+#export PATH="$HOME/.local/bin:$PATH"
+#export MY_VAR="custom value"
+#"""
+#
+# This phase can now use the modified PATH and MY_VAR
+#[[phase.runtime]]
+#name = "use-custom-env"
+#script = """
+##!/bin/bash
+#echo "PATH includes custom bin: $PATH"
+#echo "MY_VAR=$MY_VAR"
+#"""
+
 # Phase fields:
 #   name              - Phase name (for logging/debugging) [required]
 #   script            - Inline script content [optional]
@@ -112,6 +130,8 @@ scripts = [
 #   env               - Phase-specific environment variables [optional]
 #   continue_on_error - Don't fail if phase fails [optional, default: false]
 #   when/if           - Conditional - only run if command succeeds [optional]
+#   source            - Source script instead of subprocess [optional, default: false]
+#                       When true, exports persist to subsequent phases
 
 [context]
 # Instructions for Claude about your project

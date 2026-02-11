@@ -14,6 +14,7 @@ All notable changes to claude-vm will be documented in this file.
   - Conditional execution via `when`/`if` field (e.g., `when = "command -v docker"`)
   - Error handling via `continue_on_error` field
   - Named phases for better logging/debugging
+  - Script sourcing via `source` field to persist exports (like PATH modifications) across phases
   - Example:
     ```toml
     [[phase.runtime]]
@@ -22,6 +23,11 @@ All notable changes to claude-vm will be documented in this file.
     when = "command -v docker"
     continue_on_error = false
     script = "docker-compose up -d"
+
+    [[phase.runtime]]
+    name = "setup-path"
+    source = true  # Exports persist to subsequent phases
+    script = "export PATH=\"$HOME/.local/bin:$PATH\""
     ```
 
 ### Changed
