@@ -256,6 +256,12 @@ pub struct ScriptPhase {
     /// Example: "command -v docker" or "test -f /usr/bin/tool"
     #[serde(default, alias = "if")]
     pub when: Option<String>,
+
+    /// Source the script instead of executing it
+    /// When true, the script runs with 'source' (or '.') making exports persist to subsequent phases
+    /// When false (default), the script runs with 'bash' in a subprocess (isolated)
+    #[serde(default)]
+    pub source: bool,
 }
 
 impl ScriptPhase {

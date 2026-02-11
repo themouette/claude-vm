@@ -246,8 +246,8 @@ pub fn execute_command_with_runtime_scripts(
     args: &[&str],
     env_vars: &HashMap<String, String>,
 ) -> Result<()> {
-    // Collect all runtime scripts as (name, content, env_vars) tuples
-    let mut script_contents: Vec<(String, String, HashMap<String, String>)> = Vec::new();
+    // Collect all runtime scripts as (name, content, env_vars, source) tuples
+    let mut script_contents: Vec<(String, String, HashMap<String, String>, bool)> = Vec::new();
 
     // First, check for project-specific runtime script
     let runtime_script_path = find_runtime_script_path()?;
@@ -258,7 +258,7 @@ pub fn execute_command_with_runtime_scripts(
             .and_then(|n| n.to_str())
             .unwrap_or("runtime.sh")
             .to_string();
-        script_contents.push((name, content, HashMap::new())); // No env
+        script_contents.push((name, content, HashMap::new(), false)); // No env, not sourced
     }
 
     // Then add custom runtime scripts from config (legacy - with deprecation warning)
@@ -279,7 +279,7 @@ pub fn execute_command_with_runtime_scripts(
                 .and_then(|n| n.to_str())
                 .unwrap_or("script.sh")
                 .to_string();
-            script_contents.push((name, content, HashMap::new()));
+            script_contents.push((name, content, HashMap::new(), false)); // Not sourced
         }
     }
 
@@ -308,7 +308,7 @@ pub fn execute_command_with_runtime_scripts(
         };
 
         for (name, content) in scripts {
-            script_contents.push((name, content, phase.env.clone()));
+            script_contents.push((name, content, phase.env.clone(), phase.source));
         }
     }
 
@@ -316,7 +316,7 @@ pub fn execute_command_with_runtime_scripts(
     let mut scripts = Vec::new();
     let temp_dir = std::env::temp_dir();
 
-    for (i, (name, content, _env)) in script_contents.iter().enumerate() {
+    for (i, (name, content, _env, _source)) in script_contents.iter().enumerate() {
         let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, name));
         std::fs::write(&local_temp, content)?;
         scripts.push(local_temp);
@@ -448,23 +448,43 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        let (name, _content, script_env) = &script_contents[i];
+        let (name, _content, script_env, source_script) = &script_contents[i];
         entrypoint.push_str(&format!("echo 'Running runtime script: {}'...\n", name));
+
+        // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
+        let run_cmd = if *source_script { "." } else { "bash" };
 
         // Set phase-specific environment variables if any
         if !script_env.is_empty() {
             entrypoint.push_str("# Phase-specific environment variables\n");
-            entrypoint.push_str("(\n"); // Start subshell to isolate env vars
+
+            // Only use subshell if NOT sourcing (sourcing needs exports to persist)
+            if !*source_script {
+                entrypoint.push_str("(\n"); // Start subshell to isolate env vars
+            }
+
             for (key, value) in script_env {
                 let escaped_value = value.replace('\'', "'\\''");
-                entrypoint.push_str(&format!("  export {}='{}'\n", key, escaped_value));
+                let indent = if *source_script { "" } else { "  " };
+                entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
             }
+
             // Use shell_escape to prevent injection attacks
-            entrypoint.push_str(&format!("  bash {}\n", shell_escape(vm_path)));
-            entrypoint.push_str(")\n\n"); // End subshell
+            let indent = if *source_script { "" } else { "  " };
+            entrypoint.push_str(&format!(
+                "{}{} {}\n",
+                indent,
+                run_cmd,
+                shell_escape(vm_path)
+            ));
+
+            if !*source_script {
+                entrypoint.push_str(")\n"); // End subshell
+            }
+            entrypoint.push('\n');
         } else {
             // Use shell_escape to prevent injection attacks
-            entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
+            entrypoint.push_str(&format!("{} {}\n\n", run_cmd, shell_escape(vm_path)));
         }
     }
 
