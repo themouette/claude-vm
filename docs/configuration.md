@@ -493,6 +493,256 @@ scripts = [
 
 See [Runtime Scripts](features/runtime-scripts.md) for detailed information.
 
+### Troubleshooting Phase Scripts
+
+#### Exports Don't Persist Across Phases
+
+**Problem**: Environment variables exported in one phase aren't available in the next phase.
+
+```toml
+[[phase.runtime]]
+name = "setup-path"
+script = "export PATH=$HOME/.local/bin:$PATH"
+
+[[phase.runtime]]
+name = "use-tool"
+script = "my-custom-tool"  # Command not found!
+```
+
+**Solution**: Add `source = true` to make exports persist:
+
+```toml
+[[phase.runtime]]
+name = "setup-path"
+source = true  # ← Exports now persist!
+script = "export PATH=$HOME/.local/bin:$PATH"
+```
+
+**Why**: By default, scripts run in a subprocess (subprocess isolation). Use `source = true` to run the script in the current shell context.
+
+#### Runtime Script Runs Multiple Times
+
+**Problem**: Runtime phases execute on **every** `claude-vm` command, causing duplicates:
+
+```bash
+# ❌ BAD: Appends every time
+echo "export PATH=..." >> ~/.profile  # ~/.profile grows infinitely!
+```
+
+**Solution**: Make runtime scripts idempotent (safe to run multiple times):
+
+```bash
+# ✅ GOOD: Check before adding
+if ! grep -q "my-custom-path" ~/.profile; then
+    echo "export PATH=..." >> ~/.profile
+fi
+
+# ✅ GOOD: Use absolute PATH (doesn't grow)
+export PATH="$HOME/.local/bin:$PATH"  # Safe to repeat
+```
+
+**Best Practice**: Runtime phases should be **fast** (<1 second) since they run on every command.
+
+#### Phase Fails Silently
+
+**Problem**: A phase fails but setup/runtime continues without error.
+
+**Solution**: Check the `continue_on_error` setting:
+
+```toml
+[[phase.setup]]
+name = "optional-tools"
+continue_on_error = true  # ← Phase failure won't stop execution
+script = "install-optional-tool"
+```
+
+Remove `continue_on_error` (or set to `false`) to fail-fast:
+
+```toml
+[[phase.setup]]
+name = "required-tools"
+# continue_on_error defaults to false
+script = "install-required-tool"  # Failure stops execution
+```
+
+#### Conditional Phase Doesn't Run
+
+**Problem**: Phase with `when` condition never executes.
+
+```toml
+[[phase.setup]]
+name = "install-docker"
+when = "! command -v docker"  # Never runs!
+script = "brew install docker"
+```
+
+**Solution**: Check the condition manually in a shell:
+
+```bash
+# In VM shell:
+claude-vm shell
+
+# Test condition:
+! command -v docker && echo "Would run" || echo "Would skip"
+```
+
+**Common Issues**:
+- Condition has wrong exit code (remember: 0 = true, non-zero = false)
+- Tool is already installed but in different location
+- Syntax error in condition
+
+#### Script Has Shebang But Uses Wrong Interpreter
+
+**Problem**: Script has `#!/usr/bin/python` but runs with bash when `source = true`.
+
+```toml
+[[phase.runtime]]
+name = "python-script"
+source = true  # ← Sourcing ignores shebang!
+script = """
+#!/usr/bin/python
+print("Hello")
+"""
+```
+
+**Solution**: When using `source = true`, the script runs in the current bash shell. The shebang is **ignored**.
+
+**Options**:
+1. Remove `source = true` to execute with shebang interpreter:
+```toml
+[[phase.runtime]]
+name = "python-script"
+# source = false (default) - respects shebang
+script = """
+#!/usr/bin/python
+print("Hello")
+"""
+```
+
+2. Use bash syntax if sourcing is required:
+```toml
+[[phase.runtime]]
+name = "setup-env"
+source = true
+script = """
+#!/bin/bash
+export MY_VAR="value"
+"""
+```
+
+#### Phase Environment Variables Not Available
+
+**Problem**: Env vars set in `env` field not available in subsequent phases.
+
+```toml
+[[phase.runtime]]
+name = "set-env"
+env = { DEBUG = "true" }
+script = "echo $DEBUG"  # Works here
+
+[[phase.runtime]]
+name = "use-env"
+script = "echo $DEBUG"  # Empty!
+```
+
+**Explanation**: Phase-specific env vars are isolated by default (subprocess).
+
+**Solution A**: Export from script with `source = true`:
+```toml
+[[phase.runtime]]
+name = "set-env"
+source = true
+script = "export DEBUG=true"
+```
+
+**Solution B**: Set env vars in each phase that needs them:
+```toml
+[[phase.runtime]]
+name = "use-env"
+env = { DEBUG = "true" }
+script = "echo $DEBUG"
+```
+
+#### Script Works Locally But Fails in VM
+
+**Problem**: Script succeeds when run directly but fails in phase.
+
+**Common Causes**:
+1. **Missing tools**: VM doesn't have same tools as host
+   ```bash
+   # Check what's available:
+   claude-vm shell
+   which my-tool
+   ```
+
+2. **Different PATH**: VM has different PATH
+   ```bash
+   # Debug in VM:
+   echo $PATH
+   ```
+
+3. **Working directory**: Script assumes specific directory
+   ```toml
+   # Solution: Use absolute paths
+   [[phase.setup]]
+   name = "install"
+   script = "cd /full/path && ./install.sh"
+   ```
+
+#### Performance: Runtime Phases Are Slow
+
+**Problem**: `claude-vm shell` takes 10+ seconds to start.
+
+**Cause**: Runtime phases execute on **every** command.
+
+**Solution**: Optimize runtime phases:
+
+```toml
+# ❌ BAD: Network calls in runtime
+[[phase.runtime]]
+name = "check-api"
+script = "curl -s https://api.example.com/status"  # Slow!
+
+# ✅ GOOD: Fast local checks only
+[[phase.runtime]]
+name = "check-local"
+script = "test -f ~/.configured && echo 'Ready'"
+
+# ✅ GOOD: Cache expensive operations
+[[phase.runtime]]
+name = "check-cached"
+script = """
+if [ ! -f /tmp/api-status ] || [ $(($(date +%s) - $(stat -f %m /tmp/api-status))) -gt 300 ]; then
+  curl -s https://api.example.com/status > /tmp/api-status
+fi
+cat /tmp/api-status
+"""
+```
+
+**Best Practices**:
+- Keep runtime phases under 1 second
+- Use setup phases for slow operations
+- Cache results when possible
+- Avoid network calls
+
+#### Getting More Debug Information
+
+Enable verbose output to see what phases are running:
+
+```bash
+# Setup with debug output:
+claude-vm setup --no-agent-install 2>&1 | tee setup.log
+
+# Runtime with debug:
+claude-vm shell bash -c 'set -x; env'
+```
+
+Check the generated entrypoint script:
+```bash
+# The entrypoint shows all phases
+claude-vm shell cat /tmp/entrypoint.sh
+```
+
 ## Default Arguments
 
 Configure default arguments passed to Claude.
