@@ -22,6 +22,7 @@ python = false
 chromium = true
 
 [setup]
+# ⚠️  DEPRECATED: Use [[phase.setup]] instead (see below)
 # ADDITIONAL setup scripts to run during template creation
 # These run AFTER the automatically detected scripts
 #
@@ -36,6 +37,7 @@ scripts = [
 ]
 
 [runtime]
+# ⚠️  DEPRECATED: Use [[phase.runtime]] instead (see below)
 # ADDITIONAL runtime scripts to execute before starting each Claude session
 # Useful for starting services, setting up environment, etc.
 #
@@ -47,6 +49,69 @@ scripts = [
     # "./scripts/start-services.sh",
     # "./scripts/seed-database.sh",
 ]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# NEW: Phase-based Scripts (Recommended)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Setup phases run during template creation
+# Phases execute in array order
+
+# Example: Verify system requirements
+#[[phase.setup]]
+#name = "verify-system"
+#script = """
+##!/bin/bash
+#echo 'Verifying system requirements'
+#test $(nproc) -ge 2 || exit 1
+#"""
+
+# Example: Install Docker (only if not present)
+#[[phase.setup]]
+#name = "install-docker"
+#when = "! command -v docker"  # Only run if docker not installed
+#env = { DEBIAN_FRONTEND = "noninteractive" }
+#script_files = ["./scripts/install-docker.sh"]
+
+# Example: Configure tools
+#[[phase.setup]]
+#name = "configure"
+#script = "echo 'Setup complete'"
+
+# Runtime phases run before each Claude session
+# Useful for starting services, setting up environment, etc.
+
+# Example: Start services
+#[[phase.runtime]]
+#name = "start-services"
+#env = { DEBUG = "true", COMPOSE_PROJECT_NAME = "myapp" }
+#script = "docker-compose up -d"
+
+# Example: Wait for health check
+#[[phase.runtime]]
+#name = "wait-for-health"
+#continue_on_error = false
+#script = """
+#until curl -sf http://localhost:3000/health; do
+#  echo 'Waiting for service...'
+#  sleep 1
+#done
+#echo '✓ Services ready'
+#"""
+
+# Example: Optional service (won't fail if it doesn't work)
+#[[phase.runtime]]
+#name = "optional-service"
+#continue_on_error = true
+#script_files = ["./scripts/start-optional.sh"]
+
+# Phase fields:
+#   name              - Phase name (for logging/debugging) [required]
+#   script            - Inline script content [optional]
+#   script_files      - Array of file paths to execute [optional]
+#   env               - Phase-specific environment variables [optional]
+#   continue_on_error - Don't fail if phase fails [optional, default: false]
+#   when/if           - Conditional - only run if command succeeds [optional]
 
 [context]
 # Instructions for Claude about your project

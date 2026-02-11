@@ -314,9 +314,97 @@ See [Custom Packages](advanced/custom-packages.md) for more details.
 
 ## Scripts
 
-Configure setup and runtime scripts.
+Configure setup and runtime scripts using either the legacy format or the new phase-based format.
 
-### Setup Scripts
+### Phase-Based Scripts (Recommended)
+
+The new phase-based format provides better organization and control over script execution.
+
+#### Setup Phases
+
+Run during template creation (`claude-vm setup`):
+
+```toml
+# Verify system requirements
+[[phase.setup]]
+name = "verify-system"
+script = """
+#!/bin/bash
+echo 'Verifying system requirements'
+test $(nproc) -ge 2 || exit 1
+"""
+
+# Install Docker (only if not present)
+[[phase.setup]]
+name = "install-docker"
+when = "! command -v docker"  # Only run if docker not installed
+env = { DEBIAN_FRONTEND = "noninteractive" }
+script_files = ["./scripts/install-docker.sh"]
+
+# Configure tools
+[[phase.setup]]
+name = "configure"
+script = "echo 'Setup complete'"
+```
+
+#### Runtime Phases
+
+Run before each session (`claude-vm` or `claude-vm shell`):
+
+```toml
+# Start services
+[[phase.runtime]]
+name = "start-services"
+env = { DEBUG = "true", COMPOSE_PROJECT_NAME = "myapp" }
+script = "docker-compose up -d"
+
+# Wait for health check
+[[phase.runtime]]
+name = "wait-for-health"
+continue_on_error = false
+script = """
+until curl -sf http://localhost:3000/health; do
+  echo 'Waiting for service...'
+  sleep 1
+done
+echo '✓ Services ready'
+"""
+
+# Optional service (won't fail if it doesn't work)
+[[phase.runtime]]
+name = "optional-service"
+continue_on_error = true
+script_files = ["./scripts/start-optional.sh"]
+```
+
+#### Phase Fields
+
+| Field              | Type              | Required | Description                                          |
+| ------------------ | ----------------- | -------- | ---------------------------------------------------- |
+| `name`             | string            | Yes      | Phase name (for logging/debugging)                   |
+| `script`           | string            | No       | Inline script content                                |
+| `script_files`     | array of strings  | No       | File paths to execute (in order)                     |
+| `env`              | map               | No       | Phase-specific environment variables                 |
+| `continue_on_error`| boolean           | No       | Don't fail if phase fails (default: false)           |
+| `when` / `if`      | string            | No       | Conditional - only run if command succeeds (exit 0)  |
+
+**Note:** At least one of `script` or `script_files` must be provided.
+
+#### Features
+
+- **Inline scripts**: Write scripts directly in the TOML file
+- **File scripts**: Reference external script files
+- **Mixed mode**: Combine inline and file scripts in the same phase
+- **Environment variables**: Set phase-specific env vars
+- **Conditional execution**: Run phases only when conditions are met
+- **Error handling**: Control whether failures stop execution
+- **Named phases**: Better logging and debugging output
+
+### Legacy Format (Deprecated)
+
+> ⚠️  **Deprecated**: The `[setup]` and `[runtime]` scripts arrays are deprecated. Please migrate to `[[phase.setup]]` and `[[phase.runtime]]`. The legacy format continues to work with deprecation warnings.
+
+#### Setup Scripts
 
 Run during template creation (`claude-vm setup`):
 
@@ -333,7 +421,7 @@ scripts = [
 - `~/.claude-vm.setup.sh` - Global setup script
 - `./.claude-vm.setup.sh` - Project setup script
 
-### Runtime Scripts
+#### Runtime Scripts
 
 Run before each session (`claude-vm` or `claude-vm shell`):
 
@@ -355,14 +443,16 @@ scripts = [
 
 1. Global setup script (`~/.claude-vm.setup.sh`)
 2. Project setup script (`./.claude-vm.setup.sh`)
-3. Config setup scripts (from `[setup] scripts`)
-4. CLI setup scripts (from `--setup-script`)
+3. Legacy config setup scripts (from `[setup] scripts`)
+4. Phase-based setup scripts (from `[[phase.setup]]`)
+5. CLI setup scripts (from `--setup-script`)
 
 **Runtime (before each session):**
 
 1. Project runtime script (`./.claude-vm.runtime.sh`)
-2. Config runtime scripts (from `[runtime] scripts`)
-3. CLI runtime scripts (from `--runtime-script`)
+2. Legacy config runtime scripts (from `[runtime] scripts`)
+3. Phase-based runtime scripts (from `[[phase.runtime]]`)
+4. CLI runtime scripts (from `--runtime-script`)
 
 See [Runtime Scripts](features/runtime-scripts.md) for detailed information.
 
@@ -644,13 +734,36 @@ gpg = true
 [packages]
 system = ["postgresql-client", "jq", "htop"]
 
-# Setup scripts (run during template creation)
-[setup]
-scripts = ["./scripts/install-extras.sh"]
+# Setup phases (run during template creation)
+[[phase.setup]]
+name = "verify-requirements"
+script = """
+#!/bin/bash
+echo 'Verifying system requirements'
+test $(nproc) -ge 2 || exit 1
+"""
 
-# Runtime scripts (run before each session)
-[runtime]
-scripts = ["./scripts/start-services.sh"]
+[[phase.setup]]
+name = "install-extras"
+when = "test -f ./scripts/install-extras.sh"
+script_files = ["./scripts/install-extras.sh"]
+
+# Runtime phases (run before each session)
+[[phase.runtime]]
+name = "start-services"
+env = { COMPOSE_PROJECT_NAME = "myapp", DEBUG = "true" }
+script = "docker-compose up -d"
+
+[[phase.runtime]]
+name = "wait-for-db"
+continue_on_error = false
+script = """
+until pg_isready -h localhost -p 5432; do
+  echo 'Waiting for database...'
+  sleep 1
+done
+echo '✓ Database ready'
+"""
 
 # Default options
 [defaults]
