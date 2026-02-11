@@ -1,9 +1,8 @@
 use crate::capabilities;
 use crate::config::Config;
-use crate::error::{ClaudeVmError, Result};
+use crate::error::Result;
 use crate::project::Project;
 use crate::utils::git;
-use crate::utils::shell::escape as shell_escape;
 use crate::vm::limactl::LimaCtl;
 use crate::vm::{mount, session::VmSession};
 use std::collections::HashMap;
@@ -11,14 +10,6 @@ use std::path::{Path, PathBuf};
 
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
-
-/// Sanitize a filename to contain only safe characters
-/// Allows: alphanumeric, dash, underscore, dot
-fn sanitize_filename(name: &str) -> String {
-    name.chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        .collect()
-}
 
 /// Find the path to the project runtime script (.claude-vm.runtime.sh)
 /// Looks in current git repo root (handles worktrees), or current directory
@@ -329,16 +320,6 @@ pub fn execute_command_with_runtime_scripts(
         }
     }
 
-    // Now convert script_contents to files and collect PathBufs for copying
-    let mut scripts = Vec::new();
-    let temp_dir = std::env::temp_dir();
-
-    for (i, (name, content, _env, _source)) in script_contents.iter().enumerate() {
-        let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, name));
-        std::fs::write(&local_temp, content)?;
-        scripts.push(local_temp);
-    }
-
     // Generate and copy base context
     let base_context = generate_base_context(config)?;
     let temp_dir = std::env::temp_dir();
@@ -349,44 +330,6 @@ pub fn execute_command_with_runtime_scripts(
     // Copy context to VM with unique name to avoid race conditions
     let vm_context_path = format!("/tmp/claude-vm-context-base-{}.md", pid);
     LimaCtl::copy(&context_file, vm_name, &vm_context_path)?;
-
-    // Copy all scripts to VM with unique names
-    let mut vm_script_paths = Vec::new();
-
-    for (i, script) in scripts.iter().enumerate() {
-        // Sanitize filename to prevent injection
-        let original_name = script
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("script.sh");
-        let safe_name = sanitize_filename(original_name);
-        let script_name = if safe_name.is_empty() {
-            format!("script-{}", i)
-        } else {
-            safe_name
-        };
-
-        // Use PID to avoid collisions between concurrent sessions
-        let vm_path = format!("/tmp/claude-vm-{}-{}-{}", pid, i, script_name);
-
-        print!("  Copying runtime script: {} ... ", script.display());
-        std::io::Write::flush(&mut std::io::stdout()).unwrap_or(());
-
-        match LimaCtl::copy(script, vm_name, &vm_path) {
-            Ok(_) => {
-                println!("✓");
-                vm_script_paths.push(vm_path);
-            }
-            Err(e) => {
-                println!("✗");
-                return Err(ClaudeVmError::LimaExecution(format!(
-                    "Failed to copy runtime script '{}': {}",
-                    script.display(),
-                    e
-                )));
-            }
-        }
-    }
 
     // Build entrypoint script with proper escaping
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
@@ -461,15 +404,12 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("  done\n");
     entrypoint.push_str("fi\n\n");
 
-    // Then run user runtime scripts
+    // Then run user runtime scripts (embedded via heredoc)
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
-    for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        let (name, _content, script_env, source_script) = &script_contents[i];
+    for (i, (name, content, script_env, source_script)) in script_contents.iter().enumerate() {
+        entrypoint.push_str(&format!("# Runtime script {}: {}\n", i, name));
         entrypoint.push_str(&format!("echo 'Running runtime script: {}'...\n", name));
-
-        // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
-        let run_cmd = if *source_script { "." } else { "bash" };
 
         // Set phase-specific environment variables if any
         if !script_env.is_empty() {
@@ -486,22 +426,41 @@ pub fn execute_command_with_runtime_scripts(
                 entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
             }
 
-            // Use shell_escape to prevent injection attacks
+            // Embed script using heredoc
             let indent = if *source_script { "" } else { "  " };
-            entrypoint.push_str(&format!(
-                "{}{} {}\n",
-                indent,
-                run_cmd,
-                shell_escape(vm_path)
-            ));
+            if *source_script {
+                // Source mode: Execute in current shell context
+                entrypoint.push_str(&format!(
+                    "{}source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n",
+                    indent, i, content, i
+                ));
+            } else {
+                // Subprocess mode: Execute in subshell
+                entrypoint.push_str(&format!(
+                    "{}bash <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n",
+                    indent, i, content, i
+                ));
+            }
 
             if !*source_script {
                 entrypoint.push_str(")\n"); // End subshell
             }
             entrypoint.push('\n');
         } else {
-            // Use shell_escape to prevent injection attacks
-            entrypoint.push_str(&format!("{} {}\n\n", run_cmd, shell_escape(vm_path)));
+            // Embed script using heredoc
+            if *source_script {
+                // Source mode: Execute in current shell context
+                entrypoint.push_str(&format!(
+                    "source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n\n",
+                    i, content, i
+                ));
+            } else {
+                // Subprocess mode: Execute in subshell
+                entrypoint.push_str(&format!(
+                    "bash <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n\n",
+                    i, content, i
+                ));
+            }
         }
     }
 
@@ -592,9 +551,11 @@ pub fn execute_command_with_runtime_scripts(
     )
 }
 
-/// Build entrypoint script for testing purposes
+/// Build entrypoint script for testing purposes with heredoc embedding
 #[cfg(test)]
-fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) -> String {
+fn build_entrypoint_script_with_heredocs(
+    script_contents: &[(String, String, HashMap<String, String>, bool)],
+) -> String {
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
 
     // Source capability runtime scripts first
@@ -610,16 +571,60 @@ fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) 
     entrypoint.push_str("  done\n");
     entrypoint.push_str("fi\n\n");
 
-    // Then run user runtime scripts
+    // Then run user runtime scripts with heredocs
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
-    for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        entrypoint.push_str(&format!(
-            "echo 'Running runtime script: {}'...\n",
-            script_names[i]
-        ));
-        // Use shell_escape to prevent injection
-        entrypoint.push_str(&format!("bash {}\n\n", shell_escape(vm_path)));
+    for (i, (name, content, script_env, source_script)) in script_contents.iter().enumerate() {
+        entrypoint.push_str(&format!("# Runtime script {}: {}\n", i, name));
+        entrypoint.push_str(&format!("echo 'Running runtime script: {}'...\n", name));
+
+        // Set phase-specific environment variables if any
+        if !script_env.is_empty() {
+            entrypoint.push_str("# Phase-specific environment variables\n");
+
+            // Only use subshell if NOT sourcing
+            if !*source_script {
+                entrypoint.push_str("(\n");
+            }
+
+            for (key, value) in script_env {
+                let escaped_value = value.replace('\'', "'\\''");
+                let indent = if *source_script { "" } else { "  " };
+                entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
+            }
+
+            // Embed script using heredoc
+            let indent = if *source_script { "" } else { "  " };
+            if *source_script {
+                entrypoint.push_str(&format!(
+                    "{}source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n",
+                    indent, i, content, i
+                ));
+            } else {
+                entrypoint.push_str(&format!(
+                    "{}bash <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n",
+                    indent, i, content, i
+                ));
+            }
+
+            if !*source_script {
+                entrypoint.push_str(")\n");
+            }
+            entrypoint.push('\n');
+        } else {
+            // Embed script using heredoc
+            if *source_script {
+                entrypoint.push_str(&format!(
+                    "source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n\n",
+                    i, content, i
+                ));
+            } else {
+                entrypoint.push_str(&format!(
+                    "bash <<'CLAUDE_VM_SCRIPT_EOF_{}'\n{}\nCLAUDE_VM_SCRIPT_EOF_{}\n\n",
+                    i, content, i
+                ));
+            }
+        }
     }
 
     entrypoint.push_str("# Execute main command (replaces shell process)\n");
@@ -633,86 +638,181 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sanitize_filename_safe() {
-        assert_eq!(sanitize_filename("safe-file_123.sh"), "safe-file_123.sh");
-        assert_eq!(sanitize_filename("normal.txt"), "normal.txt");
-    }
-
-    #[test]
-    fn test_sanitize_filename_unsafe() {
-        // Remove special characters
-        assert_eq!(sanitize_filename("file;rm -rf"), "filerm-rf");
-        assert_eq!(sanitize_filename("file'with'quotes"), "filewithquotes");
-        assert_eq!(sanitize_filename("file$var"), "filevar");
-        assert_eq!(sanitize_filename("file`cmd`"), "filecmd");
-    }
-
-    #[test]
-    fn test_sanitize_filename_empty() {
-        // All unsafe characters should result in empty string
-        assert_eq!(sanitize_filename("';!@#$%"), "");
-    }
-
-    #[test]
-    fn test_entrypoint_script_generation() {
-        let vm_paths = vec![
-            "/tmp/claude-vm-runtime-0-setup.sh".to_string(),
-            "/tmp/claude-vm-runtime-1-init.sh".to_string(),
+    fn test_entrypoint_script_generation_with_heredocs() {
+        let script_contents = vec![
+            (
+                "setup.sh".to_string(),
+                "#!/bin/bash\necho 'setup'\n".to_string(),
+                HashMap::new(),
+                false, // not sourced
+            ),
+            (
+                "init.sh".to_string(),
+                "#!/bin/bash\necho 'init'\n".to_string(),
+                HashMap::new(),
+                false, // not sourced
+            ),
         ];
-        let names = vec!["setup.sh".to_string(), "init.sh".to_string()];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
         // Verify script structure
         assert!(entrypoint.contains("#!/bin/bash"));
         assert!(entrypoint.contains("set -e"));
-        assert!(entrypoint.contains("bash '/tmp/claude-vm-runtime-0-setup.sh'"));
-        assert!(entrypoint.contains("bash '/tmp/claude-vm-runtime-1-init.sh'"));
+        assert!(entrypoint.contains("bash <<'CLAUDE_VM_SCRIPT_EOF_0'"));
+        assert!(entrypoint.contains("bash <<'CLAUDE_VM_SCRIPT_EOF_1'"));
+        assert!(entrypoint.contains("echo 'setup'"));
+        assert!(entrypoint.contains("echo 'init'"));
         assert!(entrypoint.contains("exec \"$@\""));
 
         // Verify order - setup should come before init
-        let setup_pos = entrypoint.find("runtime-0-setup").unwrap();
-        let init_pos = entrypoint.find("runtime-1-init").unwrap();
+        let setup_pos = entrypoint.find("setup.sh").unwrap();
+        let init_pos = entrypoint.find("init.sh").unwrap();
         assert!(setup_pos < init_pos, "Scripts should run in order");
     }
 
     #[test]
-    fn test_entrypoint_script_escaping() {
-        // Test that script paths with special characters are properly quoted
-        let vm_paths = vec!["/tmp/script with spaces.sh".to_string()];
-        let names = vec!["script with spaces.sh".to_string()];
+    fn test_heredoc_with_source_true() {
+        // Test that source = true uses "source /dev/stdin"
+        let script_contents = vec![(
+            "env-setup.sh".to_string(),
+            "#!/bin/bash\nexport MY_VAR='value'\n".to_string(),
+            HashMap::new(),
+            true, // sourced
+        )];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
-        // Verify single quotes protect the path with proper escaping
-        assert!(entrypoint.contains("bash '/tmp/script with spaces.sh'"));
+        // Verify source mode is used
+        assert!(entrypoint.contains("source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_0'"));
+        assert!(entrypoint.contains("export MY_VAR='value'"));
+        assert!(entrypoint.contains("CLAUDE_VM_SCRIPT_EOF_0"));
     }
 
     #[test]
-    fn test_entrypoint_script_injection_protection() {
-        // Test protection against shell injection in script paths
-        let malicious_path = "/tmp/evil'; rm -rf /; echo '.sh".to_string();
-        let vm_paths = vec![malicious_path];
-        let names = vec!["evil.sh".to_string()];
+    fn test_heredoc_with_source_false() {
+        // Test that source = false uses "bash <<"
+        let script_contents = vec![(
+            "script.sh".to_string(),
+            "#!/bin/bash\necho 'subprocess'\n".to_string(),
+            HashMap::new(),
+            false, // not sourced
+        )];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
-        // Verify the malicious command is properly escaped
-        // The escaped version uses '\'' to safely include single quotes within the bash string
-        // This results in bash receiving the literal path: /tmp/evil'; rm -rf /; echo '.sh
-        assert!(entrypoint.contains(r"bash '/tmp/evil'\''; rm -rf /; echo '\''"));
+        // Verify subprocess mode is used
+        assert!(entrypoint.contains("bash <<'CLAUDE_VM_SCRIPT_EOF_0'"));
+        assert!(entrypoint.contains("echo 'subprocess'"));
+        assert!(entrypoint.contains("CLAUDE_VM_SCRIPT_EOF_0"));
+    }
 
-        // Verify it's wrapped in the escaped quote pattern (not just raw semicolons)
-        // The pattern '\'' safely escapes quotes, preventing command injection
-        assert!(entrypoint.contains(r"'\''"));
+    #[test]
+    fn test_heredoc_unique_delimiters() {
+        // Test that multiple scripts use different EOF markers
+        let script_contents = vec![
+            (
+                "script1.sh".to_string(),
+                "echo 'first'".to_string(),
+                HashMap::new(),
+                false,
+            ),
+            (
+                "script2.sh".to_string(),
+                "echo 'second'".to_string(),
+                HashMap::new(),
+                false,
+            ),
+            (
+                "script3.sh".to_string(),
+                "echo 'third'".to_string(),
+                HashMap::new(),
+                false,
+            ),
+        ];
+
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
+
+        // Verify unique delimiters
+        assert!(entrypoint.contains("CLAUDE_VM_SCRIPT_EOF_0"));
+        assert!(entrypoint.contains("CLAUDE_VM_SCRIPT_EOF_1"));
+        assert!(entrypoint.contains("CLAUDE_VM_SCRIPT_EOF_2"));
+    }
+
+    #[test]
+    fn test_heredoc_env_vars() {
+        // Test that environment variables are exported before heredoc
+        let mut env = HashMap::new();
+        env.insert("DEBUG".to_string(), "true".to_string());
+        env.insert("LOG_LEVEL".to_string(), "info".to_string());
+
+        let script_contents = vec![(
+            "script.sh".to_string(),
+            "echo $DEBUG $LOG_LEVEL".to_string(),
+            env,
+            false, // not sourced (uses subshell)
+        )];
+
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
+
+        // Verify environment variables are in subshell
+        assert!(entrypoint.contains("(\n"));
+        assert!(entrypoint.contains("  export DEBUG='true'"));
+        assert!(entrypoint.contains("  export LOG_LEVEL='info'"));
+        assert!(entrypoint.contains("  bash <<'CLAUDE_VM_SCRIPT_EOF_0'"));
+        assert!(entrypoint.contains(")\n"));
+    }
+
+    #[test]
+    fn test_heredoc_env_vars_with_source() {
+        // Test that environment variables with source=true don't use subshell
+        let mut env = HashMap::new();
+        env.insert("MY_VAR".to_string(), "test".to_string());
+
+        let script_contents = vec![(
+            "script.sh".to_string(),
+            "echo $MY_VAR".to_string(),
+            env,
+            true, // sourced (no subshell)
+        )];
+
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
+
+        // Verify NO subshell for sourced scripts
+        assert!(!entrypoint.contains("(\n"));
+        assert!(entrypoint.contains("export MY_VAR='test'"));
+        assert!(entrypoint.contains("source /dev/stdin <<'CLAUDE_VM_SCRIPT_EOF_0'"));
+    }
+
+    #[test]
+    fn test_heredoc_injection_protection() {
+        // Test that heredoc with quoted delimiter prevents injection
+        let malicious_content = "'; rm -rf /; echo '".to_string();
+        let script_contents = vec![(
+            "evil.sh".to_string(),
+            malicious_content.clone(),
+            HashMap::new(),
+            false,
+        )];
+
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
+
+        // Verify heredoc uses quoted delimiter to prevent expansion
+        assert!(entrypoint.contains("<<'CLAUDE_VM_SCRIPT_EOF_0'"));
+        // Verify malicious content is treated as literal text
+        assert!(entrypoint.contains(&malicious_content));
     }
 
     #[test]
     fn test_entrypoint_script_error_handling() {
-        let vm_paths = vec!["/tmp/script1.sh".to_string()];
-        let names = vec!["script1.sh".to_string()];
+        let script_contents = vec![(
+            "script1.sh".to_string(),
+            "echo 'test'".to_string(),
+            HashMap::new(),
+            false,
+        )];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
         // Verify set -e is present (exit on error)
         assert!(entrypoint.contains("set -e"));
@@ -720,10 +820,9 @@ mod tests {
 
     #[test]
     fn test_entrypoint_script_empty() {
-        let vm_paths: Vec<String> = vec![];
-        let names: Vec<String> = vec![];
+        let script_contents: Vec<(String, String, HashMap<String, String>, bool)> = vec![];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
         // Even with no user scripts, should source capability scripts and have basic structure
         assert!(entrypoint.contains("#!/bin/bash"));
@@ -736,10 +835,14 @@ mod tests {
     #[test]
     fn test_entrypoint_preserves_command_args() {
         // Test that the entrypoint properly uses "$@" to preserve arguments
-        let vm_paths = vec!["/tmp/script.sh".to_string()];
-        let names = vec!["script.sh".to_string()];
+        let script_contents = vec![(
+            "script.sh".to_string(),
+            "echo 'test'".to_string(),
+            HashMap::new(),
+            false,
+        )];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
         // Verify "$@" is used (preserves quoting and spaces in arguments)
         assert!(entrypoint.contains("exec \"$@\""));
@@ -747,10 +850,14 @@ mod tests {
 
     #[test]
     fn test_entrypoint_comment_clarity() {
-        let vm_paths = vec!["/tmp/script.sh".to_string()];
-        let names = vec!["test.sh".to_string()];
+        let script_contents = vec![(
+            "test.sh".to_string(),
+            "echo 'test'".to_string(),
+            HashMap::new(),
+            false,
+        )];
 
-        let entrypoint = build_entrypoint_script(&vm_paths, &names);
+        let entrypoint = build_entrypoint_script_with_heredocs(&script_contents);
 
         // Verify helpful comments are present
         assert!(entrypoint.contains("# Source capability runtime scripts"));
