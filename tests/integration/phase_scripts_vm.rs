@@ -157,8 +157,8 @@ fn test_setup_phase_basic_execution() {
 name = "basic-setup"
 script = """
 #!/bin/bash
-mkdir -p /home/lima.linux/test-data
-echo 'Setup phase executed' > /home/lima.linux/test-data/setup-marker.txt
+mkdir -p $HOME/test-data
+echo 'Setup phase executed' > $HOME/test-data/setup-marker.txt
 """
 "#;
 
@@ -503,7 +503,7 @@ fn test_legacy_and_phase_scripts_coexist() {
     let legacy_script = project_dir.path().join("legacy.sh");
     fs::write(
         &legacy_script,
-        "#!/bin/bash\nmkdir -p /home/lima.linux/test-data\necho 'legacy' > /home/lima.linux/test-data/coexist-test.txt\n",
+        "#!/bin/bash\nmkdir -p $HOME/test-data\necho 'legacy' > $HOME/test-data/coexist-test.txt\n",
     )
     .expect("Failed to write legacy script");
 
@@ -517,7 +517,7 @@ scripts = ["{}"]
 name = "phase-script"
 script = """
 #!/bin/bash
-echo 'phase' >> /home/lima.linux/test-data/coexist-test.txt
+echo 'phase' >> $HOME/test-data/coexist-test.txt
 """
 "#,
         legacy_script.display()
@@ -529,10 +529,10 @@ echo 'phase' >> /home/lima.linux/test-data/coexist-test.txt
     // Run setup
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify both ran (files in /home/lima.linux persist across VM restarts)
+    // Verify both ran (files in $HOME persist across VM restarts)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /home/lima.linux/test-data/coexist-test.txt",
+        "cat $HOME/test-data/coexist-test.txt",
     )
     .expect("Command should run");
 
@@ -593,17 +593,17 @@ script = """
 #!/bin/bash
 echo 'Checking requirements...'
 test $(nproc) -ge 1 || exit 1
-mkdir -p /home/lima.linux/test-data
-echo 'requirements-ok' > /home/lima.linux/test-data/workflow-test.txt
+mkdir -p $HOME/test-data
+echo 'requirements-ok' > $HOME/test-data/workflow-test.txt
 """
 
 [[phase.setup]]
 name = "install-tools"
-when = "test -f /home/lima.linux/test-data/workflow-test.txt"
+when = "test -f $HOME/test-data/workflow-test.txt"
 script = """
 #!/bin/bash
 echo 'Installing tools...'
-echo 'tools-installed' >> /home/lima.linux/test-data/workflow-test.txt
+echo 'tools-installed' >> $HOME/test-data/workflow-test.txt
 """
 
 [[phase.setup]]
@@ -612,7 +612,7 @@ env = { CONFIG = "production" }
 script = """
 #!/bin/bash
 echo "Configuring with CONFIG=$CONFIG..."
-echo "configured-$CONFIG" >> /home/lima.linux/test-data/workflow-test.txt
+echo "configured-$CONFIG" >> $HOME/test-data/workflow-test.txt
 """
 "#;
 
@@ -621,10 +621,10 @@ echo "configured-$CONFIG" >> /home/lima.linux/test-data/workflow-test.txt
     // Run setup
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify all phases ran (files in /home/lima.linux persist across VM restarts)
+    // Verify all phases ran (files in $HOME persist across VM restarts)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /home/lima.linux/test-data/workflow-test.txt",
+        "cat $HOME/test-data/workflow-test.txt",
     )
     .expect("Command should run");
 
