@@ -36,7 +36,7 @@ case "$choice" in
 
         # Build the pre-configured URL
         token_url="https://github.com/settings/personal-access-tokens/new"
-        token_url="${token_url}?name=Claude+VM+-+${project_name}+(${TEMPLATE_NAME})"
+        token_url="${token_url}?name=Claude+VM+-+${project_name}"
         token_url="${token_url}&description=Access+token+for+Claude+VM+project+${project_name}"
         token_url="${token_url}${target_param}"
         token_url="${token_url}&expires_in=90"
@@ -95,7 +95,7 @@ case "$choice" in
             mkdir -p ~/.claude-vm
             cat > ~/.claude-vm/gh-auth-info <<EOF
 auth_method=token
-token_name="Claude VM - ${project_name} (${TEMPLATE_NAME})"
+token_name="Claude VM - ${project_name}"
 token_created=$(date +%Y-%m-%d)
 EOF
         else

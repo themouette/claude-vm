@@ -29,9 +29,9 @@ GHEOF
         sed -i "s/SCOPES/$scopes/g" ~/.claude-vm/context/gh.txt
         sed -i "s/METHOD/$auth_method/g" ~/.claude-vm/context/gh.txt
 
-        if [ -n "$token_name" ]; then
-            echo "Token name: $token_name" >> ~/.claude-vm/context/gh.txt
-        fi
+        #if [ -n "$token_name" ]; then
+        #    echo "Token name: $token_name" >> ~/.claude-vm/context/gh.txt
+        #fi
         if [ -n "$token_created" ]; then
             echo "Created: $token_created" >> ~/.claude-vm/context/gh.txt
         fi
@@ -50,9 +50,9 @@ GHEOF
         sed -i "s/SCOPES/$scopes/g" ~/.claude-vm/context/gh.txt
         sed -i "s/METHOD/$auth_method/g" ~/.claude-vm/context/gh.txt
 
-        if [ -n "$token_name" ]; then
-            echo "Token name: $token_name" >> ~/.claude-vm/context/gh.txt
-        fi
+        #if [ -n "$token_name" ]; then
+        #    echo "Token name: $token_name" >> ~/.claude-vm/context/gh.txt
+        #fi
         if [ -n "$token_created" ]; then
             echo "Created: $token_created" >> ~/.claude-vm/context/gh.txt
         fi
