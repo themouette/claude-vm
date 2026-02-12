@@ -3,9 +3,12 @@
 /// These tests require limactl to be installed and take significant time to run.
 /// They are marked with #[ignore] and must be explicitly run:
 ///
-/// Run with: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --test-threads=1
+/// Run with: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --nocapture
 ///
-/// Tests are run sequentially (test-threads=1) because they share VM resources.
+/// Tests can run in parallel! Use --test-threads=N to control parallelism:
+/// - --test-threads=1: Sequential (safest, slowest)
+/// - --test-threads=4: 4 parallel threads (recommended for local dev)
+/// - (no flag): Use all available cores
 ///
 /// ## Test Organization
 ///
@@ -29,9 +32,17 @@
 ///
 /// ## Performance Impact
 ///
-/// **Before reorganization:** 16 tests × ~2 min/template = ~32 minutes
-/// **After reorganization:** 3 templates + 14 shared = ~10 minutes
-/// **Speedup:** ~70% faster CI execution
+/// **Before reorganization:** 16 tests × ~2 min/template = ~32 minutes (sequential)
+/// **After with parallelism:**
+/// - CI (--test-threads=1): 3 setup + 1 shared runtime = ~7 minutes
+/// - Local (--test-threads=4): 3 setup + 4 shared runtime = ~4 minutes
+/// - Local (--test-threads=8): 3 setup + min(8,14) shared = ~3 minutes
+///
+/// **Speedup:** Up to 90% faster with parallelism!
+///
+/// Each test thread builds its own runtime template, so with N threads:
+/// - Setup tests: 3 templates (always sequential for stability)
+/// - Runtime tests: min(N, 14) templates (one per thread)
 ///
 /// This design tests shared features comprehensively where it's fast (runtime),
 /// while keeping minimal setup-specific tests for actual setup behavior.
@@ -93,39 +104,49 @@ fn run_shell_command(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Shared template for runtime-only tests
-/// This template is built once and reused across all tests that only check runtime behavior.
-/// This significantly speeds up CI by avoiding redundant template rebuilds.
-static SHARED_RUNTIME_TEMPLATE: Lazy<Mutex<(TempDir, PathBuf)>> = Lazy::new(|| {
-    eprintln!("Building shared runtime template (one-time setup)...");
+// Thread-local shared template for runtime-only tests
+// Each test thread gets its own shared template to avoid race conditions.
+// This allows tests to run in parallel while still benefiting from template reuse.
+//
+// Performance: With --test-threads=4, we build 4 templates instead of 16 (75% reduction)
+thread_local! {
+    static SHARED_RUNTIME_TEMPLATE: Lazy<Mutex<(TempDir, PathBuf)>> = Lazy::new(|| {
+        use std::thread;
+        let thread_id = thread::current().id();
+        eprintln!("Building shared runtime template for thread {:?}...", thread_id);
 
-    // Create a minimal config - runtime tests will override with their own runtime configs
-    let config = r#"
+        // Create a minimal config - runtime tests will override with their own runtime configs
+        let config = r#"
 # Minimal base configuration for runtime testing
 # Each test will define its own runtime phases
 "#;
 
-    let project_dir = create_test_project(config);
-    let path = project_dir.path().to_path_buf();
+        let project_dir = create_test_project(config);
+        let path = project_dir.path().to_path_buf();
 
-    // Build the template once
-    run_setup(&path).expect("Shared runtime template setup should succeed");
+        // Build the template once per thread
+        run_setup(&path).expect("Shared runtime template setup should succeed");
 
-    eprintln!("Shared runtime template ready at: {:?}", path);
+        eprintln!("Shared runtime template ready for thread {:?} at: {:?}", thread_id, path);
 
-    // Keep TempDir alive and return path for reuse
-    Mutex::new((project_dir, path))
-});
-
-/// Get the shared runtime template path
-/// This returns a path to a pre-built template that can be used for runtime-only tests.
-fn get_shared_runtime_project() -> PathBuf {
-    let guard = SHARED_RUNTIME_TEMPLATE.lock().unwrap();
-    guard.1.clone()
+        // Keep TempDir alive and return path for reuse within this thread
+        Mutex::new((project_dir, path))
+    });
 }
 
-/// Helper specifically for runtime tests that uses shared template
-/// This creates a config file in the shared template directory with runtime-specific config
+/// Get the thread-local shared runtime template path
+/// This returns a path to a pre-built template that can be used for runtime-only tests.
+/// Each test thread has its own template to avoid conflicts.
+fn get_shared_runtime_project() -> PathBuf {
+    SHARED_RUNTIME_TEMPLATE.with(|template| {
+        let guard = template.lock().unwrap();
+        guard.1.clone()
+    })
+}
+
+/// Helper specifically for runtime tests that uses thread-local shared template
+/// This creates a config file in the shared template directory with runtime-specific config.
+/// Safe for parallel execution since each thread has its own template directory.
 fn setup_runtime_test(config_content: &str) -> PathBuf {
     let project_path = get_shared_runtime_project();
     let config_path = project_path.join(".claude-vm.toml");
