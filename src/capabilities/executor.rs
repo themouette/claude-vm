@@ -72,27 +72,34 @@ fn build_capability_env_vars(
     }
 
     // Detect git worktree
+    // Git worktrees have a .git file (not directory) containing:
+    // "gitdir: /path/to/main-repo/.git/worktrees/branch-name"
+    // We extract the main repository root from this path structure.
     let git_dir = project_root.join(".git");
     if git_dir.exists() && git_dir.is_file() {
         // .git is a file, likely a worktree - read it to find the main repo
         if let Ok(git_file_content) = std::fs::read_to_string(&git_dir) {
-            // Format: "gitdir: /path/to/main/.git/worktrees/branch"
+            // Parse the gitdir line
             if let Some(gitdir_line) = git_file_content.lines().next() {
                 if let Some(gitdir_path) = gitdir_line.strip_prefix("gitdir: ") {
-                    // Extract main worktree root from the gitdir path
-                    // Path format: /main/.git/worktrees/name
                     let gitdir_pathbuf = std::path::PathBuf::from(gitdir_path);
+
+                    // Validate this looks like a worktree path
+                    // Expected structure: /main-repo/.git/worktrees/branch-name
                     if let Some(worktrees_parent) = gitdir_pathbuf.parent() {
-                        if let Some(git_parent) = worktrees_parent.parent() {
-                            if let Some(main_root) = git_parent.parent() {
-                                env_vars.insert(
-                                    "PROJECT_WORKTREE_ROOT".to_string(),
-                                    main_root.to_string_lossy().to_string(),
-                                );
-                                env_vars.insert(
-                                    "PROJECT_WORKTREE".to_string(),
-                                    project_root.to_string_lossy().to_string(),
-                                );
+                        if worktrees_parent.ends_with("worktrees") {
+                            // Navigate up: worktrees -> .git -> main-repo
+                            if let Some(git_parent) = worktrees_parent.parent() {
+                                if let Some(main_root) = git_parent.parent() {
+                                    env_vars.insert(
+                                        "PROJECT_WORKTREE_ROOT".to_string(),
+                                        main_root.to_string_lossy().to_string(),
+                                    );
+                                    env_vars.insert(
+                                        "PROJECT_WORKTREE".to_string(),
+                                        project_root.to_string_lossy().to_string(),
+                                    );
+                                }
                             }
                         }
                     }
