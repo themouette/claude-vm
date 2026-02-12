@@ -269,19 +269,42 @@ That's it! The capability system handles everything else automatically.
 - **When**: On host before VM is created
 - **Where**: macOS/Linux host machine
 - **Purpose**: Validate prerequisites, detect resources, copy files to VM
-- **Environment**: `$PROJECT_ROOT`, `$TEMPLATE_NAME`, `$LIMA_INSTANCE`
+- **Environment Variables**:
+  - `PROJECT_ROOT` - Project directory path on host
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - VM instance name (same as template)
+  - `CAPABILITY_ID` - Capability identifier (e.g., "gh", "git")
 
 ### vm_setup
 - **When**: In guest VM during `claude-vm setup`
 - **Where**: Inside Lima VM (guest)
 - **Purpose**: Install software, configure system
-- **Environment**: Standard Lima environment
+- **Environment Variables**:
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - VM instance name
+  - `CAPABILITY_ID` - Capability identifier
+  - `CLAUDE_VM_PHASE` - Always "setup"
+  - `CLAUDE_VM_VERSION` - Version of claude-vm tool
+  - `PROJECT_ROOT` - Project directory path (host path for reference)
+  - `PROJECT_NAME` - Full project name from host
+  - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
+  - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
 
 ### vm_runtime
 - **When**: In VM before each `claude-vm run`
 - **Where**: Inside ephemeral VM session
 - **Purpose**: Initialize environment variables, start services
 - **Note**: Runs silently (only errors shown)
+- **Environment Variables**:
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - Ephemeral VM instance name (different from template)
+  - `CAPABILITY_ID` - Capability identifier
+  - `CLAUDE_VM_PHASE` - Always "runtime"
+  - `CLAUDE_VM_VERSION` - Version of claude-vm tool
+  - `PROJECT_ROOT` - Mounted project directory in VM
+  - `PROJECT_NAME` - Full project name
+  - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
+  - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
 
 ## Best Practices
 

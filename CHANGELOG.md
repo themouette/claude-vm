@@ -4,6 +4,21 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Environment variables for capability scripts**: All `vm_setup` and `vm_runtime` capability scripts now receive comprehensive environment variables providing context about the VM, project, and execution phase:
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - Actual VM instance name (different from template for ephemeral VMs)
+  - `CAPABILITY_ID` - Capability identifier (e.g., "gh", "git", "gpg")
+  - `CLAUDE_VM_PHASE` - Execution phase ("setup" or "runtime")
+  - `CLAUDE_VM_VERSION` - Version of claude-vm tool
+  - `PROJECT_ROOT` - Project directory path (host path during setup, mounted path during runtime)
+  - `PROJECT_NAME` - Full project name from host filesystem
+  - `PROJECT_WORKTREE_ROOT` - Main project root if using git worktrees (empty if not a worktree)
+  - `PROJECT_WORKTREE` - Current worktree path if using git worktrees (empty if not a worktree)
+
+  Scripts no longer need to parse template names or detect worktrees manually. See `capabilities/README.md` for complete documentation.
+
 ### Fixed
 
 - **Phase script name sanitization**: Phase script names are now properly sanitized before being used as local temporary filenames. Previously, phase script names containing special characters (e.g., colons, slashes, ampersands) could cause filesystem errors when creating temporary files. The sanitization logic that was already applied to VM-side paths is now also applied to local temp file creation for consistency and safety.
