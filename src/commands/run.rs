@@ -44,6 +44,29 @@ pub fn execute(
 
     eprintln!("Running Claude in VM: {}", session.name());
 
+    // Check if claude is installed in the VM
+    let check_claude = crate::vm::limactl::LimaCtl::shell(
+        session.name(),
+        None,
+        "command",
+        &["-v", "claude"],
+        false,
+    );
+
+    if check_claude.is_err() {
+        return Err(crate::error::ClaudeVmError::CommandFailed(
+            "Claude CLI is not installed in the VM.\n\
+             \n\
+             If you used --no-agent-install during setup, you cannot run 'claude-vm' without arguments.\n\
+             Instead, use:\n\
+             - 'claude-vm shell' to open a shell in the VM\n\
+             - 'claude-vm shell <command>' to run a specific command\n\
+             \n\
+             Or run 'claude-vm setup' without --no-agent-install to install the Claude agent."
+                .to_string(),
+        ));
+    }
+
     // Collect environment variables
     let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
 
