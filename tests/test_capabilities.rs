@@ -126,3 +126,72 @@ fn test_all_capabilities_load() {
     assert!(ids.contains(&"chromium"));
     assert!(ids.contains(&"gpg"));
 }
+
+#[test]
+fn test_notifications_capability_loads() {
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
+
+    let mut config = Config::default();
+    config.tools.notifications = true;
+
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get enabled capabilities");
+
+    // Check that notifications capability is present
+    let has_notifications = enabled.iter().any(|c| c.capability.id == "notifications");
+    assert!(has_notifications, "Notifications capability should be enabled");
+
+    // Check that notifications has host_setup and vm_runtime hooks
+    let notifications_cap = enabled
+        .iter()
+        .find(|c| c.capability.id == "notifications")
+        .unwrap();
+    assert!(
+        notifications_cap.host_setup.is_some(),
+        "Notifications should have host_setup hook"
+    );
+    assert!(
+        notifications_cap.vm_runtime.is_some(),
+        "Notifications should have vm_runtime hook"
+    );
+}
+
+#[test]
+fn test_notifications_port_forward() {
+    use claude_vm::capabilities;
+
+    let mut config = Config::default();
+    config.tools.notifications = true;
+
+    let port_forwards = capabilities::get_port_forwards(&config)
+        .expect("Failed to get port forwards");
+
+    // Should have at least one port forward for notifications
+    assert!(!port_forwards.is_empty(), "Should have port forwards");
+
+    // Check that the notification socket is forwarded
+    let has_notification_socket = port_forwards.iter().any(|pf| {
+        pf.host_socket.contains("claude-vm-notifications")
+            && pf.guest_socket.contains("claude-notifications")
+    });
+    assert!(
+        has_notification_socket,
+        "Should have notification socket forwarding"
+    );
+}
+
+#[test]
+fn test_notifications_config_enable() {
+    let mut config = Config::default();
+
+    // Initially disabled
+    assert!(!config.tools.is_enabled("notifications"));
+
+    // Enable notifications
+    config.tools.enable("notifications");
+
+    // Should now be enabled
+    assert!(config.tools.is_enabled("notifications"));
+    assert!(config.tools.notifications);
+}
