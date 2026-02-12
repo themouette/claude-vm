@@ -63,7 +63,11 @@ fn build_capability_env_vars(
         project_root.to_string_lossy().to_string(),
     );
 
-    // Extract full project name from the directory
+    // Extract project name from the directory name
+    // We use the last component of the path (file_name()) which works well for
+    // most cases: /home/user/my-project -> "my-project"
+    // This is simple and reliable. For projects with complex naming needs,
+    // users can access PROJECT_ROOT in their scripts and implement custom logic.
     if let Some(name) = project_root.file_name() {
         env_vars.insert(
             "PROJECT_NAME".to_string(),
