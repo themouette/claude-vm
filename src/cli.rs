@@ -114,6 +114,10 @@ pub enum Commands {
         #[arg(long)]
         network_isolation: bool,
 
+        /// Enable notification forwarding
+        #[arg(long)]
+        notifications: bool,
+
         /// Install all tools
         #[arg(long)]
         all: bool,

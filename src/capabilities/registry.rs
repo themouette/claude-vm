@@ -98,6 +98,10 @@ impl CapabilityRegistry {
                 "network-isolation",
                 include_str!("../../capabilities/network-isolation/capability.toml"),
             ),
+            (
+                "notifications",
+                include_str!("../../capabilities/notifications/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {
