@@ -34,25 +34,7 @@ fi
 """
 
 [vm_setup]
-script = """
-#!/bin/bash
-set -e
-gh --version
-
-# Use device flow by providing empty input and setting git protocol to avoid prompts
-gh auth login --git-protocol https --hostname github.com <<EOF
-
-
-EOF
-"""
+script_file = "vm_setup.sh"
 
 [vm_runtime]
-script = """
-#!/bin/bash
-# Write GitHub CLI context for Claude
-mkdir -p ~/.claude-vm/context
-cat > ~/.claude-vm/context/gh.txt <<EOF
-gh version: $(gh --version 2>/dev/null | head -n1 || echo "not available")
-Authentication status: $(gh auth status 2>&1 | grep "Logged in" | head -n1 || echo "not logged in")
-EOF
-"""
+script_file = "vm_runtime.sh"

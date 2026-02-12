@@ -434,9 +434,11 @@ fn get_script_content(script_config: &ScriptConfig, capability_id: &str) -> Resu
 fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
     // Scripts are now embedded from capabilities/{id}/{script_name}
     let content = match (capability_id, script_name) {
+        ("gh", "vm_setup.sh") => include_str!("../../capabilities/gh/vm_setup.sh"),
+        ("gh", "vm_runtime.sh") => include_str!("../../capabilities/gh/vm_runtime.sh"),
+        ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
-        ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
         ("network-isolation", "vm_setup.sh") => {
             include_str!("../../capabilities/network-isolation/vm_setup.sh")
         }
