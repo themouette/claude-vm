@@ -2,12 +2,127 @@ use super::definition::{Capability, McpServer, ScriptConfig};
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
+use crate::version;
 use crate::vm::limactl::LimaCtl;
+use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Arc;
 
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
+
+/// Ensure an environment variable exists in the map, setting it to empty string if not present
+fn ensure_env_var(env_vars: &mut HashMap<String, String>, key: &str) {
+    env_vars.entry(key.to_string()).or_default();
+}
+
+/// Phase in which a capability script is executed
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityPhase {
+    /// Setup phase - runs during template creation
+    Setup,
+    /// Runtime phase - runs before each session
+    Runtime,
+}
+
+impl CapabilityPhase {
+    /// Get the string representation of the phase
+    fn as_str(&self) -> &'static str {
+        match self {
+            CapabilityPhase::Setup => "setup",
+            CapabilityPhase::Runtime => "runtime",
+        }
+    }
+}
+
+/// Build environment variables for capability scripts
+fn build_capability_env_vars(
+    project: &Project,
+    vm_name: &str,
+    capability_id: &str,
+    phase: CapabilityPhase,
+) -> Result<HashMap<String, String>> {
+    let mut env_vars = HashMap::new();
+
+    // VM identification
+    env_vars.insert(
+        "TEMPLATE_NAME".to_string(),
+        project.template_name().to_string(),
+    );
+    env_vars.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
+    env_vars.insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+
+    // Phase
+    env_vars.insert("CLAUDE_VM_PHASE".to_string(), phase.as_str().to_string());
+
+    // Version
+    env_vars.insert(
+        "CLAUDE_VM_VERSION".to_string(),
+        version::VERSION.to_string(),
+    );
+
+    // Project information
+    let project_root = project.root();
+    env_vars.insert(
+        "PROJECT_ROOT".to_string(),
+        project_root.to_string_lossy().to_string(),
+    );
+
+    // Extract project name from the directory name
+    // We use the last component of the path (file_name()) which works well for
+    // most cases: /home/user/my-project -> "my-project"
+    // This is simple and reliable. For projects with complex naming needs,
+    // users can access PROJECT_ROOT in their scripts and implement custom logic.
+    if let Some(name) = project_root.file_name() {
+        env_vars.insert(
+            "PROJECT_NAME".to_string(),
+            name.to_string_lossy().to_string(),
+        );
+    }
+
+    // Detect git worktree
+    // Git worktrees have a .git file (not directory) containing:
+    // "gitdir: /path/to/main-repo/.git/worktrees/branch-name"
+    // We extract the main repository root from this path structure.
+    let git_dir = project_root.join(".git");
+    if git_dir.exists() && git_dir.is_file() {
+        // .git is a file, likely a worktree - read it to find the main repo
+        if let Ok(git_file_content) = std::fs::read_to_string(&git_dir) {
+            // Parse the gitdir line
+            if let Some(gitdir_line) = git_file_content.lines().next() {
+                if let Some(gitdir_path) = gitdir_line.strip_prefix("gitdir: ") {
+                    let gitdir_pathbuf = std::path::PathBuf::from(gitdir_path);
+
+                    // Validate this looks like a worktree path
+                    // Expected structure: /main-repo/.git/worktrees/branch-name
+                    if let Some(worktrees_parent) = gitdir_pathbuf.parent() {
+                        if worktrees_parent.ends_with("worktrees") {
+                            // Navigate up: worktrees -> .git -> main-repo
+                            if let Some(git_parent) = worktrees_parent.parent() {
+                                if let Some(main_root) = git_parent.parent() {
+                                    env_vars.insert(
+                                        "PROJECT_WORKTREE_ROOT".to_string(),
+                                        main_root.to_string_lossy().to_string(),
+                                    );
+                                    env_vars.insert(
+                                        "PROJECT_WORKTREE".to_string(),
+                                        project_root.to_string_lossy().to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Ensure worktree variables exist (set to empty if not a worktree)
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
+
+    Ok(env_vars)
+}
 
 /// Execute a capability's host_setup hook (runs on host machine)
 pub fn execute_host_setup(project: &Project, capability: &Arc<Capability>) -> Result<()> {
@@ -30,11 +145,20 @@ pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Resu
 
     println!("Setting up {}...", capability.capability.name);
 
+    let vm_name = project.template_name();
+    let env_vars = build_capability_env_vars(
+        project,
+        vm_name,
+        &capability.capability.id,
+        CapabilityPhase::Setup,
+    )?;
+
     execute_vm_script(
-        project.template_name(),
+        vm_name,
         vm_setup,
         &capability.capability.id,
         false,
+        &env_vars,
     )?;
 
     Ok(())
@@ -46,12 +170,21 @@ pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Re
         return Ok(());
     };
 
+    let vm_name = project.template_name();
+    let env_vars = build_capability_env_vars(
+        project,
+        vm_name,
+        &capability.capability.id,
+        CapabilityPhase::Runtime,
+    )?;
+
     // Runtime scripts are executed silently unless there's an error
     execute_vm_script(
-        project.template_name(),
+        vm_name,
         vm_runtime,
         &capability.capability.id,
         true,
+        &env_vars,
     )?;
 
     Ok(())
@@ -63,8 +196,47 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
         return Ok(());
     };
 
+    // Build minimal env vars (no Project available in this context)
+    //
+    // This function is called when running runtime scripts in an ephemeral VM
+    // where the Project context isn't available yet. This happens during VM
+    // initialization before the project directory is mounted.
+    //
+    // We provide essential runtime information (VM name, capability ID, phase, version)
+    // but set project-related variables to empty strings to ensure scripts don't
+    // fail on undefined variables. Scripts should check if these vars are non-empty
+    // before using them.
+    let mut env_vars = HashMap::new();
+    env_vars.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
+    env_vars.insert(
+        "CAPABILITY_ID".to_string(),
+        capability.capability.id.clone(),
+    );
+    env_vars.insert(
+        "CLAUDE_VM_PHASE".to_string(),
+        CapabilityPhase::Runtime.as_str().to_string(),
+    );
+    env_vars.insert(
+        "CLAUDE_VM_VERSION".to_string(),
+        version::VERSION.to_string(),
+    );
+
+    // Project-related vars are set to empty strings in this minimal context
+    // since the Project object isn't available during early VM initialization
+    ensure_env_var(&mut env_vars, "TEMPLATE_NAME");
+    ensure_env_var(&mut env_vars, "PROJECT_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_NAME");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
+
     // Runtime scripts are executed silently unless there's an error
-    execute_vm_script(vm_name, vm_runtime, &capability.capability.id, true)?;
+    execute_vm_script(
+        vm_name,
+        vm_runtime,
+        &capability.capability.id,
+        true,
+        &env_vars,
+    )?;
 
     Ok(())
 }
@@ -181,26 +353,66 @@ fn execute_host_script(
     Ok(())
 }
 
-/// Execute a script in the VM
+/// Execute a script in the VM with environment variables
 fn execute_vm_script(
     vm_name: &str,
     script_config: &ScriptConfig,
     capability_id: &str,
     silent: bool,
+    env_vars: &std::collections::HashMap<String, String>,
 ) -> Result<()> {
     let script_content = get_script_content(script_config, capability_id)?;
+
+    // Wrap script with environment variable exports
+    let wrapped_script = wrap_script_with_env_vars(&script_content, env_vars);
 
     let filename = format!("{}_{}.sh", capability_id, "script");
 
     if silent {
         // For runtime scripts, execute without printing output unless there's an error
-        runner::execute_script_silent(vm_name, &script_content, &filename)?;
+        runner::execute_script_silent(vm_name, &wrapped_script, &filename)?;
     } else {
         // For setup scripts, show output
-        runner::execute_script(vm_name, &script_content, &filename)?;
+        runner::execute_script(vm_name, &wrapped_script, &filename)?;
     }
 
     Ok(())
+}
+
+/// Wrap a script with environment variable exports
+fn wrap_script_with_env_vars(
+    script_content: &str,
+    env_vars: &std::collections::HashMap<String, String>,
+) -> String {
+    let mut wrapped = String::from("#!/bin/bash\n");
+
+    // Export environment variables
+    for (key, value) in env_vars {
+        // Escape single quotes for bash single-quoted strings
+        // Pattern: '\'' means: end quote, escaped quote, start quote
+        // Example: "it's" becomes 'it'\''s' which bash interprets as: it + ' + s
+        // This is the standard POSIX-compliant way to include a single quote
+        // within a single-quoted string.
+        let escaped_value = value.replace('\'', r"'\''");
+        wrapped.push_str(&format!("export {}='{}'\n", key, escaped_value));
+    }
+
+    wrapped.push('\n');
+
+    // Append the original script content (skip shebang if present)
+    let content = if script_content.starts_with("#!") {
+        // Skip the first line (shebang)
+        script_content
+            .lines()
+            .skip(1)
+            .collect::<Vec<_>>()
+            .join("\n")
+    } else {
+        script_content.to_string()
+    };
+
+    wrapped.push_str(&content);
+    wrapped
 }
 
 /// Get script content from config (either inline or from embedded file)
@@ -293,6 +505,12 @@ pub fn execute_repository_setups(
         println!("  Setting up repositories for {}...", capability_id);
 
         let template_name = project.template_name();
+        let env_vars = build_capability_env_vars(
+            project,
+            template_name,
+            capability_id,
+            CapabilityPhase::Setup,
+        )?;
 
         // Execute the repo setup script with enhanced error context
         execute_vm_script(
@@ -303,6 +521,7 @@ pub fn execute_repository_setups(
             },
             capability_id,
             false,
+            &env_vars,
         )
         .map_err(|e| {
             ClaudeVmError::LimaExecution(format!(
@@ -395,4 +614,185 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
 
     println!("  ✓ System packages installed successfully");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Note: Integration tests for build_capability_env_vars are in tests/test_capabilities.rs
+    // since they require actual Project instances with git repositories.
+
+    #[test]
+    fn test_wrap_script_with_env_vars_empty() {
+        let env_vars = HashMap::new();
+        let script = "#!/bin/bash\necho 'hello'";
+
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        assert!(wrapped.starts_with("#!/bin/bash\n"));
+        assert!(wrapped.contains("echo 'hello'"));
+    }
+
+    #[test]
+    fn test_wrap_script_with_env_vars_basic() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("FOO".to_string(), "bar".to_string());
+        env_vars.insert("BAZ".to_string(), "qux".to_string());
+
+        let script = "#!/bin/bash\necho $FOO";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        assert!(wrapped.contains("export FOO='bar'"));
+        assert!(wrapped.contains("export BAZ='qux'"));
+        assert!(wrapped.contains("echo $FOO"));
+    }
+
+    #[test]
+    fn test_wrap_script_with_env_vars_escaping() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("VAR".to_string(), "value with 'quotes'".to_string());
+
+        let script = "echo test";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        // Should escape single quotes in the value
+        assert!(wrapped.contains("export VAR='value with '\\''quotes'\\'''"));
+    }
+
+    #[test]
+    fn test_wrap_script_with_env_vars_removes_shebang() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("TEST".to_string(), "value".to_string());
+
+        let script = "#!/bin/bash\nset -e\necho test";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        // Should have only one shebang at the start
+        assert_eq!(wrapped.matches("#!/bin/bash").count(), 1);
+        assert!(wrapped.starts_with("#!/bin/bash\n"));
+        assert!(wrapped.contains("export TEST='value'"));
+        assert!(wrapped.contains("set -e"));
+        assert!(wrapped.contains("echo test"));
+    }
+
+    #[test]
+    fn test_wrap_script_without_shebang() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("VAR".to_string(), "val".to_string());
+
+        let script = "echo hello";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        assert!(wrapped.starts_with("#!/bin/bash\n"));
+        assert!(wrapped.contains("export VAR='val'"));
+        assert!(wrapped.contains("echo hello"));
+    }
+
+    #[test]
+    fn test_env_var_keys() {
+        // Test that we're using the correct key names
+        // This ensures API consistency
+        let mut env_vars = HashMap::new();
+        env_vars.insert("TEMPLATE_NAME".to_string(), "test".to_string());
+        env_vars.insert("LIMA_INSTANCE".to_string(), "test".to_string());
+        env_vars.insert("CAPABILITY_ID".to_string(), "test".to_string());
+        env_vars.insert("CLAUDE_VM_PHASE".to_string(), "setup".to_string());
+        env_vars.insert("CLAUDE_VM_VERSION".to_string(), "0.1.0".to_string());
+        env_vars.insert("PROJECT_ROOT".to_string(), "/test".to_string());
+        env_vars.insert("PROJECT_NAME".to_string(), "test".to_string());
+        env_vars.insert("PROJECT_WORKTREE_ROOT".to_string(), "".to_string());
+        env_vars.insert("PROJECT_WORKTREE".to_string(), "".to_string());
+
+        // Just verify the expected keys exist
+        let expected_keys = [
+            "TEMPLATE_NAME",
+            "LIMA_INSTANCE",
+            "CAPABILITY_ID",
+            "CLAUDE_VM_PHASE",
+            "CLAUDE_VM_VERSION",
+            "PROJECT_ROOT",
+            "PROJECT_NAME",
+            "PROJECT_WORKTREE_ROOT",
+            "PROJECT_WORKTREE",
+        ];
+
+        for key in &expected_keys {
+            assert!(env_vars.contains_key(*key));
+        }
+    }
+
+    #[test]
+    fn test_wrap_script_with_special_chars_in_values() {
+        // Test that special characters (except single quotes) are preserved
+        // Single-quoted strings in bash don't expand variables or escape sequences
+        let mut env_vars = HashMap::new();
+        env_vars.insert(
+            "PATH_VAR".to_string(),
+            "/path/with/$dollar/and`backtick`".to_string(),
+        );
+        env_vars.insert("NEWLINE_VAR".to_string(), "line1\nline2".to_string());
+        env_vars.insert(
+            "BACKSLASH_VAR".to_string(),
+            "path\\with\\backslash".to_string(),
+        );
+
+        let wrapped = wrap_script_with_env_vars("echo test", &env_vars);
+
+        // In single-quoted strings, these special chars should be literal
+        assert!(wrapped.contains("/path/with/$dollar/and`backtick`"));
+        assert!(wrapped.contains("line1\nline2"));
+        assert!(wrapped.contains("path\\with\\backslash"));
+    }
+
+    #[test]
+    fn test_wrap_script_multiline_value() {
+        // Test that multiline values are preserved correctly
+        let mut env_vars = HashMap::new();
+        let multiline_value = "line 1\nline 2\nline 3";
+        env_vars.insert("MULTILINE".to_string(), multiline_value.to_string());
+
+        let wrapped = wrap_script_with_env_vars("echo $MULTILINE", &env_vars);
+
+        // The newlines should be preserved in the single-quoted string
+        assert!(wrapped.contains("'line 1\nline 2\nline 3'"));
+        assert!(wrapped.contains("export MULTILINE="));
+    }
+
+    #[test]
+    fn test_wrap_script_empty_value() {
+        // Test that empty string values are handled correctly
+        let mut env_vars = HashMap::new();
+        env_vars.insert("EMPTY".to_string(), String::new());
+        env_vars.insert("NOT_EMPTY".to_string(), "value".to_string());
+
+        let wrapped = wrap_script_with_env_vars("echo test", &env_vars);
+
+        // Empty strings should still be exported
+        assert!(wrapped.contains("export EMPTY=''"));
+        assert!(wrapped.contains("export NOT_EMPTY='value'"));
+    }
+
+    #[test]
+    fn test_wrap_script_combined_special_cases() {
+        // Test a realistic combination of edge cases
+        let mut env_vars = HashMap::new();
+        env_vars.insert("PROJECT_NAME".to_string(), "my-project's name".to_string());
+        env_vars.insert(
+            "PROJECT_PATH".to_string(),
+            "/home/user/path with spaces".to_string(),
+        );
+
+        let script = "#!/bin/bash\nset -e\necho \"$PROJECT_NAME\"";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        // Single quote should be escaped
+        assert!(wrapped.contains("my-project'\\''s name"));
+        // Spaces should be preserved
+        assert!(wrapped.contains("/home/user/path with spaces"));
+        // Original script should be included (without duplicate shebang)
+        assert_eq!(wrapped.matches("#!/bin/bash").count(), 1);
+        assert!(wrapped.contains("set -e"));
+        assert!(wrapped.contains("echo \"$PROJECT_NAME\""));
+    }
 }

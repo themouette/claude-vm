@@ -265,23 +265,141 @@ That's it! The capability system handles everything else automatically.
 
 ## Lifecycle Hooks
 
+### Environment Variables Reference
+
+All capability scripts automatically receive environment variables providing context about the VM, project, and execution phase. Here's a quick reference:
+
+| Variable | host_setup | vm_setup | vm_runtime | Description |
+|----------|------------|----------|------------|-------------|
+| `CAPABILITY_ID` | ✓ | ✓ | ✓ | Capability identifier (e.g., "gh", "docker") |
+| `TEMPLATE_NAME` | ✓ | ✓ | ✓ | VM template name |
+| `LIMA_INSTANCE` | ✓ | ✓ | ✓ | VM instance name (same as template for setup, ephemeral for runtime) |
+| `CLAUDE_VM_PHASE` | - | ✓ | ✓ | Execution phase: "setup" or "runtime" |
+| `CLAUDE_VM_VERSION` | - | ✓ | ✓ | Version of claude-vm tool |
+| `PROJECT_ROOT` | ✓ | ✓ | ✓ | Project directory path (host path in setup, mounted path in runtime) |
+| `PROJECT_NAME` | - | ✓ | ✓ | Full project name extracted from directory |
+| `PROJECT_WORKTREE_ROOT` | - | ✓ | ✓ | Main project root if using git worktrees (empty otherwise) |
+| `PROJECT_WORKTREE` | - | ✓ | ✓ | Current worktree path if using git worktrees (empty otherwise) |
+
+**Note**: All variables are automatically exported as environment variables. No manual parsing needed!
+
 ### host_setup
 - **When**: On host before VM is created
 - **Where**: macOS/Linux host machine
 - **Purpose**: Validate prerequisites, detect resources, copy files to VM
-- **Environment**: `$PROJECT_ROOT`, `$TEMPLATE_NAME`, `$LIMA_INSTANCE`
+- **Environment Variables**:
+  - `PROJECT_ROOT` - Project directory path on host
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - VM instance name (same as template)
+  - `CAPABILITY_ID` - Capability identifier (e.g., "gh", "git")
 
 ### vm_setup
 - **When**: In guest VM during `claude-vm setup`
 - **Where**: Inside Lima VM (guest)
 - **Purpose**: Install software, configure system
-- **Environment**: Standard Lima environment
+- **Environment Variables**:
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - VM instance name
+  - `CAPABILITY_ID` - Capability identifier
+  - `CLAUDE_VM_PHASE` - Always "setup"
+  - `CLAUDE_VM_VERSION` - Version of claude-vm tool
+  - `PROJECT_ROOT` - Project directory path (host path for reference)
+  - `PROJECT_NAME` - Full project name from host
+  - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
+  - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
 
 ### vm_runtime
 - **When**: In VM before each `claude-vm run`
 - **Where**: Inside ephemeral VM session
 - **Purpose**: Initialize environment variables, start services
 - **Note**: Runs silently (only errors shown)
+- **Environment Variables**:
+  - `TEMPLATE_NAME` - VM template name
+  - `LIMA_INSTANCE` - Ephemeral VM instance name (different from template)
+  - `CAPABILITY_ID` - Capability identifier
+  - `CLAUDE_VM_PHASE` - Always "runtime"
+  - `CLAUDE_VM_VERSION` - Version of claude-vm tool
+  - `PROJECT_ROOT` - Mounted project directory in VM
+  - `PROJECT_NAME` - Full project name
+  - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
+  - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
+
+### Using Environment Variables in Scripts
+
+All environment variables are automatically available in your capability scripts. Here's how to use them:
+
+**Example: Basic usage in vm_setup**
+```toml
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+
+# All environment variables are automatically provided
+echo "Setting up $CAPABILITY_ID for project: $PROJECT_NAME"
+echo "VM: $TEMPLATE_NAME (instance: $LIMA_INSTANCE)"
+echo "Phase: $CLAUDE_VM_PHASE"
+
+# Use PROJECT_ROOT for project-specific configuration
+if [ -f "$PROJECT_ROOT/config.json" ]; then
+    echo "Found project configuration"
+fi
+"""
+```
+
+**Example: Worktree detection**
+```toml
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+
+if [ -n "$PROJECT_WORKTREE_ROOT" ]; then
+    echo "This is a git worktree"
+    echo "Main repository: $PROJECT_WORKTREE_ROOT"
+    echo "Current worktree: $PROJECT_WORKTREE"
+else
+    echo "This is a regular project (not a worktree)"
+fi
+"""
+```
+
+**Example: Phase-specific behavior**
+```toml
+[vm_runtime]
+script = """
+#!/bin/bash
+
+# Different behavior based on phase
+if [ "$CLAUDE_VM_PHASE" = "runtime" ]; then
+    # Generate context for Claude
+    mkdir -p ~/.claude-vm/context
+    cat > ~/.claude-vm/context/my-capability.txt <<EOF
+Capability: $CAPABILITY_ID
+Project: $PROJECT_NAME
+VM Instance: $LIMA_INSTANCE (ephemeral)
+Version: $CLAUDE_VM_VERSION
+EOF
+fi
+"""
+```
+
+**Example: Using in external script files**
+```bash
+# capabilities/my-capability/vm_setup.sh
+#!/bin/bash
+set -e
+
+# Environment variables are automatically available
+echo "Setting up for project: $PROJECT_NAME"
+
+# Use template name for VM-specific paths
+CONFIG_DIR="/home/lima.linux/.config/$TEMPLATE_NAME"
+mkdir -p "$CONFIG_DIR"
+
+# Reference project files (during setup, PROJECT_ROOT is host path)
+echo "Project location (host): $PROJECT_ROOT"
+```
 
 ## Best Practices
 
