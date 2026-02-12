@@ -20,9 +20,10 @@ Claude VM supports installing various development tools during template creation
 | `node`     | Node.js LTS, npm               | JavaScript/TypeScript projects |
 | `python`   | Python 3, pip                  | Python development             |
 | `rust`     | Rust toolchain, cargo, clippy  | Rust development               |
-| `chromium` | Chromium browser, DevTools     | Web scraping, browser testing  |
-| `gpg`      | GPG agent forwarding, key sync | Signed commits, encryption     |
-| `gh`       | GitHub CLI, authentication     | GitHub operations              |
+| `chromium`      | Chromium browser, DevTools      | Web scraping, browser testing  |
+| `gpg`           | GPG agent forwarding, key sync  | Signed commits, encryption     |
+| `gh`            | GitHub CLI, authentication      | GitHub operations              |
+| `notifications` | Notification forwarding to host | Build alerts, task completion  |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -483,6 +484,108 @@ $ gh issue list               # List issues
 $ gh api /user                # Make API calls
 ```
 
+### Notifications
+
+**Installs:**
+
+- Unix socket listener on host
+- Notification forwarding infrastructure
+- macOS Notification Center integration
+
+**Configuration:**
+
+```toml
+[tools]
+notifications = true
+```
+
+**CLI:**
+
+```bash
+claude-vm setup --notifications
+```
+
+**What it does:**
+
+1. Starts a background notification listener on host
+2. Forwards Unix socket from host to VM
+3. Enables sending notifications from VM to host
+4. Integrates with macOS Notification Center
+
+**Context provided:**
+
+```markdown
+Notification forwarding enabled
+Socket: /tmp/claude-notifications.socket
+
+To send notifications from the VM to the host:
+  echo '{"title":"Test","message":"Hello from VM"}' | nc -U /tmp/claude-notifications.socket
+```
+
+**Usage:**
+
+Send notifications from within the VM:
+
+```bash
+# Simple notification
+echo '{"title":"Build Complete","message":"Compilation successful"}' | nc -U /tmp/claude-notifications.socket
+
+# With subtitle
+echo '{"title":"Tests","message":"All passed","subtitle":"100% coverage"}' | nc -U /tmp/claude-notifications.socket
+
+# In build scripts
+if cargo build; then
+  echo '{"title":"Build Success","message":"Ready to deploy"}' | nc -U /tmp/claude-notifications.socket
+else
+  echo '{"title":"Build Failed","message":"Check logs"}' | nc -U /tmp/claude-notifications.socket
+fi
+```
+
+**JSON Format:**
+
+```json
+{
+  "title": "Notification Title",
+  "message": "Notification body text",
+  "subtitle": "Optional subtitle"
+}
+```
+
+**Requirements:**
+
+- **Host**: macOS (uses `osascript` for notifications)
+- **Recommended**: Install `socat` on host for better reliability (`brew install socat`)
+
+**Use Cases:**
+
+- Long-running build notifications
+- Test completion alerts
+- Deployment status updates
+- Background task completion
+- CI/CD pipeline alerts
+
+**Important:**
+- Notifications are local to the host machine only
+- Ensure Terminal/iTerm has notification permissions in System Settings
+- The listener runs in the background and is cleaned up when the VM stops
+
+**Troubleshooting:**
+
+```bash
+# Check listener is running (on host, outside VM)
+ps aux | grep claude-vm-notification-listener
+cat /tmp/claude-vm-notifications.pid
+
+# View logs (on host)
+tail -f /tmp/claude-vm-notifications.log
+
+# Test from host directly
+echo '{"title":"Test","message":"Direct test"}' | nc -U /tmp/claude-vm-notifications.socket
+
+# macOS permissions
+# System Settings → Notifications → Terminal/iTerm → Allow notifications
+```
+
 ### Network Isolation
 
 **Installs:**
@@ -573,13 +676,14 @@ node = true
 
 ```toml
 [tools]
-git = true        # Git identity and signing
-docker = true     # Docker + Compose
-node = true       # Node.js + npm
-python = true     # Python 3 + pip
-chromium = true   # Chromium browser
-gpg = true        # GPG agent forwarding
-gh = true         # GitHub CLI
+git = true           # Git identity and signing
+docker = true        # Docker + Compose
+node = true          # Node.js + npm
+python = true        # Python 3 + pip
+chromium = true      # Chromium browser
+gpg = true           # GPG agent forwarding
+gh = true            # GitHub CLI
+notifications = true # Notification forwarding
 ```
 
 ### Install Everything
