@@ -346,7 +346,14 @@ pub fn execute_command_with_runtime_scripts(
     for (i, (name, content, _env, _source, _when, _continue_on_error)) in
         script_contents.iter().enumerate()
     {
-        let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, name));
+        // Sanitize filename to prevent issues with special characters
+        let safe_name = sanitize_filename(name);
+        let script_name = if safe_name.is_empty() {
+            format!("script-{}", i)
+        } else {
+            safe_name
+        };
+        let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, script_name));
         std::fs::write(&local_temp, content)?;
         scripts.push(local_temp);
     }
@@ -697,6 +704,18 @@ mod tests {
     fn test_sanitize_filename_empty() {
         // All unsafe characters should result in empty string
         assert_eq!(sanitize_filename("';!@#$%"), "");
+    }
+
+    #[test]
+    fn test_sanitize_filename_phase_script_names() {
+        // Test realistic phase script names that might contain special characters
+        assert_eq!(
+            sanitize_filename("my-setup-script.sh"),
+            "my-setup-script.sh"
+        );
+        assert_eq!(sanitize_filename("setup:database"), "setupdatabase");
+        assert_eq!(sanitize_filename("run/build/deploy"), "runbuilddeploy");
+        assert_eq!(sanitize_filename("test & validate"), "testvalidate");
     }
 
     #[test]
