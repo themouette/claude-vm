@@ -221,6 +221,7 @@ dependencies = [
  "clap",
  "indicatif 0.18.3",
  "md5",
+ "once_cell",
  "predicates",
  "self_update",
  "semver",

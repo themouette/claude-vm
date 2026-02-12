@@ -6,9 +6,20 @@
 /// Run with: cargo test --test test_phase_scripts_vm -- --ignored --test-threads=1
 ///
 /// Tests are run sequentially (test-threads=1) because they share VM resources.
+///
+/// ## Performance Optimization
+///
+/// Tests are organized into two categories:
+/// - **Setup tests**: Tests that verify setup phase behavior. These build individual templates.
+/// - **Runtime tests**: Tests that only verify runtime phase behavior. These share a single
+///   pre-built template (SHARED_RUNTIME_TEMPLATE) to avoid redundant rebuilds.
+///
+/// This optimization significantly reduces CI time by building ~3 templates instead of 16.
 use assert_cmd::Command;
+use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tempfile::TempDir;
 
 /// Helper to create a test directory with a .claude-vm.toml file
@@ -46,6 +57,46 @@ fn run_shell_command(
 
     let output = cmd.output()?;
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Shared template for runtime-only tests
+/// This template is built once and reused across all tests that only check runtime behavior.
+/// This significantly speeds up CI by avoiding redundant template rebuilds.
+static SHARED_RUNTIME_TEMPLATE: Lazy<Mutex<(TempDir, PathBuf)>> = Lazy::new(|| {
+    eprintln!("Building shared runtime template (one-time setup)...");
+
+    // Create a minimal config - runtime tests will override with their own runtime configs
+    let config = r#"
+# Minimal base configuration for runtime testing
+# Each test will define its own runtime phases
+"#;
+
+    let project_dir = create_test_project(config);
+    let path = project_dir.path().to_path_buf();
+
+    // Build the template once
+    run_setup(&path).expect("Shared runtime template setup should succeed");
+
+    eprintln!("Shared runtime template ready at: {:?}", path);
+
+    // Keep TempDir alive and return path for reuse
+    Mutex::new((project_dir, path))
+});
+
+/// Get the shared runtime template path
+/// This returns a path to a pre-built template that can be used for runtime-only tests.
+fn get_shared_runtime_project() -> PathBuf {
+    let guard = SHARED_RUNTIME_TEMPLATE.lock().unwrap();
+    guard.1.clone()
+}
+
+/// Helper specifically for runtime tests that uses shared template
+/// This creates a config file in the shared template directory with runtime-specific config
+fn setup_runtime_test(config_content: &str) -> PathBuf {
+    let project_path = get_shared_runtime_project();
+    let config_path = project_path.join(".claude-vm.toml");
+    fs::write(&config_path, config_content).expect("Failed to write runtime config file");
+    project_path
 }
 
 #[test]
@@ -136,14 +187,12 @@ echo "DEBUG=$DEBUG" >> /tmp/env-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/env-test.txt")
-        .expect("Command should run");
+    let output =
+        run_shell_command(&project_path, "cat /tmp/env-test.txt").expect("Command should run");
 
     assert!(
         output.contains("TEST_VAR=hello-from-phase"),
@@ -368,17 +417,12 @@ echo 'Runtime phase executed' >> /tmp/runtime-marker.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which should trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/runtime-marker.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_path, "cat /tmp/runtime-marker.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("Runtime phase executed"),
@@ -563,17 +607,12 @@ echo "TEST_VAR=$TEST_VAR" > /tmp/source-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/source-test.txt",
-    )
-    .expect("Command should run");
+    let output =
+        run_shell_command(&project_path, "cat /tmp/source-test.txt").expect("Command should run");
 
     assert!(
         output.contains("TEST_VAR=hello from source"),
@@ -605,14 +644,12 @@ custom-tool > /tmp/path-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/path-test.txt")
-        .expect("Command should run");
+    let output =
+        run_shell_command(&project_path, "cat /tmp/path-test.txt").expect("Command should run");
 
     assert!(
         output.contains("custom tool works"),
@@ -641,17 +678,12 @@ echo "COMBINED_VAR=$COMBINED_VAR" > /tmp/combined-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/combined-test.txt",
-    )
-    .expect("Command should run");
+    let output =
+        run_shell_command(&project_path, "cat /tmp/combined-test.txt").expect("Command should run");
 
     assert!(
         output.contains("COMBINED_VAR=initial-plus-more"),
@@ -680,17 +712,12 @@ echo "NO_PERSIST_VAR=$NO_PERSIST_VAR" > /tmp/no-persist-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/no-persist-test.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_path, "cat /tmp/no-persist-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("NO_PERSIST_VAR=") && !output.contains("should not persist"),
@@ -722,17 +749,12 @@ echo "VAR3=$VAR3" >> /tmp/multi-export-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
-
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+    // Use shared template - no need to rebuild for runtime-only test
+    let project_path = setup_runtime_test(config);
 
     // Run a shell command which will trigger runtime scripts
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/multi-export-test.txt",
-    )
-    .expect("Command should run");
+    let output = run_shell_command(&project_path, "cat /tmp/multi-export-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("VAR1=value1"),
