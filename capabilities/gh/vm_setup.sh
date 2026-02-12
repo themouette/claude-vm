@@ -31,16 +31,8 @@ case "$choice" in
             target_param=""
         fi
 
-        # Extract project name from TEMPLATE_NAME (format: claude-tpl_<project>_<hash>-dev[-session])
-        # During vm_setup, PROJECT_ROOT is not mounted yet, so we parse TEMPLATE_NAME
-        if [ -n "$TEMPLATE_NAME" ]; then
-            # Remove claude-tpl_ prefix and extract project name before _<hash>
-            project_name=$(echo "$TEMPLATE_NAME" | sed 's/^claude-tpl_//' | sed 's/_[a-f0-9]\{8\}.*//')
-        elif [ -n "$PROJECT_ROOT" ]; then
-            project_name=$(basename "$PROJECT_ROOT")
-        else
-            project_name=$(basename "$(pwd)")
-        fi
+        # Use PROJECT_NAME from environment (automatically provided by claude-vm)
+        project_name="$PROJECT_NAME"
 
         # Build the pre-configured URL
         token_url="https://github.com/settings/personal-access-tokens/new"
@@ -101,10 +93,9 @@ case "$choice" in
 
             # Store metadata (token itself is stored securely by gh, not here)
             mkdir -p ~/.claude-vm
-            template_label="${TEMPLATE_NAME:-unknown}"
             cat > ~/.claude-vm/gh-auth-info <<EOF
 auth_method=token
-token_name="Claude VM - ${project_name} (${template_label})"
+token_name="Claude VM - ${project_name} (${TEMPLATE_NAME})"
 token_created=$(date +%Y-%m-%d)
 EOF
         else
