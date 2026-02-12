@@ -64,6 +64,9 @@ pub struct VmConfig {
 
     #[serde(default = "default_memory")]
     pub memory: u32,
+
+    #[serde(default = "default_cpus")]
+    pub cpus: u32,
 }
 
 impl Default for VmConfig {
@@ -71,6 +74,7 @@ impl Default for VmConfig {
         Self {
             disk: default_disk(),
             memory: default_memory(),
+            cpus: default_cpus(),
         }
     }
 }
@@ -81,6 +85,28 @@ fn default_disk() -> u32 {
 
 fn default_memory() -> u32 {
     8
+}
+
+fn default_cpus() -> u32 {
+    4
+}
+
+impl VmConfig {
+    /// Apply CI-specific resource constraints
+    /// GitHub Actions runners have limited resources, especially with VZ driver
+    pub fn apply_ci_constraints(&mut self) {
+        let is_ci = std::env::var("CI").is_ok()
+            || std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::env::var("GITLAB_CI").is_ok()
+            || std::env::var("CIRCLECI").is_ok();
+
+        if is_ci {
+            // Lima's own tests use --cpus 1 --memory 1 for VZ on GitHub Actions
+            // See: https://github.com/lima-vm/lima/.github/workflows/test.yml
+            self.cpus = 1;
+            self.memory = 1;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -691,7 +717,10 @@ impl Config {
         // 4. Apply environment variables
         config = config.merge_env();
 
-        // 5. Resolve context file if needed
+        // 5. Apply CI-specific resource constraints
+        config.vm.apply_ci_constraints();
+
+        // 6. Resolve context file if needed
         config = config.resolve_context_file()?;
 
         Ok(config)
@@ -712,6 +741,9 @@ impl Config {
         }
         if other.vm.memory != default_memory() {
             self.vm.memory = other.vm.memory;
+        }
+        if other.vm.cpus != default_cpus() {
+            self.vm.cpus = other.vm.cpus;
         }
 
         // Tools
@@ -880,6 +912,12 @@ impl Config {
             }
         }
 
+        if let Ok(cpus) = std::env::var("CLAUDE_VM_CPUS") {
+            if let Ok(cpus) = cpus.parse::<u32>() {
+                self.vm.cpus = cpus;
+            }
+        }
+
         if let Ok(enabled) = std::env::var("CLAUDE_VM_UPDATE_CHECK") {
             if let Ok(enabled) = enabled.parse::<bool>() {
                 self.update_check.enabled = enabled;
@@ -995,6 +1033,9 @@ impl Config {
         }
         if let Some(memory) = cli.memory {
             self.vm.memory = memory;
+        }
+        if let Some(cpus) = cli.cpus {
+            self.vm.cpus = cpus;
         }
 
         // Command-specific overrides
@@ -1114,6 +1155,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.vm.disk, 20);
         assert_eq!(config.vm.memory, 8);
+        assert_eq!(config.vm.cpus, 4);
         assert!(!config.tools.docker);
     }
 
@@ -1124,11 +1166,13 @@ mod tests {
 
         let mut override_cfg = Config::default();
         override_cfg.vm.memory = 16;
+        override_cfg.vm.cpus = 2;
         override_cfg.tools.docker = true;
 
         let merged = base.merge(override_cfg);
         assert_eq!(merged.vm.disk, 30); // Kept from base
         assert_eq!(merged.vm.memory, 16); // From override
+        assert_eq!(merged.vm.cpus, 2); // From override
         assert!(merged.tools.docker); // From override
     }
 
@@ -1152,6 +1196,75 @@ mod tests {
         config.context.instructions = "Test instructions".to_string();
 
         assert_eq!(config.context.instructions, "Test instructions");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_ci_constraints_applied() {
+        // Save original env state
+        let original_ci = std::env::var("CI").ok();
+        let original_github = std::env::var("GITHUB_ACTIONS").ok();
+
+        // Set CI environment variable
+        std::env::set_var("CI", "true");
+
+        let mut vm_config = VmConfig::default();
+        vm_config.apply_ci_constraints();
+
+        // CI constraints should set cpus=1, memory=1
+        assert_eq!(vm_config.cpus, 1, "CI should limit CPUs to 1");
+        assert_eq!(vm_config.memory, 1, "CI should limit memory to 1 GB");
+
+        // Restore original env state
+        match original_ci {
+            Some(val) => std::env::set_var("CI", val),
+            None => std::env::remove_var("CI"),
+        }
+        match original_github {
+            Some(val) => std::env::set_var("GITHUB_ACTIONS", val),
+            None => std::env::remove_var("GITHUB_ACTIONS"),
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_ci_constraints_not_applied_without_ci_env() {
+        // Save original env state
+        let original_ci = std::env::var("CI").ok();
+        let original_github = std::env::var("GITHUB_ACTIONS").ok();
+        let original_gitlab = std::env::var("GITLAB_CI").ok();
+        let original_circle = std::env::var("CIRCLECI").ok();
+
+        // Ensure no CI env vars are set
+        std::env::remove_var("CI");
+        std::env::remove_var("GITHUB_ACTIONS");
+        std::env::remove_var("GITLAB_CI");
+        std::env::remove_var("CIRCLECI");
+
+        let mut vm_config = VmConfig::default();
+        vm_config.apply_ci_constraints();
+
+        // Without CI env, constraints should not be applied
+        assert_eq!(vm_config.cpus, 4, "CPUs should remain at default");
+        assert_eq!(vm_config.memory, 8, "Memory should remain at default");
+
+        // Restore original env state
+        match original_ci {
+            Some(val) => std::env::set_var("CI", val),
+            None => std::env::remove_var("CI"),
+        }
+        match original_github {
+            Some(val) => std::env::set_var("GITHUB_ACTIONS", val),
+            None => std::env::remove_var("GITHUB_ACTIONS"),
+        }
+        match original_gitlab {
+            Some(val) => std::env::set_var("GITLAB_CI", val),
+            None => std::env::remove_var("GITLAB_CI"),
+        }
+        match original_circle {
+            Some(val) => std::env::set_var("CIRCLECI", val),
+            None => std::env::remove_var("CIRCLECI"),
+        }
     }
 
     #[test]

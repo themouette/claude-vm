@@ -73,11 +73,11 @@ claude-vm setup --git --setup-script ./my-setup.sh
 Customize VM resources:
 
 ```bash
-# Set disk and memory
-claude-vm setup --disk 30 --memory 16 --git --node
+# Set disk, memory, and CPUs
+claude-vm setup --disk 30 --memory 16 --cpus 4 --git --node
 
 # Use environment variables
-CLAUDE_VM_DISK=30 CLAUDE_VM_MEMORY=16 claude-vm setup --git
+CLAUDE_VM_DISK=30 CLAUDE_VM_MEMORY=16 CLAUDE_VM_CPUS=4 claude-vm setup --git
 ```
 
 ### Setup-Specific Mounts
@@ -437,8 +437,11 @@ Options that work with most commands.
 # Set memory size (GB)
 --memory 16
 
+# Set number of CPUs
+--cpus 4
+
 # Example
-claude-vm --disk 30 --memory 16 setup --git
+claude-vm --disk 30 --memory 16 --cpus 4 setup --git
 ```
 
 ### Environment Variables

@@ -17,7 +17,7 @@ pub fn execute(
     helpers::ensure_template_exists(project, config)?;
 
     if !config.verbose {
-        println!("Starting ephemeral VM session...");
+        eprintln!("Starting ephemeral VM session...");
     }
 
     // Create session
@@ -42,7 +42,7 @@ pub fn execute(
         args.push(arg.as_str());
     }
 
-    println!("Running Claude in VM: {}", session.name());
+    eprintln!("Running Claude in VM: {}", session.name());
 
     // Collect environment variables
     let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;

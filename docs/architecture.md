@@ -211,12 +211,12 @@ claude_args = ["--dangerously-skip-permissions"]
 ### Precedence Example
 
 Given:
-- Global config: `~/.claude-vm.toml` sets `disk = 20`
+- Global config: `~/.claude-vm.toml` sets `disk = 20, cpus = 2`
 - Project config: `.claude-vm.toml` sets `disk = 30`
 - Environment: `CLAUDE_VM_DISK=40`
 - CLI flag: `--disk 50`
 
-Result: `disk = 50` (CLI wins)
+Result: `disk = 50` (CLI wins), `cpus = 2` (from global config)
 
 ## Binary Stats
 

@@ -37,6 +37,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub memory: Option<u32>,
 
+    /// Number of CPUs for the VM
+    #[arg(long, global = true)]
+    pub cpus: Option<u32>,
+
     /// Show verbose output including Lima logs
     #[arg(short = 'v', long = "verbose", global = true)]
     pub verbose: bool,

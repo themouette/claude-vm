@@ -16,9 +16,9 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
 
     if !config.verbose {
         if is_interactive {
-            println!("Starting ephemeral VM session for shell...");
+            eprintln!("Starting ephemeral VM session for shell...");
         } else {
-            println!("Starting ephemeral VM session...");
+            eprintln!("Starting ephemeral VM session...");
         }
     }
 
@@ -62,7 +62,7 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
         )?;
     } else {
         // Command execution mode
-        println!("Executing command in VM: {}", session.name());
+        eprintln!("Executing command in VM: {}", session.name());
 
         let cmd_str = shell_utils::join_args(command);
         match runner::execute_command_with_runtime_scripts(
