@@ -11,12 +11,31 @@ use std::sync::Arc;
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
 
+/// Phase in which a capability script is executed
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CapabilityPhase {
+    /// Setup phase - runs during template creation
+    Setup,
+    /// Runtime phase - runs before each session
+    Runtime,
+}
+
+impl CapabilityPhase {
+    /// Get the string representation of the phase
+    fn as_str(&self) -> &'static str {
+        match self {
+            CapabilityPhase::Setup => "setup",
+            CapabilityPhase::Runtime => "runtime",
+        }
+    }
+}
+
 /// Build environment variables for capability scripts
 fn build_capability_env_vars(
     project: &Project,
     vm_name: &str,
     capability_id: &str,
-    phase: &str, // "setup" or "runtime"
+    phase: CapabilityPhase,
 ) -> Result<HashMap<String, String>> {
     let mut env_vars = HashMap::new();
 
@@ -29,7 +48,7 @@ fn build_capability_env_vars(
     env_vars.insert("CAPABILITY_ID".to_string(), capability_id.to_string());
 
     // Phase
-    env_vars.insert("CLAUDE_VM_PHASE".to_string(), phase.to_string());
+    env_vars.insert("CLAUDE_VM_PHASE".to_string(), phase.as_str().to_string());
 
     // Version
     env_vars.insert(
@@ -113,7 +132,7 @@ pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Resu
     println!("Setting up {}...", capability.capability.name);
 
     let vm_name = project.template_name();
-    let env_vars = build_capability_env_vars(project, vm_name, &capability.capability.id, "setup")?;
+    let env_vars = build_capability_env_vars(project, vm_name, &capability.capability.id, CapabilityPhase::Setup)?;
 
     execute_vm_script(
         vm_name,
@@ -134,7 +153,7 @@ pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Re
 
     let vm_name = project.template_name();
     let env_vars =
-        build_capability_env_vars(project, vm_name, &capability.capability.id, "runtime")?;
+        build_capability_env_vars(project, vm_name, &capability.capability.id, CapabilityPhase::Runtime)?;
 
     // Runtime scripts are executed silently unless there's an error
     execute_vm_script(
@@ -161,7 +180,7 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
         "CAPABILITY_ID".to_string(),
         capability.capability.id.clone(),
     );
-    env_vars.insert("CLAUDE_VM_PHASE".to_string(), "runtime".to_string());
+    env_vars.insert("CLAUDE_VM_PHASE".to_string(), CapabilityPhase::Runtime.as_str().to_string());
     env_vars.insert(
         "CLAUDE_VM_VERSION".to_string(),
         version::VERSION.to_string(),
@@ -445,7 +464,7 @@ pub fn execute_repository_setups(
         println!("  Setting up repositories for {}...", capability_id);
 
         let template_name = project.template_name();
-        let env_vars = build_capability_env_vars(project, template_name, capability_id, "setup")?;
+        let env_vars = build_capability_env_vars(project, template_name, capability_id, CapabilityPhase::Setup)?;
 
         // Execute the repo setup script with enhanced error context
         execute_vm_script(
@@ -554,7 +573,6 @@ pub fn batch_install_system_packages(project: &Project, packages: &[String]) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     // Note: Integration tests for build_capability_env_vars are in tests/test_capabilities.rs
     // since they require actual Project instances with git repositories.
