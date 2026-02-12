@@ -39,16 +39,42 @@ fn perform_update(target: Option<String>, skip_confirm: bool) -> Result<()> {
 
     println!("Current version: {}", current);
 
-    // Check for latest version first if not targeting specific version
-    if target.is_none() {
-        if let Some(latest) = get_latest_version()? {
-            if latest == current {
-                println!("You're already running the latest version");
-                return Ok(());
-            }
-            println!("New version available: {}", latest);
+    // Determine target version: fetch latest if not specified or if "latest" is specified
+    let target_version = match target {
+        Some(v) if v == "latest" || v == "v" => {
+            // Explicit "latest" request
+            None
         }
-    }
+        Some(v) => {
+            // Specific version requested - strip 'v' prefix if present
+            Some(v.trim_start_matches('v').to_string())
+        }
+        None => {
+            // No version specified - fetch latest
+            None
+        }
+    };
+
+    // Fetch latest version if needed
+    let target_version = if target_version.is_none() {
+        match get_latest_version()? {
+            Some(latest) => {
+                if latest == current {
+                    println!("You're already running the latest version");
+                    return Ok(());
+                }
+                println!("New version available: {}", latest);
+                Some(latest)
+            }
+            None => {
+                return Err(ClaudeVmError::UpdateError(
+                    "Unable to fetch latest version".to_string(),
+                ));
+            }
+        }
+    } else {
+        target_version
+    };
 
     println!("\nDownloading update...");
 
@@ -62,7 +88,8 @@ fn perform_update(target: Option<String>, skip_confirm: bool) -> Result<()> {
         .show_download_progress(true)
         .no_confirm(skip_confirm);
 
-    if let Some(version) = target {
+    // Always set target version to ensure we update to the specific version
+    if let Some(version) = target_version {
         update_builder.target_version_tag(&format!("v{}", version));
     }
 
