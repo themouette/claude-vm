@@ -11,6 +11,11 @@ use std::sync::Arc;
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
 
+/// Ensure an environment variable exists in the map, setting it to empty string if not present
+fn ensure_env_var(env_vars: &mut HashMap<String, String>, key: &str) {
+    env_vars.entry(key.to_string()).or_default();
+}
+
 /// Phase in which a capability script is executed
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapabilityPhase {
@@ -112,11 +117,9 @@ fn build_capability_env_vars(
         }
     }
 
-    // If not a worktree, set empty strings
-    if !env_vars.contains_key("PROJECT_WORKTREE_ROOT") {
-        env_vars.insert("PROJECT_WORKTREE_ROOT".to_string(), String::new());
-        env_vars.insert("PROJECT_WORKTREE".to_string(), String::new());
-    }
+    // Ensure worktree variables exist (set to empty if not a worktree)
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
 
     Ok(env_vars)
 }
@@ -143,7 +146,12 @@ pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Resu
     println!("Setting up {}...", capability.capability.name);
 
     let vm_name = project.template_name();
-    let env_vars = build_capability_env_vars(project, vm_name, &capability.capability.id, CapabilityPhase::Setup)?;
+    let env_vars = build_capability_env_vars(
+        project,
+        vm_name,
+        &capability.capability.id,
+        CapabilityPhase::Setup,
+    )?;
 
     execute_vm_script(
         vm_name,
@@ -163,8 +171,12 @@ pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Re
     };
 
     let vm_name = project.template_name();
-    let env_vars =
-        build_capability_env_vars(project, vm_name, &capability.capability.id, CapabilityPhase::Runtime)?;
+    let env_vars = build_capability_env_vars(
+        project,
+        vm_name,
+        &capability.capability.id,
+        CapabilityPhase::Runtime,
+    )?;
 
     // Runtime scripts are executed silently unless there's an error
     execute_vm_script(
@@ -200,7 +212,10 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
         "CAPABILITY_ID".to_string(),
         capability.capability.id.clone(),
     );
-    env_vars.insert("CLAUDE_VM_PHASE".to_string(), CapabilityPhase::Runtime.as_str().to_string());
+    env_vars.insert(
+        "CLAUDE_VM_PHASE".to_string(),
+        CapabilityPhase::Runtime.as_str().to_string(),
+    );
     env_vars.insert(
         "CLAUDE_VM_VERSION".to_string(),
         version::VERSION.to_string(),
@@ -208,11 +223,11 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
 
     // Project-related vars are set to empty strings in this minimal context
     // since the Project object isn't available during early VM initialization
-    env_vars.insert("TEMPLATE_NAME".to_string(), String::new());
-    env_vars.insert("PROJECT_ROOT".to_string(), String::new());
-    env_vars.insert("PROJECT_NAME".to_string(), String::new());
-    env_vars.insert("PROJECT_WORKTREE_ROOT".to_string(), String::new());
-    env_vars.insert("PROJECT_WORKTREE".to_string(), String::new());
+    ensure_env_var(&mut env_vars, "TEMPLATE_NAME");
+    ensure_env_var(&mut env_vars, "PROJECT_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_NAME");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE_ROOT");
+    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
 
     // Runtime scripts are executed silently unless there's an error
     execute_vm_script(
@@ -490,7 +505,12 @@ pub fn execute_repository_setups(
         println!("  Setting up repositories for {}...", capability_id);
 
         let template_name = project.template_name();
-        let env_vars = build_capability_env_vars(project, template_name, capability_id, CapabilityPhase::Setup)?;
+        let env_vars = build_capability_env_vars(
+            project,
+            template_name,
+            capability_id,
+            CapabilityPhase::Setup,
+        )?;
 
         // Execute the repo setup script with enhanced error context
         execute_vm_script(
@@ -712,7 +732,10 @@ mod tests {
             "/path/with/$dollar/and`backtick`".to_string(),
         );
         env_vars.insert("NEWLINE_VAR".to_string(), "line1\nline2".to_string());
-        env_vars.insert("BACKSLASH_VAR".to_string(), "path\\with\\backslash".to_string());
+        env_vars.insert(
+            "BACKSLASH_VAR".to_string(),
+            "path\\with\\backslash".to_string(),
+        );
 
         let wrapped = wrap_script_with_env_vars("echo test", &env_vars);
 
@@ -754,11 +777,11 @@ mod tests {
     fn test_wrap_script_combined_special_cases() {
         // Test a realistic combination of edge cases
         let mut env_vars = HashMap::new();
+        env_vars.insert("PROJECT_NAME".to_string(), "my-project's name".to_string());
         env_vars.insert(
-            "PROJECT_NAME".to_string(),
-            "my-project's name".to_string(),
+            "PROJECT_PATH".to_string(),
+            "/home/user/path with spaces".to_string(),
         );
-        env_vars.insert("PROJECT_PATH".to_string(), "/home/user/path with spaces".to_string());
 
         let script = "#!/bin/bash\nset -e\necho \"$PROJECT_NAME\"";
         let wrapped = wrap_script_with_env_vars(script, &env_vars);
