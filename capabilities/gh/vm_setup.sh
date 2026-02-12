@@ -66,6 +66,10 @@ case "$choice" in
         echo "After creating or regenerating your token, paste it below:" >&2
 
         # Read token with asterisk feedback
+        # NOTE: This secure input pattern could be extracted to a shared function
+        # if other capabilities need masked input. For now, keeping it inline since
+        # it's only used here. Pattern: read char-by-char, mask with asterisks,
+        # handle backspace/delete.
         echo -n "Token: " >&2
         token=""
         while IFS= read -r -s -n1 char; do
