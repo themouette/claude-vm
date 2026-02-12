@@ -1,0 +1,43 @@
+[capability]
+id = "notifications"
+name = "Notification Forwarding"
+description = "Forward notifications from VM to host system"
+
+[host_setup]
+script_file = "host_setup.sh"
+
+[vm_runtime]
+script = """
+#!/bin/bash
+# Setup notification socket environment
+NOTIFICATION_SOCKET="/tmp/claude-notifications.socket"
+
+if [ -S "$NOTIFICATION_SOCKET" ]; then
+  export CLAUDE_NOTIFICATION_SOCKET="$NOTIFICATION_SOCKET"
+else
+  echo "Warning: Notification socket not found at $NOTIFICATION_SOCKET"
+fi
+
+# Write context for Claude
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/notifications.txt <<EOF
+Notification forwarding enabled
+Socket: $NOTIFICATION_SOCKET
+
+To send notifications from the VM to the host:
+  echo '{"title":"Test","message":"Hello from VM"}' | nc -U $NOTIFICATION_SOCKET
+
+JSON format:
+  {
+    "title": "Notification Title",
+    "message": "Notification body",
+    "subtitle": "Optional subtitle"
+  }
+EOF
+"""
+
+# Forward notification socket from host to VM
+[[forwards]]
+type = "unix_socket"
+host = "/tmp/claude-vm-notifications.socket"
+guest = "/tmp/claude-notifications.socket"

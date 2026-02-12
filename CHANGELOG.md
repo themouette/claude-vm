@@ -4,6 +4,19 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Notifications capability**: Forward notifications from VM to host system (macOS only)
+  - Sends notifications from VM to macOS Notification Center on host
+  - Unix socket-based communication for security and efficiency
+  - JSON protocol for structured notifications (title, message, subtitle)
+  - Background listener daemon on host with automatic lifecycle management
+  - Simple usage: `echo '{"title":"Build Complete","message":"Success"}' | nc -U /tmp/claude-notifications.socket`
+  - Enable with `--notifications` flag or `[tools] notifications = true` in configuration
+  - Use cases: build alerts, test completion, deployment status, background tasks
+  - See `capabilities/notifications/README.md` and `capabilities/notifications/TESTING.md` for documentation
+  - **Requirements**: macOS host with notification permissions for Terminal/iTerm
+
 ## [0.6.0] - 2026-02-12
 
 ### Added

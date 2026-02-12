@@ -137,6 +137,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub network_isolation: bool,
+
+    #[serde(default)]
+    pub notifications: bool,
 }
 
 impl ToolsConfig {
@@ -152,6 +155,7 @@ impl ToolsConfig {
             "gh" => self.gh,
             "git" => self.git,
             "network-isolation" => self.network_isolation,
+            "notifications" => self.notifications,
             _ => false,
         }
     }
@@ -168,6 +172,7 @@ impl ToolsConfig {
             "gh" => self.gh = true,
             "git" => self.git = true,
             "network-isolation" => self.network_isolation = true,
+            "notifications" => self.notifications = true,
             _ => {}
         }
     }
@@ -1049,6 +1054,7 @@ impl Config {
             gh,
             git,
             network_isolation,
+            notifications,
             all,
             disk,
             memory,
@@ -1068,6 +1074,7 @@ impl Config {
                 self.tools.enable("gh");
                 self.tools.enable("git");
                 self.tools.enable("network-isolation");
+                self.tools.enable("notifications");
             } else {
                 if *docker {
                     self.tools.enable("docker");
@@ -1096,6 +1103,9 @@ impl Config {
                 if *network_isolation {
                     self.tools.enable("network-isolation");
                     self.security.network.enabled = true;
+                }
+                if *notifications {
+                    self.tools.enable("notifications");
                 }
             }
 
@@ -1861,6 +1871,16 @@ mod tests {
         tools.enable("network-isolation");
         assert!(tools.is_enabled("network-isolation"));
         assert!(tools.network_isolation);
+    }
+
+    #[test]
+    fn test_tools_config_notifications() {
+        let mut tools = ToolsConfig::default();
+        assert!(!tools.is_enabled("notifications"));
+
+        tools.enable("notifications");
+        assert!(tools.is_enabled("notifications"));
+        assert!(tools.notifications);
     }
 
     #[test]
