@@ -167,10 +167,10 @@ echo 'Setup phase executed' > $HOME/test-data/setup-marker.txt
     // Run setup - this builds the template and runs setup scripts
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify the marker file was created during template build (persists in /home/lima.linux)
+    // Verify the marker file was created during template build (persists in $HOME)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /home/lima.linux/test-data/setup-marker.txt",
+        "cat $HOME/test-data/setup-marker.txt",
     )
     .expect("Command should run");
 
