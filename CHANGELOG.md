@@ -21,6 +21,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Fixed
 
+- **Update command now updates to latest version**: Fixed bug where `claude-vm update` would only update one version at a time instead of jumping directly to the latest version. The command now explicitly fetches and sets the latest version as the target, ensuring direct updates. Also added support for `claude-vm update latest` and automatic handling of version prefixes (both `v1.2.3` and `1.2.3` formats are now accepted).
 - **Phase script name sanitization**: Phase script names are now properly sanitized before being used as local temporary filenames. Previously, phase script names containing special characters (e.g., colons, slashes, ampersands) could cause filesystem errors when creating temporary files. The sanitization logic that was already applied to VM-side paths is now also applied to local temp file creation for consistency and safety.
 
 ## [0.6.0] - 2026-02-12
