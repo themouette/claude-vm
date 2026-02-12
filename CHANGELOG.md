@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Phase script name sanitization**: Phase script names are now properly sanitized before being used as local temporary filenames. Previously, phase script names containing special characters (e.g., colons, slashes, ampersands) could cause filesystem errors when creating temporary files. The sanitization logic that was already applied to VM-side paths is now also applied to local temp file creation for consistency and safety.
+
 ## [0.6.0] - 2026-02-12
 
 ### Added
