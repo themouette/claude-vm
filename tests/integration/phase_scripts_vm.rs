@@ -3,18 +3,38 @@
 /// These tests require limactl to be installed and take significant time to run.
 /// They are marked with #[ignore] and must be explicitly run:
 ///
-/// Run with: cargo test --test test_phase_scripts_vm -- --ignored --test-threads=1
+/// Run with: cargo test --test integration_tests integration::phase_scripts_vm -- --ignored --test-threads=1
 ///
 /// Tests are run sequentially (test-threads=1) because they share VM resources.
 ///
-/// ## Performance Optimization
+/// ## Test Organization
 ///
-/// Tests are organized into two categories:
-/// - **Setup tests**: Tests that verify setup phase behavior. These build individual templates.
-/// - **Runtime tests**: Tests that only verify runtime phase behavior. These share a single
-///   pre-built template (SHARED_RUNTIME_TEMPLATE) to avoid redundant rebuilds.
+/// Tests are organized by what they actually test, not just by phase type:
 ///
-/// This optimization significantly reduces CI time by building ~3 templates instead of 16.
+/// ### Setup Phase Tests (3 tests) - Build individual templates
+/// These test setup-specific behavior:
+/// - `test_setup_phase_basic_execution` - Verifies setup scripts run during template build
+/// - `test_legacy_and_phase_scripts_coexist` - Tests legacy setup scripts compatibility
+/// - `test_phase_realistic_setup_workflow` - Integration test for realistic setup scenarios
+///
+/// ### Runtime Phase Tests (14 tests) - Share one pre-built template
+/// These test the **shared phase logic** that works identically in both setup and runtime:
+/// - Script execution (inline, file, mixed)
+/// - Execution order
+/// - Conditional execution (`when`)
+/// - Error handling (`continue_on_error`)
+/// - Environment variables
+/// - Special character escaping
+/// - Source/export behavior (runtime-only feature)
+///
+/// ## Performance Impact
+///
+/// **Before reorganization:** 16 tests × ~2 min/template = ~32 minutes
+/// **After reorganization:** 3 templates + 14 shared = ~10 minutes
+/// **Speedup:** ~70% faster CI execution
+///
+/// This design tests shared features comprehensively where it's fast (runtime),
+/// while keeping minimal setup-specific tests for actual setup behavior.
 use assert_cmd::Command;
 use once_cell::sync::Lazy;
 use std::fs;
@@ -99,11 +119,52 @@ fn setup_runtime_test(config_content: &str) -> PathBuf {
     project_path
 }
 
+// ============================================================================
+// Setup Phase Tests (3 tests)
+// These test setup-specific behavior and build individual templates
+// ============================================================================
+
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_inline_script_execution() {
+fn test_setup_phase_basic_execution() {
     let config = r#"
 [[phase.setup]]
+name = "basic-setup"
+script = """
+#!/bin/bash
+echo 'Setup phase executed' > /tmp/setup-marker.txt
+"""
+"#;
+
+    let project_dir = create_test_project(config);
+
+    // Run setup - this builds the template and runs setup scripts
+    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
+
+    // Verify the marker file was created during template build
+    let output = run_shell_command(
+        &project_dir.path().to_path_buf(),
+        "cat /tmp/setup-marker.txt",
+    )
+    .expect("Command should run");
+
+    assert!(
+        output.contains("Setup phase executed"),
+        "Setup script should have run during template build, got: {}",
+        output
+    );
+}
+
+// ============================================================================
+// Runtime Phase Tests (14 tests)
+// These test shared features using a single pre-built template for speed
+// ============================================================================
+
+#[test]
+#[ignore] // Requires limactl and takes time
+fn test_runtime_inline_script_execution() {
+    let config = r#"
+[[phase.runtime]]
 name = "create-marker"
 script = """
 #!/bin/bash
@@ -111,17 +172,12 @@ echo 'Phase script executed' > /tmp/phase-test-marker.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
+    // Use shared template - tests shared script loading logic
+    let project_path = setup_runtime_test(config);
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Verify the marker file was created
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/phase-test-marker.txt",
-    )
-    .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(&project_path, "cat /tmp/phase-test-marker.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("Phase script executed"),
@@ -132,11 +188,12 @@ echo 'Phase script executed' > /tmp/phase-test-marker.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_file_script_execution() {
-    let project_dir = TempDir::new().expect("Failed to create temp dir");
+fn test_runtime_file_script_execution() {
+    // Use shared template but need a separate temp dir for the script file
+    let project_path = get_shared_runtime_project();
 
-    // Create a script file
-    let script_path = project_dir.path().join("setup-script.sh");
+    // Create a script file in the project directory
+    let script_path = project_path.join("runtime-script.sh");
     fs::write(
         &script_path,
         "#!/bin/bash\necho 'File script executed' > /tmp/file-script-marker.txt\n",
@@ -146,25 +203,19 @@ fn test_phase_file_script_execution() {
     // Create config that references the script
     let config = format!(
         r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "run-file-script"
 script_files = ["{}"]
 "#,
         script_path.display()
     );
 
-    let config_path = project_dir.path().join(".claude-vm.toml");
+    let config_path = project_path.join(".claude-vm.toml");
     fs::write(&config_path, config).expect("Failed to write config file");
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Verify the marker file was created
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/file-script-marker.txt",
-    )
-    .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(&project_path, "cat /tmp/file-script-marker.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("File script executed"),
@@ -209,23 +260,23 @@ echo "DEBUG=$DEBUG" >> /tmp/env-test.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_execution_order() {
+fn test_runtime_execution_order() {
     let config = r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "first"
 script = """
 #!/bin/bash
 echo '1' > /tmp/phase-order.txt
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "second"
 script = """
 #!/bin/bash
 echo '2' >> /tmp/phase-order.txt
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "third"
 script = """
 #!/bin/bash
@@ -233,17 +284,12 @@ echo '3' >> /tmp/phase-order.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
+    // Use shared template - tests shared execution order logic
+    let project_path = setup_runtime_test(config);
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Verify execution order
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/phase-order.txt",
-    )
-    .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output =
+        run_shell_command(&project_path, "cat /tmp/phase-order.txt").expect("Command should run");
 
     // Should contain lines 1, 2, 3 in order
     let lines: Vec<&str> = output.trim().lines().collect();
@@ -255,16 +301,16 @@ echo '3' >> /tmp/phase-order.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_conditional_when() {
+fn test_runtime_conditional_when() {
     let config = r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "always-run"
 script = """
 #!/bin/bash
 echo 'always' > /tmp/conditional-test.txt
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "conditional-run"
 when = "test -f /tmp/conditional-test.txt"
 script = """
@@ -272,7 +318,7 @@ script = """
 echo 'conditional executed' >> /tmp/conditional-test.txt
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "should-not-run"
 when = "test -f /nonexistent-file-xyz"
 script = """
@@ -281,17 +327,12 @@ echo 'should not appear' >> /tmp/conditional-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
+    // Use shared template - tests shared conditional logic
+    let project_path = setup_runtime_test(config);
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Check results
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/conditional-test.txt",
-    )
-    .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(&project_path, "cat /tmp/conditional-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("always"),
@@ -314,16 +355,16 @@ echo 'should not appear' >> /tmp/conditional-test.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_continue_on_error() {
+fn test_runtime_continue_on_error() {
     let config = r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "first-success"
 script = """
 #!/bin/bash
 echo 'first' > /tmp/error-test.txt
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "second-fails"
 continue_on_error = true
 script = """
@@ -331,7 +372,7 @@ script = """
 exit 1
 """
 
-[[phase.setup]]
+[[phase.runtime]]
 name = "third-should-run"
 script = """
 #!/bin/bash
@@ -339,14 +380,12 @@ echo 'third' >> /tmp/error-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
+    // Use shared template - tests shared error handling logic
+    let project_path = setup_runtime_test(config);
 
-    // Run setup - should succeed despite second phase failing
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed despite error");
-
-    // Verify first and third phases ran
-    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/error-test.txt")
-        .expect("Command should run");
+    // Run a shell command - should succeed despite second phase failing
+    let output = run_shell_command(&project_path, "cat /tmp/error-test.txt")
+        .expect("Command should run despite error");
 
     assert!(
         output.contains("first"),
@@ -363,11 +402,12 @@ echo 'third' >> /tmp/error-test.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_mixed_inline_and_file() {
-    let project_dir = TempDir::new().expect("Failed to create temp dir");
+fn test_runtime_mixed_inline_and_file() {
+    // Use shared template but need to create script file
+    let project_path = get_shared_runtime_project();
 
     // Create a script file
-    let script_path = project_dir.path().join("extra.sh");
+    let script_path = project_path.join("extra.sh");
     fs::write(
         &script_path,
         "#!/bin/bash\necho 'from-file' >> /tmp/mixed-test.txt\n",
@@ -377,7 +417,7 @@ fn test_phase_mixed_inline_and_file() {
     // Create config with both inline and file scripts
     let config = format!(
         r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "mixed"
 script = """
 #!/bin/bash
@@ -388,15 +428,12 @@ script_files = ["{}"]
         script_path.display()
     );
 
-    let config_path = project_dir.path().join(".claude-vm.toml");
+    let config_path = project_path.join(".claude-vm.toml");
     fs::write(&config_path, config).expect("Failed to write config file");
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Verify both ran (inline first, then file)
-    let output = run_shell_command(&project_dir.path().to_path_buf(), "cat /tmp/mixed-test.txt")
-        .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output =
+        run_shell_command(&project_path, "cat /tmp/mixed-test.txt").expect("Command should run");
 
     let lines: Vec<&str> = output.trim().lines().collect();
     assert_eq!(lines.len(), 2, "Should have 2 lines, got: {:?}", lines);
@@ -488,9 +525,9 @@ echo 'phase' >> /tmp/coexist-test.txt
 
 #[test]
 #[ignore] // Requires limactl and takes time
-fn test_phase_with_special_characters() {
+fn test_runtime_with_special_characters() {
     let config = r#"
-[[phase.setup]]
+[[phase.runtime]]
 name = "special-chars"
 env = { VAR = "value with 'quotes' and $dollar" }
 script = """
@@ -500,17 +537,12 @@ echo 'Single quotes: '"'"'test'"'"'' >> /tmp/special-chars-test.txt
 """
 "#;
 
-    let project_dir = create_test_project(config);
+    // Use shared template - tests shared escaping logic
+    let project_path = setup_runtime_test(config);
 
-    // Run setup
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
-
-    // Verify special characters are handled correctly
-    let output = run_shell_command(
-        &project_dir.path().to_path_buf(),
-        "cat /tmp/special-chars-test.txt",
-    )
-    .expect("Command should run");
+    // Run a shell command which will trigger runtime scripts
+    let output = run_shell_command(&project_path, "cat /tmp/special-chars-test.txt")
+        .expect("Command should run");
 
     assert!(
         output.contains("VAR=value with 'quotes' and $dollar"),
