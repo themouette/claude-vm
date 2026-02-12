@@ -358,7 +358,11 @@ fn wrap_script_with_env_vars(
 
     // Export environment variables
     for (key, value) in env_vars {
-        // Escape single quotes in the value
+        // Escape single quotes for bash single-quoted strings
+        // Pattern: '\'' means: end quote, escaped quote, start quote
+        // Example: "it's" becomes 'it'\''s' which bash interprets as: it + ' + s
+        // This is the standard POSIX-compliant way to include a single quote
+        // within a single-quoted string.
         let escaped_value = value.replace('\'', r"'\''");
         wrapped.push_str(&format!("export {}='{}'\n", key, escaped_value));
     }
