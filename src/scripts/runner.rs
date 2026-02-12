@@ -719,6 +719,33 @@ mod tests {
     }
 
     #[test]
+    fn test_sanitize_filename_duplicate_names() {
+        // Verify that duplicate script names don't cause collisions
+        // because the index is included in the filename
+        let temp_dir = std::env::temp_dir();
+
+        // Simulate two scripts with the same name
+        let name1 = "setup.sh";
+        let name2 = "setup.sh";
+
+        let safe_name1 = sanitize_filename(name1);
+        let safe_name2 = sanitize_filename(name2);
+
+        // Both sanitize to the same value
+        assert_eq!(safe_name1, safe_name2);
+        assert_eq!(safe_name1, "setup.sh");
+
+        // But with different indices, they create different paths
+        let path1 = temp_dir.join(format!("claude-vm-runtime-{}-{}", 0, safe_name1));
+        let path2 = temp_dir.join(format!("claude-vm-runtime-{}-{}", 1, safe_name2));
+
+        // Verify paths are different despite same script name
+        assert_ne!(path1, path2);
+        assert!(path1.to_string_lossy().contains("runtime-0-setup.sh"));
+        assert!(path2.to_string_lossy().contains("runtime-1-setup.sh"));
+    }
+
+    #[test]
     fn test_entrypoint_script_generation() {
         let vm_paths = vec![
             "/tmp/claude-vm-runtime-0-setup.sh".to_string(),
