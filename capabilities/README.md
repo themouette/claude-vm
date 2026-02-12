@@ -265,6 +265,24 @@ That's it! The capability system handles everything else automatically.
 
 ## Lifecycle Hooks
 
+### Environment Variables Reference
+
+All capability scripts automatically receive environment variables providing context about the VM, project, and execution phase. Here's a quick reference:
+
+| Variable | host_setup | vm_setup | vm_runtime | Description |
+|----------|------------|----------|------------|-------------|
+| `CAPABILITY_ID` | ✓ | ✓ | ✓ | Capability identifier (e.g., "gh", "docker") |
+| `TEMPLATE_NAME` | ✓ | ✓ | ✓ | VM template name |
+| `LIMA_INSTANCE` | ✓ | ✓ | ✓ | VM instance name (same as template for setup, ephemeral for runtime) |
+| `CLAUDE_VM_PHASE` | - | ✓ | ✓ | Execution phase: "setup" or "runtime" |
+| `CLAUDE_VM_VERSION` | - | ✓ | ✓ | Version of claude-vm tool |
+| `PROJECT_ROOT` | ✓ | ✓ | ✓ | Project directory path (host path in setup, mounted path in runtime) |
+| `PROJECT_NAME` | - | ✓ | ✓ | Full project name extracted from directory |
+| `PROJECT_WORKTREE_ROOT` | - | ✓ | ✓ | Main project root if using git worktrees (empty otherwise) |
+| `PROJECT_WORKTREE` | - | ✓ | ✓ | Current worktree path if using git worktrees (empty otherwise) |
+
+**Note**: All variables are automatically exported as environment variables. No manual parsing needed!
+
 ### host_setup
 - **When**: On host before VM is created
 - **Where**: macOS/Linux host machine
