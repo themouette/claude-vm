@@ -686,4 +686,75 @@ mod tests {
             assert!(env_vars.contains_key(*key));
         }
     }
+
+    #[test]
+    fn test_wrap_script_with_special_chars_in_values() {
+        // Test that special characters (except single quotes) are preserved
+        // Single-quoted strings in bash don't expand variables or escape sequences
+        let mut env_vars = HashMap::new();
+        env_vars.insert(
+            "PATH_VAR".to_string(),
+            "/path/with/$dollar/and`backtick`".to_string(),
+        );
+        env_vars.insert("NEWLINE_VAR".to_string(), "line1\nline2".to_string());
+        env_vars.insert("BACKSLASH_VAR".to_string(), "path\\with\\backslash".to_string());
+
+        let wrapped = wrap_script_with_env_vars("echo test", &env_vars);
+
+        // In single-quoted strings, these special chars should be literal
+        assert!(wrapped.contains("/path/with/$dollar/and`backtick`"));
+        assert!(wrapped.contains("line1\nline2"));
+        assert!(wrapped.contains("path\\with\\backslash"));
+    }
+
+    #[test]
+    fn test_wrap_script_multiline_value() {
+        // Test that multiline values are preserved correctly
+        let mut env_vars = HashMap::new();
+        let multiline_value = "line 1\nline 2\nline 3";
+        env_vars.insert("MULTILINE".to_string(), multiline_value.to_string());
+
+        let wrapped = wrap_script_with_env_vars("echo $MULTILINE", &env_vars);
+
+        // The newlines should be preserved in the single-quoted string
+        assert!(wrapped.contains("'line 1\nline 2\nline 3'"));
+        assert!(wrapped.contains("export MULTILINE="));
+    }
+
+    #[test]
+    fn test_wrap_script_empty_value() {
+        // Test that empty string values are handled correctly
+        let mut env_vars = HashMap::new();
+        env_vars.insert("EMPTY".to_string(), String::new());
+        env_vars.insert("NOT_EMPTY".to_string(), "value".to_string());
+
+        let wrapped = wrap_script_with_env_vars("echo test", &env_vars);
+
+        // Empty strings should still be exported
+        assert!(wrapped.contains("export EMPTY=''"));
+        assert!(wrapped.contains("export NOT_EMPTY='value'"));
+    }
+
+    #[test]
+    fn test_wrap_script_combined_special_cases() {
+        // Test a realistic combination of edge cases
+        let mut env_vars = HashMap::new();
+        env_vars.insert(
+            "PROJECT_NAME".to_string(),
+            "my-project's name".to_string(),
+        );
+        env_vars.insert("PROJECT_PATH".to_string(), "/home/user/path with spaces".to_string());
+
+        let script = "#!/bin/bash\nset -e\necho \"$PROJECT_NAME\"";
+        let wrapped = wrap_script_with_env_vars(script, &env_vars);
+
+        // Single quote should be escaped
+        assert!(wrapped.contains("my-project'\\''s name"));
+        // Spaces should be preserved
+        assert!(wrapped.contains("/home/user/path with spaces"));
+        // Original script should be included (without duplicate shebang)
+        assert_eq!(wrapped.matches("#!/bin/bash").count(), 1);
+        assert!(wrapped.contains("set -e"));
+        assert!(wrapped.contains("echo \"$PROJECT_NAME\""));
+    }
 }
