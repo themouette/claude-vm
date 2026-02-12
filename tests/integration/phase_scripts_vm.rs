@@ -157,7 +157,8 @@ fn test_setup_phase_basic_execution() {
 name = "basic-setup"
 script = """
 #!/bin/bash
-echo 'Setup phase executed' > /tmp/setup-marker.txt
+mkdir -p /home/lima.linux/test-data
+echo 'Setup phase executed' > /home/lima.linux/test-data/setup-marker.txt
 """
 "#;
 
@@ -166,10 +167,10 @@ echo 'Setup phase executed' > /tmp/setup-marker.txt
     // Run setup - this builds the template and runs setup scripts
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify the marker file was created during template build
+    // Verify the marker file was created during template build (persists in /home/lima.linux)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /tmp/setup-marker.txt",
+        "cat /home/lima.linux/test-data/setup-marker.txt",
     )
     .expect("Command should run");
 
@@ -498,11 +499,11 @@ echo 'Runtime phase executed' >> /tmp/runtime-marker.txt
 fn test_legacy_and_phase_scripts_coexist() {
     let project_dir = TempDir::new().expect("Failed to create temp dir");
 
-    // Create a legacy setup script
+    // Create a legacy setup script (use persistent location for setup tests)
     let legacy_script = project_dir.path().join("legacy.sh");
     fs::write(
         &legacy_script,
-        "#!/bin/bash\necho 'legacy' > /tmp/coexist-test.txt\n",
+        "#!/bin/bash\nmkdir -p /home/lima.linux/test-data\necho 'legacy' > /home/lima.linux/test-data/coexist-test.txt\n",
     )
     .expect("Failed to write legacy script");
 
@@ -516,7 +517,7 @@ scripts = ["{}"]
 name = "phase-script"
 script = """
 #!/bin/bash
-echo 'phase' >> /tmp/coexist-test.txt
+echo 'phase' >> /home/lima.linux/test-data/coexist-test.txt
 """
 "#,
         legacy_script.display()
@@ -528,10 +529,10 @@ echo 'phase' >> /tmp/coexist-test.txt
     // Run setup
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify both ran
+    // Verify both ran (files in /home/lima.linux persist across VM restarts)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /tmp/coexist-test.txt",
+        "cat /home/lima.linux/test-data/coexist-test.txt",
     )
     .expect("Command should run");
 
@@ -592,16 +593,17 @@ script = """
 #!/bin/bash
 echo 'Checking requirements...'
 test $(nproc) -ge 1 || exit 1
-echo 'requirements-ok' > /tmp/workflow-test.txt
+mkdir -p /home/lima.linux/test-data
+echo 'requirements-ok' > /home/lima.linux/test-data/workflow-test.txt
 """
 
 [[phase.setup]]
 name = "install-tools"
-when = "test -f /tmp/workflow-test.txt"
+when = "test -f /home/lima.linux/test-data/workflow-test.txt"
 script = """
 #!/bin/bash
 echo 'Installing tools...'
-echo 'tools-installed' >> /tmp/workflow-test.txt
+echo 'tools-installed' >> /home/lima.linux/test-data/workflow-test.txt
 """
 
 [[phase.setup]]
@@ -610,7 +612,7 @@ env = { CONFIG = "production" }
 script = """
 #!/bin/bash
 echo "Configuring with CONFIG=$CONFIG..."
-echo "configured-$CONFIG" >> /tmp/workflow-test.txt
+echo "configured-$CONFIG" >> /home/lima.linux/test-data/workflow-test.txt
 """
 "#;
 
@@ -619,10 +621,10 @@ echo "configured-$CONFIG" >> /tmp/workflow-test.txt
     // Run setup
     run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed");
 
-    // Verify all phases ran
+    // Verify all phases ran (files in /home/lima.linux persist across VM restarts)
     let output = run_shell_command(
         &project_dir.path().to_path_buf(),
-        "cat /tmp/workflow-test.txt",
+        "cat /home/lima.linux/test-data/workflow-test.txt",
     )
     .expect("Command should run");
 
