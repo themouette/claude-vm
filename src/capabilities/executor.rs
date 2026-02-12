@@ -181,6 +181,15 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
     };
 
     // Build minimal env vars (no Project available in this context)
+    //
+    // This function is called when running runtime scripts in an ephemeral VM
+    // where the Project context isn't available yet. This happens during VM
+    // initialization before the project directory is mounted.
+    //
+    // We provide essential runtime information (VM name, capability ID, phase, version)
+    // but set project-related variables to empty strings to ensure scripts don't
+    // fail on undefined variables. Scripts should check if these vars are non-empty
+    // before using them.
     let mut env_vars = HashMap::new();
     env_vars.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
     env_vars.insert(
@@ -192,7 +201,9 @@ pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> 
         "CLAUDE_VM_VERSION".to_string(),
         version::VERSION.to_string(),
     );
-    // Other vars like PROJECT_ROOT, PROJECT_NAME, etc. will be empty in this minimal context
+
+    // Project-related vars are set to empty strings in this minimal context
+    // since the Project object isn't available during early VM initialization
     env_vars.insert("TEMPLATE_NAME".to_string(), String::new());
     env_vars.insert("PROJECT_ROOT".to_string(), String::new());
     env_vars.insert("PROJECT_NAME".to_string(), String::new());
