@@ -12,6 +12,16 @@ use std::path::{Path, PathBuf};
 /// Directory where capability runtime scripts are installed in the VM
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
 
+/// Type alias for runtime script metadata: (name, content, env_vars, source, when_condition, continue_on_error)
+type RuntimeScriptInfo = (
+    String,
+    String,
+    HashMap<String, String>,
+    bool,
+    Option<String>,
+    bool,
+);
+
 /// Sanitize a filename to contain only safe characters
 /// Allows: alphanumeric, dash, underscore, dot
 fn sanitize_filename(name: &str) -> String {
@@ -246,8 +256,8 @@ pub fn execute_command_with_runtime_scripts(
     args: &[&str],
     env_vars: &HashMap<String, String>,
 ) -> Result<()> {
-    // Collect all runtime scripts as (name, content, env_vars, source) tuples
-    let mut script_contents: Vec<(String, String, HashMap<String, String>, bool)> = Vec::new();
+    // Collect all runtime scripts as (name, content, env_vars, source, when_condition, continue_on_error) tuples
+    let mut script_contents: Vec<RuntimeScriptInfo> = Vec::new();
 
     // First, check for project-specific runtime script
     let runtime_script_path = find_runtime_script_path()?;
@@ -258,7 +268,8 @@ pub fn execute_command_with_runtime_scripts(
             .and_then(|n| n.to_str())
             .unwrap_or("runtime.sh")
             .to_string();
-        script_contents.push((name, content, HashMap::new(), false)); // No env, not sourced
+        script_contents.push((name, content, HashMap::new(), false, None, false));
+        // No env, not sourced, no condition, no continue_on_error
     }
 
     // Then add custom runtime scripts from config (legacy - with deprecation warning)
@@ -280,7 +291,8 @@ pub fn execute_command_with_runtime_scripts(
                 .and_then(|n| n.to_str())
                 .unwrap_or("script.sh")
                 .to_string();
-            script_contents.push((name, content, HashMap::new(), false)); // Not sourced
+            script_contents.push((name, content, HashMap::new(), false, None, false));
+            // Not sourced, no condition, no continue_on_error
         }
     }
 
@@ -288,15 +300,6 @@ pub fn execute_command_with_runtime_scripts(
     for phase in &config.phase.runtime {
         // Validate phase and emit warnings for potential issues
         phase.validate_and_warn();
-
-        // Check conditional execution
-        if !phase.should_execute(vm_name)? {
-            eprintln!(
-                "⊘ Skipping runtime phase '{}' (condition not met)",
-                phase.name
-            );
-            continue;
-        }
 
         // Get scripts for this phase
         let scripts = match phase.get_scripts(project.root()) {
@@ -325,7 +328,14 @@ pub fn execute_command_with_runtime_scripts(
         };
 
         for (name, content) in scripts {
-            script_contents.push((name, content, phase.env.clone(), phase.source));
+            script_contents.push((
+                name,
+                content,
+                phase.env.clone(),
+                phase.source,
+                phase.when.clone(), // Store condition for runtime evaluation
+                phase.continue_on_error,
+            ));
         }
     }
 
@@ -333,7 +343,9 @@ pub fn execute_command_with_runtime_scripts(
     let mut scripts = Vec::new();
     let temp_dir = std::env::temp_dir();
 
-    for (i, (name, content, _env, _source)) in script_contents.iter().enumerate() {
+    for (i, (name, content, _env, _source, _when, _continue_on_error)) in
+        script_contents.iter().enumerate()
+    {
         let local_temp = temp_dir.join(format!("claude-vm-runtime-{}-{}", i, name));
         std::fs::write(&local_temp, content)?;
         scripts.push(local_temp);
@@ -465,43 +477,77 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        let (name, _content, script_env, source_script) = &script_contents[i];
-        entrypoint.push_str(&format!("echo 'Running runtime script: {}'... >&2\n", name));
+        let (name, _content, script_env, source_script, when_condition, continue_on_error) =
+            &script_contents[i];
+
+        // Wrap in conditional block if 'when' is specified
+        if let Some(condition) = when_condition {
+            let escaped_condition = condition.replace('\'', "'\\''");
+            entrypoint.push_str(&format!("# Check condition for phase: {}\n", name));
+            entrypoint.push_str(&format!("if bash -c '{}'; then\n", escaped_condition));
+        }
+
+        entrypoint.push_str(&format!(
+            "  echo 'Running runtime script: {}'... >&2\n",
+            name
+        ));
 
         // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
         let run_cmd = if *source_script { "." } else { "bash" };
 
         // Set phase-specific environment variables if any
         if !script_env.is_empty() {
-            entrypoint.push_str("# Phase-specific environment variables\n");
+            entrypoint.push_str("  # Phase-specific environment variables\n");
 
             // Only use subshell if NOT sourcing (sourcing needs exports to persist)
             if !*source_script {
-                entrypoint.push_str("(\n"); // Start subshell to isolate env vars
+                entrypoint.push_str("  (\n"); // Start subshell to isolate env vars
             }
 
             for (key, value) in script_env {
                 let escaped_value = value.replace('\'', "'\\''");
-                let indent = if *source_script { "" } else { "  " };
+                let indent = if *source_script { "  " } else { "    " };
                 entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
             }
 
             // Use shell_escape to prevent injection attacks
-            let indent = if *source_script { "" } else { "  " };
-            entrypoint.push_str(&format!(
-                "{}{} {}\n",
-                indent,
-                run_cmd,
-                shell_escape(vm_path)
-            ));
+            let indent = if *source_script { "  " } else { "    " };
+            if *continue_on_error {
+                entrypoint.push_str(&format!(
+                    "{}{} {} || true\n",
+                    indent,
+                    run_cmd,
+                    shell_escape(vm_path)
+                ));
+            } else {
+                entrypoint.push_str(&format!(
+                    "{}{} {}\n",
+                    indent,
+                    run_cmd,
+                    shell_escape(vm_path)
+                ));
+            }
 
             if !*source_script {
-                entrypoint.push_str(")\n"); // End subshell
+                entrypoint.push_str("  )\n"); // End subshell
             }
             entrypoint.push('\n');
         } else {
             // Use shell_escape to prevent injection attacks
-            entrypoint.push_str(&format!("{} {}\n\n", run_cmd, shell_escape(vm_path)));
+            if *continue_on_error {
+                entrypoint.push_str(&format!(
+                    "  {} {} || true\n\n",
+                    run_cmd,
+                    shell_escape(vm_path)
+                ));
+            } else {
+                entrypoint.push_str(&format!("  {} {}\n\n", run_cmd, shell_escape(vm_path)));
+            }
+        }
+
+        // Close conditional block if 'when' was specified
+        if when_condition.is_some() {
+            entrypoint.push_str("fi\n\n");
         }
     }
 
