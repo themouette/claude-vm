@@ -4,6 +4,10 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Network isolation bypass domains**: Fixed HTTP/2 protocol errors with services like GitHub API by making bypass_domains truly bypass the proxy. Bypass domains are now added to the NO_PROXY environment variable for direct connections instead of going through mitmproxy with ignore_hosts. This resolves HTTP/2 PROTOCOL_ERROR issues caused by mitmproxy's header handling. Updated documentation to clarify that bypass domains completely skip the proxy rather than just skipping TLS interception.
+
 ## [0.6.0] - 2026-02-12
 
 ### Added

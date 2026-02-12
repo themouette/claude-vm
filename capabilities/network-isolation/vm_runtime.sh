@@ -278,10 +278,15 @@ export HTTPS_PROXY="http://localhost:8080"
 export http_proxy="$HTTP_PROXY"
 export https_proxy="$HTTPS_PROXY"
 
-# Build NO_PROXY list: localhost variants only
-# Note: Cannot add bypass_domains here because iptables blocks direct connections.
-# Bypass domains must still go through proxy, but mitmproxy will pass them through.
+# Build NO_PROXY list: localhost variants + bypass domains
+# The proxy user (current user) is allowed to make direct connections via iptables,
+# so we can add bypass_domains to NO_PROXY for true bypass (no proxy at all).
+# This is necessary for services like GitHub API that have HTTP/2 protocol issues
+# when going through mitmproxy, even with ignore_hosts.
 NO_PROXY_LIST="127.0.0.1,localhost,::1,[::1]"
+if [ -n "${BYPASS_DOMAINS:-}" ]; then
+    NO_PROXY_LIST="${NO_PROXY_LIST},${BYPASS_DOMAINS}"
+fi
 export NO_PROXY="$NO_PROXY_LIST"
 export no_proxy="$NO_PROXY"
 
@@ -411,12 +416,13 @@ Network isolation is enabled with the following policies:
 - Policy mode: ${POLICY_MODE:-denylist}
 - Allowed domains: ${ALLOWED_DOMAINS:-none configured}
 - Blocked domains: ${BLOCKED_DOMAINS:-none configured}
-- Bypass domains: ${BYPASS_DOMAINS:-none configured}
+- Bypass domains: ${BYPASS_DOMAINS:-none configured} (completely bypass proxy via NO_PROXY)
 - Raw TCP/UDP: $([ "${BLOCK_TCP_UDP:-true}" = "true" ] && echo "Blocked" || echo "Allowed")
 - Private networks (10.0.0.0/8, etc.): $([ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ] && echo "Blocked" || echo "Allowed")
 - Cloud metadata (169.254.169.254): $([ "${BLOCK_METADATA_SERVICES:-true}" = "true" ] && echo "Blocked" || echo "Allowed")
 
 You can only make HTTP/HTTPS requests. The proxy filters domains according to the policy.
+Bypass domains connect directly without going through the proxy.
 Raw TCP connections and UDP traffic are blocked for security.
 EOF
 fi

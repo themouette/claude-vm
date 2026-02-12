@@ -167,7 +167,8 @@ blocked_domains = [
   "*.ads.com",        # Block all ad subdomains
 ]
 
-# Bypass domains (no TLS interception, for certificate pinning)
+# Bypass domains (completely bypass proxy via NO_PROXY)
+# Use for certificate pinning or HTTP/2 protocol issues
 bypass_domains = [
   "*.internal.company.com",
 ]
@@ -276,19 +277,20 @@ Domain patterns can contain:
 
 ### Bypass Domains
 
-Bypass domains pass through the proxy without TLS interception:
+Bypass domains completely skip the proxy (added to NO_PROXY environment variable):
 
 ```toml
-bypass_domains = ["*.pinned.com"]
+bypass_domains = ["*.pinned.com", "api.github.com"]
 ```
 
 **Use for:**
 
 - Certificate pinning (domains that reject MITM certificates)
+- HTTP/2 protocol issues (some services have protocol incompatibilities with mitmproxy)
 - Internal services with custom CA
 - Domains that detect proxy usage
 
-**Note:** Bypass domains still go through the proxy (iptables requires it), but mitmproxy doesn't intercept TLS.
+**Note:** Bypass domains make direct connections without going through mitmproxy at all. They are added to the NO_PROXY environment variable and are not logged or filtered by the proxy.
 
 ## Protocol Blocking
 
@@ -528,13 +530,18 @@ Common issues:
 - Certificate generation failed
 - Mitmproxy installation corrupted
 
-### Certificate Errors
+### Certificate Errors or HTTP/2 Protocol Issues
 
-Some domains reject mitmproxy certificates. Add to bypass:
+Some domains reject mitmproxy certificates or have HTTP/2 protocol incompatibilities. Add to bypass:
 
 ```toml
-bypass_domains = ["*.github.com"]
+bypass_domains = ["*.github.com", "api.problematic.com"]
 ```
+
+Common symptoms:
+- TLS certificate validation errors
+- HTTP/2 protocol errors (GOAWAY frames, header whitespace issues)
+- Authentication failures with GitHub CLI or similar tools
 
 ### Logs Too Large
 
