@@ -306,6 +306,83 @@ That's it! The capability system handles everything else automatically.
   - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
   - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
 
+### Using Environment Variables in Scripts
+
+All environment variables are automatically available in your capability scripts. Here's how to use them:
+
+**Example: Basic usage in vm_setup**
+```toml
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+
+# All environment variables are automatically provided
+echo "Setting up $CAPABILITY_ID for project: $PROJECT_NAME"
+echo "VM: $TEMPLATE_NAME (instance: $LIMA_INSTANCE)"
+echo "Phase: $CLAUDE_VM_PHASE"
+
+# Use PROJECT_ROOT for project-specific configuration
+if [ -f "$PROJECT_ROOT/config.json" ]; then
+    echo "Found project configuration"
+fi
+"""
+```
+
+**Example: Worktree detection**
+```toml
+[vm_setup]
+script = """
+#!/bin/bash
+set -e
+
+if [ -n "$PROJECT_WORKTREE_ROOT" ]; then
+    echo "This is a git worktree"
+    echo "Main repository: $PROJECT_WORKTREE_ROOT"
+    echo "Current worktree: $PROJECT_WORKTREE"
+else
+    echo "This is a regular project (not a worktree)"
+fi
+"""
+```
+
+**Example: Phase-specific behavior**
+```toml
+[vm_runtime]
+script = """
+#!/bin/bash
+
+# Different behavior based on phase
+if [ "$CLAUDE_VM_PHASE" = "runtime" ]; then
+    # Generate context for Claude
+    mkdir -p ~/.claude-vm/context
+    cat > ~/.claude-vm/context/my-capability.txt <<EOF
+Capability: $CAPABILITY_ID
+Project: $PROJECT_NAME
+VM Instance: $LIMA_INSTANCE (ephemeral)
+Version: $CLAUDE_VM_VERSION
+EOF
+fi
+"""
+```
+
+**Example: Using in external script files**
+```bash
+# capabilities/my-capability/vm_setup.sh
+#!/bin/bash
+set -e
+
+# Environment variables are automatically available
+echo "Setting up for project: $PROJECT_NAME"
+
+# Use template name for VM-specific paths
+CONFIG_DIR="/home/lima.linux/.config/$TEMPLATE_NAME"
+mkdir -p "$CONFIG_DIR"
+
+# Reference project files (during setup, PROJECT_ROOT is host path)
+echo "Project location (host): $PROJECT_ROOT"
+```
+
 ## Best Practices
 
 1. **Keep capabilities focused**: Each capability should do one thing well
