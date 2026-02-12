@@ -4,6 +4,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-02-12
+
 ### Added
 
 - **Environment variables for capability scripts**: All `vm_setup` and `vm_runtime` capability scripts now receive comprehensive environment variables providing context about the VM, project, and execution phase:
@@ -344,7 +346,8 @@ All notable changes to claude-vm will be documented in this file.
 - **VM lifecycle management**: Basic commands for creating, starting, stopping, and destroying VMs
 - **Lima integration**: Leverages Lima (Linux virtual machines) for macOS to provide lightweight, fast VM creation
 
-[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/themouette/claude-vm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/themouette/claude-vm/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/themouette/claude-vm/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/themouette/claude-vm/compare/v0.4.0...v0.5.0
