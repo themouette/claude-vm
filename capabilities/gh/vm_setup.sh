@@ -34,10 +34,14 @@ case "$choice" in
         # Use PROJECT_NAME from environment (automatically provided by claude-vm)
         project_name="$PROJECT_NAME"
 
+        # URL encode project name to handle special characters (&, =, #, spaces, etc.)
+        # This uses printf %s and xxd to convert to hex, then awk to format as %XX
+        project_name_encoded=$(printf '%s' "$project_name" | xxd -plain | awk '{gsub(/../, "%&"); print}' | tr -d '\n')
+
         # Build the pre-configured URL
         token_url="https://github.com/settings/personal-access-tokens/new"
-        token_url="${token_url}?name=Claude+VM+-+${project_name}"
-        token_url="${token_url}&description=Access+token+for+Claude+VM+project+${project_name}"
+        token_url="${token_url}?name=Claude+VM+-+${project_name_encoded}"
+        token_url="${token_url}&description=Access+token+for+Claude+VM+project+${project_name_encoded}"
         token_url="${token_url}${target_param}"
         token_url="${token_url}&expires_in=90"
         token_url="${token_url}&contents=read"
