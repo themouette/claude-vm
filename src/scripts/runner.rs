@@ -369,16 +369,16 @@ pub fn execute_command_with_runtime_scripts(
         // Use PID to avoid collisions between concurrent sessions
         let vm_path = format!("/tmp/claude-vm-{}-{}-{}", pid, i, script_name);
 
-        print!("  Copying runtime script: {} ... ", script.display());
-        std::io::Write::flush(&mut std::io::stdout()).unwrap_or(());
+        eprint!("  Copying runtime script: {} ... ", script.display());
+        std::io::Write::flush(&mut std::io::stderr()).unwrap_or(());
 
         match LimaCtl::copy(script, vm_name, &vm_path) {
             Ok(_) => {
-                println!("✓");
+                eprintln!("✓");
                 vm_script_paths.push(vm_path);
             }
             Err(e) => {
-                println!("✗");
+                eprintln!("✗");
                 return Err(ClaudeVmError::LimaExecution(format!(
                     "Failed to copy runtime script '{}': {}",
                     script.display(),
@@ -466,7 +466,7 @@ pub fn execute_command_with_runtime_scripts(
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
         let (name, _content, script_env, source_script) = &script_contents[i];
-        entrypoint.push_str(&format!("echo 'Running runtime script: {}'...\n", name));
+        entrypoint.push_str(&format!("echo 'Running runtime script: {}'... >&2\n", name));
 
         // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
         let run_cmd = if *source_script { "." } else { "bash" };
@@ -615,7 +615,7 @@ fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) 
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
         entrypoint.push_str(&format!(
-            "echo 'Running runtime script: {}'...\n",
+            "echo 'Running runtime script: {}'... >&2\n",
             script_names[i]
         ));
         // Use shell_escape to prevent injection

@@ -76,6 +76,20 @@ fn run_shell_command(
         .args(["shell", "bash", "-c", command]);
 
     let output = cmd.output()?;
+
+    // If command failed, include stderr in error for debugging
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "Command failed with exit code {:?}\nstdout: {}\nstderr: {}",
+            output.status.code(),
+            stdout,
+            stderr
+        )
+        .into());
+    }
+
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
