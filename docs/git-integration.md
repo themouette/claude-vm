@@ -13,7 +13,81 @@ Claude-vm provides seamless git integration for projects:
 
 ## Git Worktree Support
 
-Git worktrees allow you to check out multiple branches in different directories from the same repository. Claude-vm automatically detects and handles worktrees correctly.
+Git worktrees allow you to check out multiple branches in different directories from the same repository. Claude-vm provides comprehensive worktree management with dedicated commands and automatic detection.
+
+### Worktree Management Commands
+
+Claude-vm includes a full suite of worktree management commands:
+
+#### Create Worktrees
+
+```bash
+# Create worktree from current branch
+claude-vm worktree create feature-branch
+
+# Create worktree from specific base branch
+claude-vm worktree create feature-branch main
+
+# Create and immediately start working
+claude-vm agent --worktree feature-branch
+claude-vm shell --worktree feature-branch
+```
+
+#### List Worktrees
+
+```bash
+# List all worktrees with branch, path, and status
+claude-vm worktree list
+```
+
+#### Delete Worktrees
+
+```bash
+# Delete specific worktree (preserves branch)
+claude-vm worktree delete feature-branch
+
+# Clean merged worktrees
+claude-vm worktree clean --merged
+claude-vm worktree clean --merged main
+```
+
+### Flag Integration
+
+The `--worktree` flag on agent and shell commands provides seamless worktree integration:
+
+```bash
+# Create or resume worktree and run agent
+claude-vm agent --worktree my-feature
+
+# Specify base branch for new worktrees
+claude-vm agent --worktree my-feature main
+
+# Open shell in worktree
+claude-vm shell --worktree my-feature
+```
+
+The system automatically:
+- Creates the worktree if the branch doesn't exist
+- Resumes the existing worktree if the branch is already checked out
+- Uses current HEAD as base when base-ref not specified
+- Provides clear messaging about whether it created or resumed
+
+### Configuration
+
+Configure worktree behavior in `.claude-vm.toml`:
+
+```toml
+[worktree]
+# Default location for worktrees (default: {repo_root}-worktrees/)
+location = "/path/to/worktrees"
+
+# Path template for worktree directories
+path_template = "{repo}-{branch}"
+```
+
+Available template variables:
+- `{repo}` - Repository name
+- `{branch}` - Branch name (sanitized)
 
 ### How It Works
 

@@ -132,9 +132,9 @@ fn main() -> Result<()> {
         Some(Commands::Shell(cmd)) => {
             commands::shell::execute(&project, &config, cmd)?;
         }
-        Some(Commands::Setup(cmd)) => {
+        Some(Commands::Setup(_cmd)) => {
             #[cfg(debug_assertions)]
-            let skip_install = cmd.no_agent_install;
+            let skip_install = _cmd.no_agent_install;
             #[cfg(not(debug_assertions))]
             let skip_install = false;
 

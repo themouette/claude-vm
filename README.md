@@ -42,19 +42,20 @@ Both forms work identically. The explicit `agent` command makes the default beha
 ### Available Commands
 
 ```bash
-claude-vm agent [flags] [args]   # Run Claude (also the default)
-claude-vm shell [flags] [args]   # Interactive shell or run commands
-claude-vm setup [flags] <name>   # Create a template VM
-claude-vm info                   # Show project information
-claude-vm config <subcommand>    # Configuration management
-claude-vm list [flags]           # List templates
-claude-vm clean [flags]          # Remove current template
-claude-vm clean-all [flags]      # Remove all templates
-claude-vm update [flags]         # Update claude-vm
-claude-vm network <subcommand>   # Network isolation management
+claude-vm agent [flags] [args]     # Run Claude (also the default)
+claude-vm shell [flags] [args]     # Interactive shell or run commands
+claude-vm setup [flags] <name>     # Create a template VM
+claude-vm worktree <subcommand>    # Worktree management (create, list, delete, clean)
+claude-vm info                     # Show project information
+claude-vm config <subcommand>      # Configuration management
+claude-vm list [flags]             # List templates
+claude-vm clean [flags]            # Remove current template
+claude-vm clean-all [flags]        # Remove all templates
+claude-vm update [flags]           # Update claude-vm
+claude-vm network <subcommand>     # Network isolation management
 ```
 
-Runtime flags like `--disk`, `--memory`, `--mount`, and `--env` are available on `agent`, `shell`, and `setup` commands. Other commands show only their own flags.
+Runtime flags like `--disk`, `--memory`, `--mount`, `--env`, and `--worktree` are available on `agent`, `shell`, and `setup` commands. Other commands show only their own flags.
 
 See [Usage Guide](docs/usage.md) for complete command reference.
 
@@ -74,9 +75,10 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 ## Key Features
 
 - **Template VMs per Repository** - Create once per project, clone for fast startup
+- **Git Worktree Management** - Dedicated commands for creating, listing, deleting, and cleaning worktrees with seamless `--worktree` flag integration
 - **Runtime Scripts** - Automatically run setup scripts before each session
 - **Configuration File Support** - Define VM resources, tools, and settings in `.claude-vm.toml`
-- **Git Worktree Support** - Automatically detects and mounts both worktree and main repository
+- **Automatic Worktree Detection** - Detects and mounts both worktree and main repository automatically
 - **Comprehensive Management** - Commands for info, config validation, template cleanup, and more
 
 ## Installation

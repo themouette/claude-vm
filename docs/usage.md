@@ -9,6 +9,7 @@ This guide covers all Claude VM commands with detailed examples.
 - [Shell Access](#shell-access)
 - [Project Information](#project-information)
 - [Configuration Management](#configuration-management)
+- [Worktree Management](#worktree-management)
 - [Template Management](#template-management)
 - [Updates](#updates)
 - [Global Options](#global-options)
@@ -323,6 +324,120 @@ node = true    # From project config
 [defaults]
 auto_setup = false  # Built-in default
 ```
+
+## Worktree Management
+
+Manage git worktrees for parallel branch development. See [Git Integration](git-integration.md) for comprehensive worktree documentation.
+
+### Create Worktrees
+
+Create a new worktree with a branch name:
+
+```bash
+# Create from current branch
+claude-vm worktree create feature-branch
+
+# Create from specific base branch
+claude-vm worktree create feature-branch main
+```
+
+The system automatically:
+- Creates the worktree directory
+- Checks out the branch
+- Uses configurable path templates for organization
+
+### Seamless Integration with --worktree Flag
+
+The `--worktree` flag on agent and shell commands provides one-command worktree creation:
+
+```bash
+# Create/resume worktree and run agent
+claude-vm agent --worktree feature-branch
+
+# Specify base branch
+claude-vm agent --worktree feature-branch main
+
+# Open shell in worktree
+claude-vm shell --worktree feature-branch
+```
+
+The system will:
+- Resume existing worktree if branch is already checked out
+- Create new worktree if branch exists but not checked out
+- Provide clear messaging about resume vs create behavior
+
+### List Worktrees
+
+Show all worktrees with branch, path, and status:
+
+```bash
+# List all worktrees
+claude-vm worktree list
+```
+
+**Example output:**
+```
++ main       /Users/me/project
+  feature-1  /Users/me/project-worktrees/project-feature-1
+  bugfix     /Users/me/project-worktrees/project-bugfix
+```
+
+The `+` indicates the main repository.
+
+### Delete Worktrees
+
+Remove worktree directories while preserving branches:
+
+```bash
+# Delete specific worktree
+claude-vm worktree delete feature-branch
+
+# Delete with confirmation
+claude-vm worktree delete feature-branch
+```
+
+**Note:** This only removes the worktree directory. The branch is preserved.
+
+### Clean Merged Worktrees
+
+Automatically clean worktrees for branches that have been merged:
+
+```bash
+# Clean worktrees merged into current default branch
+claude-vm worktree clean --merged
+
+# Clean worktrees merged into specific branch
+claude-vm worktree clean --merged main
+```
+
+The system automatically:
+- Detects the default branch if not specified
+- Lists merged branches
+- Removes worktrees (best-effort, continues on failures)
+
+### Configuration
+
+Configure worktree behavior in `.claude-vm.toml`:
+
+```toml
+[worktree]
+# Default location for worktrees
+location = "/path/to/worktrees"  # Default: {repo_root}-worktrees/
+
+# Path template for worktree directories
+path_template = "{repo}-{branch}"  # Default template
+```
+
+Available template variables:
+- `{repo}` - Repository name
+- `{branch}` - Branch name (sanitized)
+
+### Safety Features
+
+- **Automatic git worktree pruning**: Orphaned metadata cleaned before operations
+- **Locked worktree detection**: Clear errors with unlock instructions
+- **Submodule warnings**: Alerts when operating on repositories with submodules
+- **Git version validation**: Ensures git 2.5+ for worktree support
 
 ## Template Management
 

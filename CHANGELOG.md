@@ -6,12 +6,27 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Git worktree management**: Comprehensive worktree support for parallel branch development
+  - **Worktree commands**: New `worktree` subcommand with create, list, delete, and clean operations
+    - `claude-vm worktree create <branch> [base]` - Create new worktree with branch name
+    - `claude-vm worktree list` - List all worktrees with branch, path, and status
+    - `claude-vm worktree delete <branch>` - Remove worktree directory (preserves branch)
+    - `claude-vm worktree clean --merged [base]` - Clean worktrees for merged branches
+  - **Automatic detection**: System detects when branch exists and automatically resumes in existing worktree or creates new one
+  - **Flag integration**: `--worktree` flag on agent and shell commands for seamless worktree creation
+    - `claude-vm agent --worktree my-feature` - Create/resume worktree and run agent in one command
+    - `claude-vm shell --worktree my-feature main` - Specify base branch for new worktrees
+    - System defaults to current HEAD as base when base-ref not specified
+  - **Configuration**: Configurable worktree location and path templates via `.claude-vm.toml`
+    - Default location: `{repo_root}-worktrees/` for easy discovery
+    - Path templates: `{repo}-{branch}` format with variable substitution
+  - **Safety features**: Automatic git worktree metadata pruning, locked worktree detection, submodule warnings, and git version validation (2.5+)
+  - Clear messaging distinguishing resume vs create behavior
 - **Build-specific template filtering**: `list` and `clean-all` commands now filter templates by build type to prevent interference between development and production environments
   - Debug builds only show and operate on templates with `-dev` suffix
   - Release builds only show and operate on templates without `-dev` suffix
   - Prevents accidental deletion of release templates when using debug builds
   - Ensures clean separation between development and production template namespaces
-
 - **Explicit agent command**: Users can invoke the agent explicitly via `claude-vm agent [flags] [args]`
   - Both `claude-vm [args]` and `claude-vm agent [args]` work identically
   - Existing usage continues to work without modification — no changes required to workflows or scripts
@@ -62,6 +77,7 @@ All notable changes to claude-vm will be documented in this file.
   - Named phases for better logging/debugging
   - Script sourcing via `source` field to persist exports (like PATH modifications) across phases
   - Example:
+
     ```toml
     [[phase.runtime]]
     name = "start-services"
