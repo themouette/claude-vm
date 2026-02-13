@@ -4,6 +4,21 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **Explicit agent command**: Users can invoke the agent explicitly via `claude-vm agent [flags] [args]`
+  - Both `claude-vm [args]` and `claude-vm agent [args]` work identically
+  - Existing usage continues to work without modification — no changes required to workflows or scripts
+  - Runtime flags (`--disk`, `--memory`, `--mount`, `--env`, etc.) scoped to commands that use them (`agent`, `shell`, `setup`)
+  - `claude-vm agent --help` shows all agent-specific flags
+  - `claude-vm --help` shows available commands without per-command flag details
+  - See updated [Usage Guide](docs/usage.md) for examples
+
+### Changed
+
+- **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
+- **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
+
 ## [0.7.0] - 2026-02-12
 
 ### Added
