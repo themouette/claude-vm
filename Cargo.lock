@@ -246,6 +246,7 @@ dependencies = [
  "md5",
  "once_cell",
  "predicates",
+ "regex",
  "self_update",
  "semver",
  "serde",
