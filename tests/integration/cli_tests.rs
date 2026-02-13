@@ -143,3 +143,186 @@ fn test_disk_memory_flags() {
     // Should accept the flags
     cmd.assert().success();
 }
+
+// Phase 1 Tests: Agent Command with Runtime Flags
+
+#[test]
+fn test_agent_command_help_shows_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk"))
+        .stdout(predicate::str::contains("--memory"))
+        .stdout(predicate::str::contains("--cpus"))
+        .stdout(predicate::str::contains("--mount"))
+        .stdout(predicate::str::contains("--verbose"))
+        .stdout(predicate::str::contains("--env"))
+        .stdout(predicate::str::contains("--env-file"))
+        .stdout(predicate::str::contains("--inherit-env"))
+        .stdout(predicate::str::contains("--runtime-script"))
+        .stdout(predicate::str::contains("--forward-ssh-agent"))
+        .stdout(predicate::str::contains("--no-conversations"))
+        .stdout(predicate::str::contains("--auto-setup"));
+}
+
+#[test]
+fn test_agent_command_accepts_flags_and_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--disk", "50", "--memory", "8", "/clear"]);
+
+    // Should not fail with CLI parse error (exit code 2)
+    // May fail at runtime (no template), but flags should parse
+    let result = cmd.assert();
+    result.code(predicate::ne(2));
+}
+
+// Phase 1 Tests: Shell Command with Runtime Flags
+
+#[test]
+fn test_shell_command_help_shows_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk"))
+        .stdout(predicate::str::contains("--memory"))
+        .stdout(predicate::str::contains("--mount"))
+        .stdout(predicate::str::contains("--verbose"));
+}
+
+#[test]
+fn test_shell_command_with_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--mount", "/tmp:/tmp", "ls", "-la"]);
+
+    // Should not fail with CLI parse error (exit code 2)
+    let result = cmd.assert();
+    result.code(predicate::ne(2));
+}
+
+// Phase 1 Tests: Setup Command with VM Sizing Flags
+
+#[test]
+fn test_setup_command_has_vm_sizing() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["setup", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk"))
+        .stdout(predicate::str::contains("--memory"))
+        .stdout(predicate::str::contains("--cpus"))
+        // Should NOT contain runtime-only flags
+        .stdout(predicate::str::contains("--env-file").not())
+        .stdout(predicate::str::contains("--inherit-env").not())
+        .stdout(predicate::str::contains("--forward-ssh-agent").not());
+}
+
+#[test]
+fn test_setup_command_accepts_vm_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["setup", "--disk", "50", "--cpus", "4", "--help"]);
+
+    // --help with flags is valid
+    cmd.assert().success();
+}
+
+// Phase 1 Tests: List and Clean Commands DO NOT have Runtime Flags
+
+#[test]
+fn test_list_help_no_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["list", "--help"]);
+
+    let result = cmd.assert().success();
+    let output = result.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should NOT contain runtime VM sizing flags (but --disk-usage is OK)
+    // Check for the flags as separate arguments, not as part of other flags
+    assert!(
+        !stdout.contains("--disk ") && !stdout.contains("--disk\n"),
+        "list help should not contain --disk flag"
+    );
+    assert!(
+        !stdout.contains("--memory"),
+        "list help should not contain --memory flag"
+    );
+    assert!(
+        !stdout.contains("--mount"),
+        "list help should not contain --mount flag"
+    );
+    assert!(
+        !stdout.contains("--verbose"),
+        "list help should not contain --verbose flag"
+    );
+}
+
+#[test]
+fn test_clean_help_no_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["clean", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk").not())
+        .stdout(predicate::str::contains("--memory").not())
+        .stdout(predicate::str::contains("--mount").not())
+        .stdout(predicate::str::contains("--verbose").not());
+}
+
+// Phase 1 Tests: Top-Level Help Shows Agent Subcommand
+
+#[test]
+fn test_top_level_help_shows_agent_subcommand() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("agent"));
+}
+
+#[test]
+fn test_top_level_help_no_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        // Runtime flags should NOT appear at top level
+        .stdout(predicate::str::contains("--disk").not())
+        .stdout(predicate::str::contains("--memory").not())
+        .stdout(predicate::str::contains("--mount").not())
+        .stdout(predicate::str::contains("--env").not())
+        .stdout(predicate::str::contains("--runtime-script").not());
+}
+
+#[test]
+fn test_no_subcommand_shows_usage_hint() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    // No arguments - should show usage hint
+
+    // Set CLAUDE_VM_CONFIG to empty string to avoid config file errors
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    let result = cmd.assert();
+    // Before Phase 2 default routing, running with no args should show help
+    // Check that it mentions "agent" or "Usage:" in output
+    let output = result.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        stdout.contains("agent")
+            || stdout.contains("Usage:")
+            || stderr.contains("agent")
+            || stderr.contains("Usage:"),
+        "Expected usage hint mentioning 'agent' or 'Usage:', got stdout: {}, stderr: {}",
+        stdout,
+        stderr
+    );
+}
