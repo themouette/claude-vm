@@ -176,14 +176,10 @@ fn main() -> Result<()> {
                 commands::worktree::list::execute()?;
             }
             WorktreeCommands::Delete { branch, yes } => {
-                // Placeholder - implemented in plan 02-03
-                let _ = (branch, yes);
-                eprintln!("worktree delete not yet implemented");
+                commands::worktree::delete::execute(branch, *yes)?;
             }
             WorktreeCommands::Clean { merged, yes } => {
-                // Placeholder - implemented in plan 02-03
-                let _ = (merged, yes);
-                eprintln!("worktree clean not yet implemented");
+                commands::worktree::clean::execute(merged, *yes)?;
             }
         },
         None => {
