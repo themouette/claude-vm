@@ -2,10 +2,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
 use crate::vm::template;
-use crate::worktree::{
-    operations,
-    validation,
-};
+use crate::worktree::{operations, validation};
 use std::io::{self, Write};
 use std::path::PathBuf;
 

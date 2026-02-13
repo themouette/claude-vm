@@ -39,10 +39,18 @@ impl CreateResult {
     pub fn message(&self, branch: &str) -> String {
         match self {
             CreateResult::Resumed(path) => {
-                format!("Resuming worktree for branch '{}' at {}", branch, path.display())
+                format!(
+                    "Resuming worktree for branch '{}' at {}",
+                    branch,
+                    path.display()
+                )
             }
             CreateResult::Created(path) => {
-                format!("Created worktree for branch '{}' at {}", branch, path.display())
+                format!(
+                    "Created worktree for branch '{}' at {}",
+                    branch,
+                    path.display()
+                )
             }
         }
     }
@@ -120,11 +128,12 @@ pub fn create_worktree(
             let context = TemplateContext::new(repo_name, branch, &short_hash);
             let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
-            let path_str = worktree_path
-                .to_str()
-                .ok_or_else(|| ClaudeVmError::Worktree(
-                    format!("Worktree path contains invalid UTF-8: {}", worktree_path.display())
-                ))?;
+            let path_str = worktree_path.to_str().ok_or_else(|| {
+                ClaudeVmError::Worktree(format!(
+                    "Worktree path contains invalid UTF-8: {}",
+                    worktree_path.display()
+                ))
+            })?;
             let output = Command::new("git")
                 .args(["worktree", "add", path_str, branch])
                 .output()
@@ -149,18 +158,13 @@ pub fn create_worktree(
             let context = TemplateContext::new(repo_name, branch, &short_hash);
             let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
-            let path_str = worktree_path
-                .to_str()
-                .ok_or_else(|| ClaudeVmError::Worktree(
-                    format!("Worktree path contains invalid UTF-8: {}", worktree_path.display())
-                ))?;
-            let mut args = vec![
-                "worktree",
-                "add",
-                "-b",
-                branch,
-                path_str,
-            ];
+            let path_str = worktree_path.to_str().ok_or_else(|| {
+                ClaudeVmError::Worktree(format!(
+                    "Worktree path contains invalid UTF-8: {}",
+                    worktree_path.display()
+                ))
+            })?;
+            let mut args = vec!["worktree", "add", "-b", branch, path_str];
             if let Some(base_branch) = base {
                 args.push(base_branch);
             }
@@ -200,11 +204,12 @@ pub fn delete_worktree(branch: &str) -> Result<()> {
         })?;
 
     // Use git worktree remove to delete the directory and update metadata
-    let path_str = worktree.path
-        .to_str()
-        .ok_or_else(|| ClaudeVmError::Worktree(
-            format!("Worktree path contains invalid UTF-8: {}", worktree.path.display())
-        ))?;
+    let path_str = worktree.path.to_str().ok_or_else(|| {
+        ClaudeVmError::Worktree(format!(
+            "Worktree path contains invalid UTF-8: {}",
+            worktree.path.display()
+        ))
+    })?;
     let output = Command::new("git")
         .args(["worktree", "remove", path_str])
         .output()

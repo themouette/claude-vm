@@ -93,35 +93,36 @@ pub fn validate_branch_name(branch: &str) -> Result<()> {
     // Check for empty
     if branch.is_empty() {
         return Err(ClaudeVmError::Worktree(
-            "Branch name cannot be empty".to_string()
+            "Branch name cannot be empty".to_string(),
         ));
     }
 
     // Check for dangerous patterns
     if branch.starts_with('-') {
         return Err(ClaudeVmError::Worktree(
-            "Branch name cannot start with a dash".to_string()
+            "Branch name cannot start with a dash".to_string(),
         ));
     }
 
     if branch.contains('\0') {
         return Err(ClaudeVmError::Worktree(
-            "Branch name cannot contain null bytes".to_string()
+            "Branch name cannot contain null bytes".to_string(),
         ));
     }
 
     if branch.contains("..") {
         return Err(ClaudeVmError::Worktree(
-            "Branch name cannot contain '..'".to_string()
+            "Branch name cannot contain '..'".to_string(),
         ));
     }
 
     // Check for reserved names
     let reserved = ["HEAD", "FETCH_HEAD", "ORIG_HEAD", "MERGE_HEAD"];
     if reserved.contains(&branch) {
-        return Err(ClaudeVmError::Worktree(
-            format!("'{}' is a reserved git ref name", branch)
-        ));
+        return Err(ClaudeVmError::Worktree(format!(
+            "'{}' is a reserved git ref name",
+            branch
+        )));
     }
 
     Ok(())

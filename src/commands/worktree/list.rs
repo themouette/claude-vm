@@ -15,7 +15,8 @@ pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Resul
     if let Some(base) = merged_base {
         let merged_branches = operations::list_merged_branches(base)?;
         filtered_worktrees.retain(|w| {
-            w.branch.as_ref()
+            w.branch
+                .as_ref()
                 .map(|b| merged_branches.contains(b))
                 .unwrap_or(false)
         });
@@ -38,10 +39,7 @@ pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Resul
     }
 
     // Skip first entry (main worktree) for display
-    let display_worktrees: Vec<_> = filtered_worktrees
-        .iter()
-        .skip(1)
-        .collect();
+    let display_worktrees: Vec<_> = filtered_worktrees.iter().skip(1).collect();
 
     if display_worktrees.is_empty() {
         println!("No additional worktrees found matching filters.");
@@ -50,10 +48,7 @@ pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Resul
 
     println!("Worktrees:");
     for worktree in display_worktrees {
-        let branch_display = worktree
-            .branch
-            .as_deref()
-            .unwrap_or("<detached>");
+        let branch_display = worktree.branch.as_deref().unwrap_or("<detached>");
 
         let mut status_tags = Vec::new();
         if worktree.is_bare {
@@ -87,7 +82,12 @@ pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Resul
                 status
             );
         } else {
-            println!("  {} -> {}{}", branch_display, worktree.path.display(), status);
+            println!(
+                "  {} -> {}{}",
+                branch_display,
+                worktree.path.display(),
+                status
+            );
         }
     }
 

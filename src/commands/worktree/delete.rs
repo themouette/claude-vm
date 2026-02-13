@@ -14,7 +14,10 @@ pub fn execute(branches: &[String], yes: bool, dry_run: bool) -> Result<()> {
     let mut missing = Vec::new();
 
     for branch in branches {
-        match worktrees.iter().find(|e| e.branch.as_deref() == Some(branch)) {
+        match worktrees
+            .iter()
+            .find(|e| e.branch.as_deref() == Some(branch))
+        {
             Some(worktree) => to_delete.push((branch.as_str(), &worktree.path)),
             None => missing.push(branch.as_str()),
         }
@@ -28,7 +31,7 @@ pub fn execute(branches: &[String], yes: bool, dry_run: bool) -> Result<()> {
         }
         if to_delete.is_empty() {
             return Err(ClaudeVmError::Worktree(
-                "No valid worktrees found to delete".to_string()
+                "No valid worktrees found to delete".to_string(),
             ));
         }
         eprintln!();
@@ -45,8 +48,10 @@ pub fn execute(branches: &[String], yes: bool, dry_run: bool) -> Result<()> {
         }
     }
     println!();
-    println!("This will remove the worktree director{}. Branches will be preserved.",
-        if to_delete.len() == 1 { "y" } else { "ies" });
+    println!(
+        "This will remove the worktree director{}. Branches will be preserved.",
+        if to_delete.len() == 1 { "y" } else { "ies" }
+    );
     println!();
 
     // If dry-run, exit after displaying
@@ -57,7 +62,10 @@ pub fn execute(branches: &[String], yes: bool, dry_run: bool) -> Result<()> {
 
     // Prompt for confirmation unless --yes was provided
     if !yes {
-        print!("Delete worktree{}? [y/N] ", if to_delete.len() == 1 { "" } else { "s" });
+        print!(
+            "Delete worktree{}? [y/N] ",
+            if to_delete.len() == 1 { "" } else { "s" }
+        );
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -99,7 +107,11 @@ pub fn execute(branches: &[String], yes: bool, dry_run: bool) -> Result<()> {
     // Summary for batch operations
     if to_delete.len() > 1 {
         println!();
-        println!("Deleted {} of {} worktree(s).", deleted_count, to_delete.len());
+        println!(
+            "Deleted {} of {} worktree(s).",
+            deleted_count,
+            to_delete.len()
+        );
     }
 
     Ok(())

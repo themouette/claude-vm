@@ -98,17 +98,21 @@ pub fn compute_worktree_path(
     // Canonicalize both paths and verify final_path is under base_dir
     // Only do this check if base_dir exists; if it doesn't exist yet, we can't canonicalize
     if base_dir.exists() {
-        let canonical_base = base_dir.canonicalize()
-            .map_err(|e| crate::error::ClaudeVmError::Worktree(
-                format!("Failed to canonicalize base directory: {}", e)
-            ))?;
+        let canonical_base = base_dir.canonicalize().map_err(|e| {
+            crate::error::ClaudeVmError::Worktree(format!(
+                "Failed to canonicalize base directory: {}",
+                e
+            ))
+        })?;
 
         // For non-existent final_path, check parent directory
         let check_path = if final_path.exists() {
-            final_path.canonicalize()
-                .map_err(|e| crate::error::ClaudeVmError::Worktree(
-                    format!("Failed to canonicalize worktree path: {}", e)
-                ))?
+            final_path.canonicalize().map_err(|e| {
+                crate::error::ClaudeVmError::Worktree(format!(
+                    "Failed to canonicalize worktree path: {}",
+                    e
+                ))
+            })?
         } else {
             // Check that parent would be under base_dir
             // We can't canonicalize a non-existent path, so we check the expanded template

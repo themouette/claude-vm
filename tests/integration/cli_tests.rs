@@ -1019,7 +1019,14 @@ fn test_worktree_clean_dry_run_flag_parses() {
 #[test]
 fn test_dry_run_and_yes_together_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "branch", "--dry-run", "--yes", "--help"]);
+    cmd.args([
+        "worktree",
+        "delete",
+        "branch",
+        "--dry-run",
+        "--yes",
+        "--help",
+    ]);
     cmd.assert().success();
 }
 
@@ -1033,7 +1040,9 @@ fn test_worktree_delete_single_branch_parses() {
 #[test]
 fn test_worktree_delete_multiple_branches_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "branch-1", "branch-2", "branch-3", "--help"]);
+    cmd.args([
+        "worktree", "delete", "branch-1", "branch-2", "branch-3", "--help",
+    ]);
     cmd.assert().success();
 }
 
@@ -1073,6 +1082,8 @@ fn test_worktree_list_multiple_filters() {
 #[test]
 fn test_worktree_clean_locked_flag() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "main", "--locked", "--help"]);
+    cmd.args([
+        "worktree", "clean", "--merged", "main", "--locked", "--help",
+    ]);
     cmd.assert().success();
 }
