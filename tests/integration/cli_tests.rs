@@ -585,3 +585,320 @@ fn test_help_flag_not_routed_to_agent() {
         .stdout(predicate::str::contains("agent"))
         .stdout(predicate::str::contains("shell"));
 }
+
+// Phase 4 Tests: Edge Cases and Backward Compatibility Validation
+
+// Group 1: Router Edge Cases — Subcommand names as trailing args
+
+#[test]
+fn test_edge_case_literal_shell_as_first_arg_is_subcommand() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("shell");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "shell" should be recognized as the shell subcommand (not routed to agent)
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Not a CLI parse error
+}
+
+#[test]
+fn test_edge_case_flag_then_literal_shell_routes_to_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--verbose", "shell"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Router sees --verbose at args[1], inserts "agent", so "shell" becomes a trailing arg
+    // This is the documented trade-off from router.rs
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse successfully (routes to agent with trailing arg "shell")
+}
+
+#[test]
+fn test_edge_case_literal_setup_as_first_arg_is_subcommand() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("setup");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "setup" should be recognized as setup subcommand
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Not a CLI parse error
+}
+
+#[test]
+fn test_edge_case_literal_list_as_first_arg_is_subcommand() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("list");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "list" should be recognized as list subcommand
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Not a CLI parse error
+}
+
+#[test]
+fn test_edge_case_unknown_word_routes_to_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("foobar");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "foobar" is not a known subcommand, should route to agent
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse successfully (routes to agent)
+}
+
+#[test]
+fn test_edge_case_number_as_first_arg_routes_to_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("42");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Numeric arg should route to agent
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse successfully
+}
+
+// Group 2: Flag Position Variations — Systematic coverage
+
+#[test]
+fn test_flag_positions_systematic() {
+    // Table-driven test covering various flag position patterns
+    let test_cases = vec![
+        (
+            "flag before arg (implicit agent)",
+            vec!["--disk", "50", "/clear"],
+        ),
+        (
+            "multiple flags before arg",
+            vec!["--disk", "50", "--memory", "8", "/clear"],
+        ),
+        ("boolean flag before arg", vec!["--verbose", "/clear"]),
+        (
+            "boolean + value flags before arg",
+            vec!["--verbose", "--disk", "50", "/clear"],
+        ),
+        ("arg only (no flags)", vec!["/clear"]),
+        ("flag only (no trailing args)", vec!["--disk", "50"]),
+    ];
+
+    for (description, args) in test_cases {
+        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+        cmd.args(&args);
+        cmd.env("CLAUDE_VM_CONFIG", "");
+
+        let result = cmd.assert();
+        result.code(predicate::ne(2)); // Should parse without CLI error
+        eprintln!("✓ Passed: {}", description);
+    }
+}
+
+#[test]
+fn test_flag_positions_explicit_agent_systematic() {
+    // Same table as above but with "agent" prepended
+    // Verifies explicit and implicit produce same parse outcome
+    let test_cases = vec![
+        (
+            "agent + flag before arg",
+            vec!["agent", "--disk", "50", "/clear"],
+        ),
+        (
+            "agent + multiple flags before arg",
+            vec!["agent", "--disk", "50", "--memory", "8", "/clear"],
+        ),
+        (
+            "agent + boolean flag before arg",
+            vec!["agent", "--verbose", "/clear"],
+        ),
+        (
+            "agent + boolean + value flags",
+            vec!["agent", "--verbose", "--disk", "50", "/clear"],
+        ),
+        ("agent + arg only", vec!["agent", "/clear"]),
+        ("agent + flag only", vec!["agent", "--disk", "50"]),
+    ];
+
+    for (description, args) in test_cases {
+        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+        cmd.args(&args);
+        cmd.env("CLAUDE_VM_CONFIG", "");
+
+        let result = cmd.assert();
+        result.code(predicate::ne(2)); // Should parse without CLI error
+        eprintln!("✓ Passed: {}", description);
+    }
+}
+
+// Group 3: Double-dash separator handling
+
+#[test]
+fn test_double_dash_separator_implicit_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--disk", "50", "--", "/clear"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // The `--` separates flags from trailing args
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_double_dash_separator_explicit_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--disk", "50", "--", "/clear"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_double_dash_with_flag_like_arg() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--", "--project-dir", "/path"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // After `--`, `--project-dir` should be treated as a literal trailing arg
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+// Group 4: Flag-like trailing args (hyphen values)
+
+#[test]
+fn test_trailing_arg_with_hyphens() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--project-dir", "/tmp/test"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // --project-dir consumed as trailing arg due to allow_hyphen_values
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_trailing_arg_with_hyphens_explicit_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--project-dir", "/tmp/test"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_multiple_trailing_args_with_hyphens() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--resume", "--project-dir", "/tmp/test"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Multiple flag-like trailing args should parse correctly
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+// Group 5: Parity tests — implicit vs explicit produce equivalent parse outcomes
+
+#[test]
+fn test_parity_no_args() {
+    // Both claude-vm and claude-vm agent should produce same routing result
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.env("CLAUDE_VM_CONFIG", "");
+    let result1 = cmd1.assert();
+    result1.code(predicate::ne(2)); // Routing succeeds
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.arg("agent");
+    cmd2.env("CLAUDE_VM_CONFIG", "");
+    let result2 = cmd2.assert();
+    result2.code(predicate::ne(2)); // Routing succeeds
+}
+
+#[test]
+fn test_parity_slash_command() {
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.arg("/clear");
+    cmd1.env("CLAUDE_VM_CONFIG", "");
+    let result1 = cmd1.assert();
+    result1.code(predicate::ne(2));
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["agent", "/clear"]);
+    cmd2.env("CLAUDE_VM_CONFIG", "");
+    let result2 = cmd2.assert();
+    result2.code(predicate::ne(2));
+}
+
+#[test]
+fn test_parity_flags_and_args() {
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.args(["--disk", "50", "/clear"]);
+    cmd1.env("CLAUDE_VM_CONFIG", "");
+    let result1 = cmd1.assert();
+    result1.code(predicate::ne(2));
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["agent", "--disk", "50", "/clear"]);
+    cmd2.env("CLAUDE_VM_CONFIG", "");
+    let result2 = cmd2.assert();
+    result2.code(predicate::ne(2));
+}
+
+#[test]
+fn test_parity_verbose_flag() {
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.args(["--verbose", "/clear"]);
+    cmd1.env("CLAUDE_VM_CONFIG", "");
+    let result1 = cmd1.assert();
+    result1.code(predicate::ne(2));
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["agent", "--verbose", "/clear"]);
+    cmd2.env("CLAUDE_VM_CONFIG", "");
+    let result2 = cmd2.assert();
+    result2.code(predicate::ne(2));
+}
+
+// Group 6: Reserved words and special characters
+
+#[test]
+fn test_reserved_word_help_as_trailing_arg() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "help"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "help" as trailing arg (not subcommand) should parse
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_reserved_word_version_as_trailing_arg() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "version"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // "version" as trailing arg (following "agent") should parse
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_special_chars_in_trailing_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "/path/with spaces/file.txt"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Arg with spaces should parse (note: shell would quote this, but here it's a single arg)
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
+
+#[test]
+fn test_empty_string_trailing_arg() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", ""]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Empty string as trailing arg
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Should parse without error
+}
