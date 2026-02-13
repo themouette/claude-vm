@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::worktree::config::WorktreeConfig;
 use chrono::Local;
 use std::path::{Path, PathBuf};
@@ -73,11 +74,12 @@ impl TemplateContext {
 /// - If config.location is None, compute sibling directory: {repo_root}-worktrees
 /// - Expand the template with the context
 /// - Join the base directory with the expanded template
+/// - Validates that the final path stays within the base directory
 pub fn compute_worktree_path(
     config: &WorktreeConfig,
     repo_root: &Path,
     context: &TemplateContext,
-) -> PathBuf {
+) -> Result<PathBuf> {
     let base_dir = if let Some(location) = &config.location {
         PathBuf::from(location)
     } else {
@@ -91,7 +93,51 @@ pub fn compute_worktree_path(
     };
 
     let expanded_template = context.expand(&config.template);
-    base_dir.join(expanded_template)
+    let final_path = base_dir.join(&expanded_template);
+
+    // Canonicalize both paths and verify final_path is under base_dir
+    // Only do this check if base_dir exists; if it doesn't exist yet, we can't canonicalize
+    if base_dir.exists() {
+        let canonical_base = base_dir.canonicalize()
+            .map_err(|e| crate::error::ClaudeVmError::Worktree(
+                format!("Failed to canonicalize base directory: {}", e)
+            ))?;
+
+        // For non-existent final_path, check parent directory
+        let check_path = if final_path.exists() {
+            final_path.canonicalize()
+                .map_err(|e| crate::error::ClaudeVmError::Worktree(
+                    format!("Failed to canonicalize worktree path: {}", e)
+                ))?
+        } else {
+            // Check that parent would be under base_dir
+            // We can't canonicalize a non-existent path, so we check the expanded template
+            // doesn't try to escape with ".."
+            if expanded_template.contains("..") || expanded_template.starts_with('/') {
+                return Err(crate::error::ClaudeVmError::WorktreePathTraversal {
+                    path: final_path.display().to_string(),
+                });
+            }
+            // If no obvious traversal, trust the join() which normalizes the path
+            final_path.clone()
+        };
+
+        // Verify the path is under base directory
+        if !check_path.starts_with(&canonical_base) {
+            return Err(crate::error::ClaudeVmError::WorktreePathTraversal {
+                path: final_path.display().to_string(),
+            });
+        }
+    } else {
+        // Base dir doesn't exist yet - do basic check on expanded template
+        if expanded_template.contains("..") || expanded_template.starts_with('/') {
+            return Err(crate::error::ClaudeVmError::WorktreePathTraversal {
+                path: final_path.display().to_string(),
+            });
+        }
+    }
+
+    Ok(final_path)
 }
 
 #[cfg(test)]
@@ -250,7 +296,7 @@ mod tests {
         let repo_root = PathBuf::from("/home/user/myproject");
         let ctx = TemplateContext::new("myproject", "feature", "abc12345");
 
-        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        let result = compute_worktree_path(&config, &repo_root, &ctx).unwrap();
         assert_eq!(
             result,
             PathBuf::from("/home/user/myproject-worktrees/feature")
@@ -266,7 +312,7 @@ mod tests {
         let repo_root = PathBuf::from("/home/user/myproject");
         let ctx = TemplateContext::new("myproject", "main", "abc12345");
 
-        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        let result = compute_worktree_path(&config, &repo_root, &ctx).unwrap();
         assert_eq!(result, PathBuf::from("/tmp/worktrees/main"));
     }
 
@@ -279,7 +325,7 @@ mod tests {
         let repo_root = PathBuf::from("/home/user/proj");
         let ctx = TemplateContext::new("proj", "dev", "abc12345");
 
-        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        let result = compute_worktree_path(&config, &repo_root, &ctx).unwrap();
         assert_eq!(result, PathBuf::from("/work/proj-dev"));
     }
 
@@ -289,7 +335,7 @@ mod tests {
         let repo_root = PathBuf::from("/home/user/myrepo");
         let ctx = TemplateContext::new("myrepo", "hotfix", "abc12345");
 
-        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        let result = compute_worktree_path(&config, &repo_root, &ctx).unwrap();
         // Default template is "{branch}", so worktree named "hotfix" in base dir
         assert_eq!(result, PathBuf::from("/home/user/myrepo-worktrees/hotfix"));
     }
@@ -301,12 +347,61 @@ mod tests {
         let repo_root = PathBuf::from("/projects/my-awesome-project");
         let ctx = TemplateContext::new("my-awesome-project", "feature/new", "abc12345");
 
-        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        let result = compute_worktree_path(&config, &repo_root, &ctx).unwrap();
         // Sibling directory name: my-awesome-project-worktrees
         // Branch sanitized: feature-new
         assert_eq!(
             result,
             PathBuf::from("/projects/my-awesome-project-worktrees/feature-new")
         );
+    }
+
+    // ========== Path traversal prevention tests ==========
+
+    #[test]
+    fn test_path_traversal_prevention_dotdot() {
+        let config = WorktreeConfig {
+            location: Some("/tmp/worktrees".to_string()),
+            template: "../escape".to_string(),
+        };
+        let repo_root = PathBuf::from("/home/user/myproject");
+        let ctx = TemplateContext::new("myproject", "branch", "abc12345");
+
+        // This should fail because template contains ".."
+        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_path_traversal_prevention_absolute() {
+        let config = WorktreeConfig {
+            location: Some("/tmp/worktrees".to_string()),
+            template: "/etc/passwd".to_string(),
+        };
+        let repo_root = PathBuf::from("/home/user/myproject");
+        let ctx = TemplateContext::new("myproject", "branch", "abc12345");
+
+        // This should fail because template is absolute path
+        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_nested_template_allowed() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let config = WorktreeConfig {
+            location: Some(temp_dir.path().to_string_lossy().to_string()),
+            template: "nested/path/{branch}".to_string(),
+        };
+        let repo_root = PathBuf::from("/home/user/myproject");
+        let ctx = TemplateContext::new("myproject", "feature", "abc12345");
+
+        // This should succeed - nested paths are fine as long as they stay under base
+        let result = compute_worktree_path(&config, &repo_root, &ctx);
+        assert!(result.is_ok());
+        let path = result.unwrap();
+        assert!(path.to_string_lossy().contains("nested/path/feature"));
     }
 }

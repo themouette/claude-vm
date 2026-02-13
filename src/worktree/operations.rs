@@ -97,7 +97,7 @@ pub fn create_worktree(
                 .and_then(|n| n.to_str())
                 .unwrap_or("repo");
             let context = TemplateContext::new(repo_name, branch, &short_hash);
-            let worktree_path = compute_worktree_path(config, repo_root, &context);
+            let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
             let path_str = worktree_path
                 .to_str()
@@ -126,7 +126,7 @@ pub fn create_worktree(
                 .and_then(|n| n.to_str())
                 .unwrap_or("repo");
             let context = TemplateContext::new(repo_name, branch, &short_hash);
-            let worktree_path = compute_worktree_path(config, repo_root, &context);
+            let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
             let path_str = worktree_path
                 .to_str()

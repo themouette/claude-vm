@@ -60,6 +60,9 @@ pub enum ClaudeVmError {
     #[error("No worktree found for branch '{branch}'")]
     WorktreeNotFound { branch: String },
 
+    #[error("Worktree path escapes base directory: {path}")]
+    WorktreePathTraversal { path: String },
+
     #[error("Branch '{branch}' does not exist")]
     BranchNotFound { branch: String },
 }
