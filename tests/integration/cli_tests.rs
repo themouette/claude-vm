@@ -932,3 +932,72 @@ fn test_regression_all_subcommands_parseable() {
         eprintln!("✓ Subcommand '{}' --help works", subcommand);
     }
 }
+
+// Phase 5 Tests: Worktree Flag Integration
+
+#[test]
+fn test_agent_help_shows_worktree_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--worktree"));
+}
+
+#[test]
+fn test_shell_help_shows_worktree_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--worktree"));
+}
+
+#[test]
+fn test_worktree_flag_with_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree", "my-feature", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_with_branch_and_base_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree", "my-feature", "main", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_shell_worktree_flag_with_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--worktree", "my-feature", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_implicit_agent_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--worktree", "my-feature", "--help"]);
+
+    // Implicit agent routing with --worktree flag
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_requires_branch_name() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Should fail with CLI parse error (exit code 2) since num_args = 1..=2 requires at least one value
+    let result = cmd.assert();
+    result.code(predicate::eq(2));
+}
