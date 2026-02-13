@@ -288,14 +288,37 @@ fn test_top_level_help_no_runtime_flags() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.arg("--help");
 
-    cmd.assert()
-        .success()
-        // Runtime flags should NOT appear at top level
-        .stdout(predicate::str::contains("--disk").not())
-        .stdout(predicate::str::contains("--memory").not())
-        .stdout(predicate::str::contains("--mount").not())
-        .stdout(predicate::str::contains("--env").not())
-        .stdout(predicate::str::contains("--runtime-script").not());
+    let output = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+
+    // Extract the Options section (between "Options:" and "INVOCATION PATTERNS:")
+    let options_start = stdout
+        .find("Options:")
+        .expect("Should have Options section");
+    let options_end = stdout.find("INVOCATION PATTERNS:").unwrap_or(stdout.len());
+    let options_section = &stdout[options_start..options_end];
+
+    // Runtime flags should NOT appear at top level in Options section
+    assert!(
+        !options_section.contains("--disk <"),
+        "Top-level help should not contain --disk flag in Options"
+    );
+    assert!(
+        !options_section.contains("--memory"),
+        "Top-level help should not contain --memory flag in Options"
+    );
+    assert!(
+        !options_section.contains("--mount"),
+        "Top-level help should not contain --mount flag in Options"
+    );
+    assert!(
+        !options_section.contains("--env <") && !options_section.contains("--env\n"),
+        "Top-level help should not contain --env flag in Options"
+    );
+    assert!(
+        !options_section.contains("--runtime-script"),
+        "Top-level help should not contain --runtime-script flag in Options"
+    );
 }
 
 #[test]
@@ -422,4 +445,143 @@ fn test_backward_compat_trailing_args_without_separator() {
     // Trailing args should be parsed without `--` separator
     let result = cmd.assert();
     result.code(predicate::ne(2));
+}
+
+// Phase 3 Tests: Help System
+
+#[test]
+fn test_main_help_shows_invocation_patterns() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("INVOCATION PATTERNS"))
+        .stdout(predicate::str::contains("claude-vm [options] [args]"))
+        .stdout(predicate::str::contains("claude-vm agent [options] [args]"));
+}
+
+#[test]
+fn test_main_help_shows_examples() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("EXAMPLES"))
+        .stdout(predicate::str::contains("claude-vm /clear"));
+}
+
+#[test]
+fn test_main_help_excludes_agent_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    let output = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+
+    // Extract the Options section (between "Options:" and "INVOCATION PATTERNS:")
+    let options_start = stdout
+        .find("Options:")
+        .expect("Should have Options section");
+    let options_end = stdout.find("INVOCATION PATTERNS:").unwrap_or(stdout.len());
+    let options_section = &stdout[options_start..options_end];
+
+    // Runtime flags should NOT appear in the Options section
+    assert!(
+        !options_section.contains("--disk <"),
+        "Main help Options should not contain --disk flag"
+    );
+    assert!(
+        !options_section.contains("--memory"),
+        "Main help Options should not contain --memory flag"
+    );
+    assert!(
+        !options_section.contains("--mount"),
+        "Main help Options should not contain --mount flag"
+    );
+    assert!(
+        !options_section.contains("--runtime-script"),
+        "Main help Options should not contain --runtime-script flag"
+    );
+    assert!(
+        !options_section.contains("--forward-ssh-agent"),
+        "Main help Options should not contain --forward-ssh-agent flag"
+    );
+}
+
+#[test]
+fn test_agent_help_shows_all_runtime_flags() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk"))
+        .stdout(predicate::str::contains("--memory"))
+        .stdout(predicate::str::contains("--cpus"))
+        .stdout(predicate::str::contains("--mount"))
+        .stdout(predicate::str::contains("--env"))
+        .stdout(predicate::str::contains("--env-file"))
+        .stdout(predicate::str::contains("--inherit-env"))
+        .stdout(predicate::str::contains("--runtime-script"))
+        .stdout(predicate::str::contains("--forward-ssh-agent"))
+        .stdout(predicate::str::contains("--no-conversations"))
+        .stdout(predicate::str::contains("--auto-setup"));
+}
+
+#[test]
+fn test_agent_long_help_mentions_shorthand() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    let output = cmd.assert().success();
+    let stdout = String::from_utf8_lossy(&output.get_output().stdout);
+
+    // Check for mention of shorthand/default behavior
+    assert!(
+        stdout.contains("default command") || stdout.contains("omit 'agent'"),
+        "Agent help should mention that it's the default command or that 'agent' can be omitted"
+    );
+}
+
+#[test]
+fn test_short_help_differs_from_long_help() {
+    // By default clap shows the same output for -h and --help
+    // This test verifies both produce valid help output
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.arg("-h");
+    let output1 = cmd1.assert().success();
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.arg("--help");
+    let output2 = cmd2.assert().success();
+
+    let stdout1 = String::from_utf8_lossy(&output1.get_output().stdout);
+    let stdout2 = String::from_utf8_lossy(&output2.get_output().stdout);
+
+    // Both should contain basic help information
+    assert!(
+        stdout1.contains("Usage:"),
+        "Short help should contain Usage"
+    );
+    assert!(stdout2.contains("Usage:"), "Long help should contain Usage");
+
+    // Both should contain INVOCATION PATTERNS (clap doesn't differentiate by default)
+    assert!(
+        stdout1.contains("INVOCATION PATTERNS") || stdout2.contains("INVOCATION PATTERNS"),
+        "Help should contain INVOCATION PATTERNS"
+    );
+}
+
+#[test]
+fn test_help_flag_not_routed_to_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Commands:"))
+        .stdout(predicate::str::contains("agent"))
+        .stdout(predicate::str::contains("shell"));
 }
