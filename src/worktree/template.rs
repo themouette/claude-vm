@@ -3,8 +3,23 @@ use chrono::Local;
 use std::path::{Path, PathBuf};
 
 /// Sanitize a path component by replacing invalid characters with safe alternatives
+/// - Replace `/` and `\` with `-`
+/// - Replace spaces with `_`
+/// - Replace control characters with `_`
 fn sanitize_path_component(s: &str) -> String {
-    todo!("Implement sanitization")
+    s.chars()
+        .map(|c| {
+            if c == '/' || c == '\\' {
+                '-'
+            } else if c == ' ' {
+                '_'
+            } else if c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// Context for template variable expansion
@@ -19,22 +34,65 @@ pub struct TemplateContext {
 impl TemplateContext {
     /// Create a new template context
     pub fn new(repo_name: &str, branch: &str, short_hash: &str) -> Self {
-        todo!("Implement TemplateContext::new")
+        let user = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        let short_hash = if short_hash.len() > 8 {
+            short_hash[..8].to_string()
+        } else {
+            short_hash.to_string()
+        };
+
+        Self {
+            repo: repo_name.to_string(),
+            branch: branch.to_string(),
+            user,
+            date,
+            short_hash,
+        }
     }
 
     /// Expand template variables in a template string
+    /// Replaces known variables with sanitized values:
+    /// - {repo} -> sanitized repo name
+    /// - {branch} -> sanitized branch name
+    /// - {user} -> sanitized username
+    /// - {date} -> sanitized date (YYYY-MM-DD)
+    /// - {short_hash} -> sanitized short hash (8 chars or less)
+    /// Unknown variables are left unexpanded
     pub fn expand(&self, template: &str) -> String {
-        todo!("Implement template expansion")
+        template
+            .replace("{repo}", &sanitize_path_component(&self.repo))
+            .replace("{branch}", &sanitize_path_component(&self.branch))
+            .replace("{user}", &sanitize_path_component(&self.user))
+            .replace("{date}", &sanitize_path_component(&self.date))
+            .replace("{short_hash}", &sanitize_path_component(&self.short_hash))
     }
 }
 
 /// Compute the full worktree path from config, repo root, and template context
+/// - If config.location is Some, use that as the base directory
+/// - If config.location is None, compute sibling directory: {repo_root}-worktrees
+/// - Expand the template with the context
+/// - Join the base directory with the expanded template
 pub fn compute_worktree_path(
     config: &WorktreeConfig,
     repo_root: &Path,
     context: &TemplateContext,
 ) -> PathBuf {
-    todo!("Implement worktree path computation")
+    let base_dir = if let Some(location) = &config.location {
+        PathBuf::from(location)
+    } else {
+        // Compute sibling directory
+        let repo_name = repo_root
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("repo");
+        let parent = repo_root.parent().unwrap_or(repo_root);
+        parent.join(format!("{}-worktrees", repo_name))
+    };
+
+    let expanded_template = context.expand(&config.template);
+    base_dir.join(expanded_template)
 }
 
 #[cfg(test)]
