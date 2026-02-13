@@ -122,8 +122,9 @@ pub fn compute_worktree_path(
                     path: final_path.display().to_string(),
                 });
             }
-            // If no obvious traversal, trust the join() which normalizes the path
-            final_path.clone()
+            // Construct the check path from the canonical base to handle symlinks correctly
+            // (e.g., on macOS where /var -> /private/var)
+            canonical_base.join(&expanded_template)
         };
 
         // Verify the path is under base directory
@@ -395,8 +396,10 @@ mod tests {
         use tempfile::TempDir;
 
         let temp_dir = TempDir::new().unwrap();
+        // Canonicalize the temp dir path to handle macOS symlinks (/var -> /private/var)
+        let canonical_temp = temp_dir.path().canonicalize().unwrap();
         let config = WorktreeConfig {
-            location: Some(temp_dir.path().to_string_lossy().to_string()),
+            location: Some(canonical_temp.to_string_lossy().to_string()),
             template: "nested/path/{branch}".to_string(),
         };
         let repo_root = PathBuf::from("/home/user/myproject");
