@@ -902,3 +902,33 @@ fn test_empty_string_trailing_arg() {
     let result = cmd.assert();
     result.code(predicate::ne(2)); // Should parse without error
 }
+
+// Group 7: Regression smoke test for all subcommands
+
+#[test]
+fn test_regression_all_subcommands_parseable() {
+    // Iterate over all known subcommands and verify --help works for each
+    // This catches any future subcommand additions that break parsing
+    let subcommands = vec![
+        "agent",
+        "shell",
+        "setup",
+        "info",
+        "config",
+        "list",
+        "clean",
+        "clean-all",
+        "version",
+        "update",
+        "network",
+    ];
+
+    for subcommand in subcommands {
+        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+        cmd.args([subcommand, "--help"]);
+
+        let result = cmd.assert();
+        result.success(); // --help should always succeed with exit code 0
+        eprintln!("✓ Subcommand '{}' --help works", subcommand);
+    }
+}
