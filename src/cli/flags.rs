@@ -44,6 +44,11 @@ pub struct RuntimeFlags {
     /// Automatically create template if missing
     #[arg(long = "auto-setup")]
     pub auto_setup: bool,
+
+    /// Create or resume worktree for branch development.
+    /// Usage: --worktree <branch> [base-ref]
+    #[arg(long = "worktree", num_args = 1..=2, value_names = ["BRANCH", "BASE"])]
+    pub worktree: Vec<String>,
 }
 
 /// VM sizing flags for the setup command.
