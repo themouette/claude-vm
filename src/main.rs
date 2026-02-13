@@ -3,14 +3,16 @@
 use anyhow::Result;
 use clap::Parser;
 
-use claude_vm::cli::{Cli, Commands, NetworkCommands};
+use claude_vm::cli::{router, Cli, Commands, NetworkCommands};
 use claude_vm::config::Config;
 use claude_vm::project::Project;
 use claude_vm::{commands, error::ClaudeVmError};
 
 fn main() -> Result<()> {
-    // Parse CLI arguments
-    let cli = Cli::parse();
+    // Route arguments to default to agent command when appropriate
+    let args = std::env::args_os();
+    let routed_args = router::route_args(args);
+    let cli = Cli::parse_from(routed_args);
 
     // Handle commands that truly don't need project or config
     match &cli.command {
@@ -166,11 +168,11 @@ fn main() -> Result<()> {
             }
         },
         None => {
-            // Print usage hint directing users to use explicit subcommand
-            println!("Usage: claude-vm <COMMAND>\n");
-            println!("Run 'claude-vm agent [ARGS]' to start a Claude Code session.");
-            println!("Run 'claude-vm --help' for all available commands.");
-            std::process::exit(0);
+            // Router should always insert a subcommand; this is a safety net
+            eprintln!(
+                "Internal error: no command after routing. Run 'claude-vm --help' for usage."
+            );
+            std::process::exit(1);
         }
         _ => unreachable!(),
     }

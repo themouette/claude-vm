@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 pub mod flags;
+pub mod router;
 pub use flags::{RuntimeFlags, SetupVmFlags};
 
 #[derive(Subcommand, Debug)]
