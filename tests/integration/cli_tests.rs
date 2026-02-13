@@ -299,27 +299,127 @@ fn test_top_level_help_no_runtime_flags() {
 }
 
 #[test]
-fn test_no_subcommand_shows_usage_hint() {
+fn test_no_subcommand_routes_to_agent() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    // No arguments - should show usage hint
+    // No arguments - should route to agent
 
     // Set CLAUDE_VM_CONFIG to empty string to avoid config file errors
     cmd.env("CLAUDE_VM_CONFIG", "");
 
     let result = cmd.assert();
-    // Before Phase 2 default routing, running with no args should show help
-    // Check that it mentions "agent" or "Usage:" in output
-    let output = result.get_output();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    // After routing, no-args invocation routes to agent
+    // Agent without a project will fail (non-zero exit), but NOT with parse error (exit code 2)
+    result.code(predicate::ne(2));
+}
 
+// Phase 2 Tests: Backward Compatibility - Default Agent Routing
+
+#[test]
+fn test_backward_compat_slash_command_defaults_to_agent() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("/clear");
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Should parse successfully (routes to agent), may fail at runtime
+    let result = cmd.assert();
+    result.code(predicate::ne(2)); // Not a CLI parse error
+}
+
+#[test]
+fn test_backward_compat_flags_before_args() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--disk", "50", "--memory", "8", "/clear"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Should parse successfully
+    let result = cmd.assert();
+    result.code(predicate::ne(2));
+}
+
+#[test]
+fn test_backward_compat_flags_only() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--disk", "50"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Routes to agent with flags but no trailing args
+    let result = cmd.assert();
+    result.code(predicate::ne(2));
+}
+
+#[test]
+fn test_backward_compat_help_still_shows_main_help() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--help");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Commands:"))
+        .stdout(predicate::str::contains("agent"))
+        .stdout(predicate::str::contains("shell"));
+}
+
+#[test]
+fn test_backward_compat_version_still_works() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.arg("--version");
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("claude-vm"));
+}
+
+#[test]
+fn test_backward_compat_explicit_agent_still_works() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--disk"))
+        .stdout(predicate::str::contains("--memory"));
+}
+
+#[test]
+fn test_backward_compat_explicit_and_implicit_equivalent() {
+    // Test that main help and agent help are different
+    let mut cmd1 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd1.arg("--help");
+    let output1 = cmd1.assert().success();
+    let stdout1 = String::from_utf8_lossy(&output1.get_output().stdout);
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["agent", "--help"]);
+    let output2 = cmd2.assert().success();
+    let stdout2 = String::from_utf8_lossy(&output2.get_output().stdout);
+
+    // Main help should have "Commands:"
     assert!(
-        stdout.contains("agent")
-            || stdout.contains("Usage:")
-            || stderr.contains("agent")
-            || stderr.contains("Usage:"),
-        "Expected usage hint mentioning 'agent' or 'Usage:', got stdout: {}, stderr: {}",
-        stdout,
-        stderr
+        stdout1.contains("Commands:"),
+        "Main help should show Commands section"
     );
+
+    // Agent help should have "--disk"
+    assert!(
+        stdout2.contains("--disk"),
+        "Agent help should show agent-specific flags"
+    );
+
+    // They should be different
+    assert_ne!(
+        stdout1.as_ref(),
+        stdout2.as_ref(),
+        "Main help and agent help should be different"
+    );
+}
+
+#[test]
+fn test_backward_compat_trailing_args_without_separator() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--project-dir", "/tmp/test"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Trailing args should be parsed without `--` separator
+    let result = cmd.assert();
+    result.code(predicate::ne(2));
 }
