@@ -52,6 +52,21 @@ pub enum NetworkCommands {
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
 #[command(version = env!("CLAUDE_VM_VERSION"))]
+#[command(after_help = "\
+INVOCATION PATTERNS:
+  The 'agent' command is the default. These are equivalent:
+
+  claude-vm [options] [args]         Shorthand for 'claude-vm agent'
+  claude-vm agent [options] [args]   Explicit agent command
+
+EXAMPLES:
+  claude-vm /clear                   Start Claude with /clear command
+  claude-vm --disk 50 /clear         Use 50GB disk (shorthand)
+  claude-vm agent --disk 50 /clear   Same as above (explicit form)
+  claude-vm shell                    Open an interactive VM shell
+
+For details about a specific command, use:
+  claude-vm <command> --help")]
 pub struct Cli {
     /// Show verbose output including Lima logs
     #[arg(short = 'v', long = "verbose", global = true)]
@@ -64,12 +79,18 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Run Claude Code agent in an ephemeral VM
+    #[command(long_about = "Run Claude Code agent in an ephemeral VM.\n\n\
+        Creates a fresh VM from your project's template, runs Claude Code,\n\
+        and destroys the VM when done. This is the default command - you can\n\
+        omit 'agent' and use 'claude-vm [options] [args]' as a shorthand.")]
     Agent(AgentCmd),
 
     /// Open a shell or execute a command in an ephemeral VM
-    ///
-    /// Without arguments: Opens an interactive shell
-    /// With arguments: Executes the command and exits
+    #[command(
+        long_about = "Open a shell or execute a command in an ephemeral VM.\n\n\
+        Without arguments: Opens an interactive shell in a fresh VM.\n\
+        With arguments: Executes the command in the VM and exits."
+    )]
     Shell(ShellCmd),
 
     /// Set up a new template VM for this project
