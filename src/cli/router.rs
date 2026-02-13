@@ -56,9 +56,14 @@ where
 {
     let args: Vec<OsString> = args.into_iter().map(Into::into).collect();
 
-    // If fewer than 2 args (just program name or empty), return unchanged
+    // If no args provided (just program name), default to agent
     if args.len() < 2 {
-        return args;
+        let mut routed = Vec::with_capacity(2);
+        if !args.is_empty() {
+            routed.push(args[0].clone());
+        }
+        routed.push("agent".into());
+        return routed;
     }
 
     let first_arg = args[1].to_string_lossy();
@@ -95,17 +100,17 @@ mod tests {
     // Core routing tests: unchanged args
 
     #[test]
-    fn test_empty_args() {
+    fn test_empty_args_defaults_to_agent() {
         let input = args(&["claude-vm"]);
-        let output = route_args(input.clone());
-        assert_eq!(output, input);
+        let output = route_args(input);
+        assert_eq!(output, args(&["claude-vm", "agent"]));
     }
 
     #[test]
-    fn test_no_args_at_all() {
+    fn test_no_args_at_all_defaults_to_agent() {
         let input: Vec<OsString> = vec![];
-        let output = route_args(input.clone());
-        assert_eq!(output, input);
+        let output = route_args(input);
+        assert_eq!(output, args(&["agent"]));
     }
 
     #[test]
