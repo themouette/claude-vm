@@ -2,7 +2,7 @@ use crate::error::{ClaudeVmError, Result};
 use crate::worktree::{operations, recovery, validation};
 use std::io::{self, Write};
 
-pub fn execute(branch: &str, yes: bool) -> Result<()> {
+pub fn execute(branch: &str, yes: bool, dry_run: bool) -> Result<()> {
     // Validate git version supports worktrees
     validation::check_git_version()?;
 
@@ -35,11 +35,18 @@ pub fn execute(branch: &str, yes: bool) -> Result<()> {
         });
     }
 
-    // Display what will happen
-    println!("Worktree: {}", branch);
-    println!("Path: {}", worktree.path.display());
+    // Display what will be deleted
+    println!("Worktree: {}", worktree.path.display());
+    println!("Branch: {}", branch);
+    println!();
     println!("This will remove the worktree directory. The branch will be preserved.");
     println!();
+
+    // If dry-run, exit after displaying
+    if dry_run {
+        println!("[Dry run - no changes made]");
+        return Ok(());
+    }
 
     // Prompt for confirmation unless --yes was provided
     if !yes {

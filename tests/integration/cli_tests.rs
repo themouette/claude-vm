@@ -1001,3 +1001,24 @@ fn test_worktree_flag_requires_branch_name() {
     let result = cmd.assert();
     result.code(predicate::eq(2));
 }
+
+#[test]
+fn test_worktree_delete_dry_run_flag_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "delete", "branch-name", "--dry-run", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_clean_dry_run_flag_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "clean", "--dry-run", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_dry_run_and_yes_together_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "delete", "branch", "--dry-run", "--yes", "--help"]);
+    cmd.assert().success();
+}

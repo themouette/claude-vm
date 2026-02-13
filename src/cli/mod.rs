@@ -70,6 +70,10 @@ pub enum WorktreeCommands {
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
         yes: bool,
+
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Clean worktrees for branches that have been merged
@@ -81,6 +85,10 @@ pub enum WorktreeCommands {
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
         yes: bool,
+
+        /// Show what would be cleaned without actually cleaning
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
