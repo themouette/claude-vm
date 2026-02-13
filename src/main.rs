@@ -179,7 +179,7 @@ fn main() -> Result<()> {
                 commands::worktree::delete::execute(branch, *yes)?;
             }
             WorktreeCommands::Clean { merged, yes } => {
-                commands::worktree::clean::execute(merged, *yes)?;
+                commands::worktree::clean::execute(merged.as_deref(), *yes)?;
             }
         },
         None => {

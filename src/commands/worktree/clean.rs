@@ -2,12 +2,22 @@ use crate::error::Result;
 use crate::worktree::{operations, recovery, validation};
 use std::io::{self, Write};
 
-pub fn execute(merged_base: &str, yes: bool) -> Result<()> {
+pub fn execute(merged_base: Option<&str>, yes: bool) -> Result<()> {
     // Validate git version supports worktrees
     validation::check_git_version()?;
 
+    // Resolve the actual base branch
+    let merged_base = match merged_base {
+        Some(base) => base.to_string(),
+        None => {
+            let branch = crate::utils::git::get_default_branch()?;
+            println!("Using default branch: {}", branch);
+            branch
+        }
+    };
+
     // Get merged branches (this validates base branch exists)
-    let merged_branches = operations::list_merged_branches(merged_base)?;
+    let merged_branches = operations::list_merged_branches(&merged_base)?;
 
     // Get current worktree list with auto-prune
     let worktrees = recovery::ensure_clean_state()?;
@@ -32,7 +42,7 @@ pub fn execute(merged_base: &str, yes: bool) -> Result<()> {
     // Display what will be cleaned
     println!(
         "The following worktrees have been merged into '{}':",
-        merged_base
+        &merged_base
     );
     for (branch, path) in &merged_worktrees {
         println!("  {} -> {}", branch, path.display());
