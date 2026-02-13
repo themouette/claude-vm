@@ -2,6 +2,7 @@ use crate::error::{ClaudeVmError, Result};
 use crate::worktree::config::WorktreeConfig;
 use crate::worktree::recovery::ensure_clean_state;
 use crate::worktree::template::{compute_worktree_path, TemplateContext};
+use crate::worktree::validation;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::SystemTime;
@@ -78,6 +79,9 @@ pub fn create_worktree(
     branch: &str,
     base: Option<&str>,
 ) -> Result<CreateResult> {
+    // Validate branch name first
+    validation::validate_branch_name(branch)?;
+
     let status = detect_branch_status(branch)?;
 
     match status {
@@ -161,6 +165,9 @@ pub fn create_worktree(
 ///
 /// This removes the worktree directory and updates git metadata, but preserves the branch.
 pub fn delete_worktree(branch: &str) -> Result<()> {
+    // Validate branch name first
+    validation::validate_branch_name(branch)?;
+
     let worktrees = ensure_clean_state()?;
 
     // Find worktree by branch

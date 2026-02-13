@@ -82,6 +82,51 @@ pub fn check_submodules_and_warn(repo_root: &Path) {
     }
 }
 
+/// Validate that a branch name is a valid git ref
+///
+/// Rejects names that:
+/// - Start with a dash (could be confused with flags)
+/// - Contain null bytes
+/// - Contain path traversal sequences (..)
+/// - Are special refs like HEAD
+pub fn validate_branch_name(branch: &str) -> Result<()> {
+    // Check for empty
+    if branch.is_empty() {
+        return Err(ClaudeVmError::Worktree(
+            "Branch name cannot be empty".to_string()
+        ));
+    }
+
+    // Check for dangerous patterns
+    if branch.starts_with('-') {
+        return Err(ClaudeVmError::Worktree(
+            "Branch name cannot start with a dash".to_string()
+        ));
+    }
+
+    if branch.contains('\0') {
+        return Err(ClaudeVmError::Worktree(
+            "Branch name cannot contain null bytes".to_string()
+        ));
+    }
+
+    if branch.contains("..") {
+        return Err(ClaudeVmError::Worktree(
+            "Branch name cannot contain '..'".to_string()
+        ));
+    }
+
+    // Check for reserved names
+    let reserved = ["HEAD", "FETCH_HEAD", "ORIG_HEAD", "MERGE_HEAD"];
+    if reserved.contains(&branch) {
+        return Err(ClaudeVmError::Worktree(
+            format!("'{}' is a reserved git ref name", branch)
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,5 +208,43 @@ mod tests {
         // Second call should see it's already initialized
         assert!(WARNING_SHOWN.get().is_some());
         assert!(*WARNING_SHOWN.get().unwrap());
+    }
+
+    // Branch name validation tests
+
+    #[test]
+    fn test_validate_branch_name_valid() {
+        assert!(validate_branch_name("feature-branch").is_ok());
+        assert!(validate_branch_name("feature/auth").is_ok());
+        assert!(validate_branch_name("fix_bug").is_ok());
+        assert!(validate_branch_name("v1.2.3").is_ok());
+    }
+
+    #[test]
+    fn test_validate_branch_name_empty() {
+        assert!(validate_branch_name("").is_err());
+    }
+
+    #[test]
+    fn test_validate_branch_name_starts_with_dash() {
+        assert!(validate_branch_name("-feature").is_err());
+    }
+
+    #[test]
+    fn test_validate_branch_name_contains_null() {
+        let name = format!("feature{}null", '\0');
+        assert!(validate_branch_name(&name).is_err());
+    }
+
+    #[test]
+    fn test_validate_branch_name_path_traversal() {
+        assert!(validate_branch_name("../etc/passwd").is_err());
+        assert!(validate_branch_name("feature/../main").is_err());
+    }
+
+    #[test]
+    fn test_validate_branch_name_reserved() {
+        assert!(validate_branch_name("HEAD").is_err());
+        assert!(validate_branch_name("FETCH_HEAD").is_err());
     }
 }
