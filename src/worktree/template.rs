@@ -4,16 +4,13 @@ use std::path::{Path, PathBuf};
 
 /// Sanitize a path component by replacing invalid characters with safe alternatives
 /// - Replace `/` and `\` with `-`
-/// - Replace spaces with `_`
-/// - Replace control characters with `_`
+/// - Replace spaces and control characters with `_`
 fn sanitize_path_component(s: &str) -> String {
     s.chars()
         .map(|c| {
             if c == '/' || c == '\\' {
                 '-'
-            } else if c == ' ' {
-                '_'
-            } else if c.is_control() {
+            } else if c == ' ' || c.is_control() {
                 '_'
             } else {
                 c
@@ -52,12 +49,14 @@ impl TemplateContext {
     }
 
     /// Expand template variables in a template string
+    ///
     /// Replaces known variables with sanitized values:
     /// - {repo} -> sanitized repo name
     /// - {branch} -> sanitized branch name
     /// - {user} -> sanitized username
     /// - {date} -> sanitized date (YYYY-MM-DD)
     /// - {short_hash} -> sanitized short hash (8 chars or less)
+    ///
     /// Unknown variables are left unexpanded
     pub fn expand(&self, template: &str) -> String {
         template
@@ -147,7 +146,10 @@ mod tests {
     #[test]
     fn test_sanitize_consecutive_separators() {
         // Each character replaced individually, no collapsing
-        assert_eq!(sanitize_path_component("feature//double"), "feature--double");
+        assert_eq!(
+            sanitize_path_component("feature//double"),
+            "feature--double"
+        );
     }
 
     // ========== Template expansion tests ==========
@@ -249,7 +251,10 @@ mod tests {
         let ctx = TemplateContext::new("myproject", "feature", "abc12345");
 
         let result = compute_worktree_path(&config, &repo_root, &ctx);
-        assert_eq!(result, PathBuf::from("/home/user/myproject-worktrees/feature"));
+        assert_eq!(
+            result,
+            PathBuf::from("/home/user/myproject-worktrees/feature")
+        );
     }
 
     #[test]
