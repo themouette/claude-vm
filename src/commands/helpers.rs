@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::project::Project;
 use crate::vm::template;
 use crate::worktree::{
-    operations::{self, CreateResult},
+    operations,
     validation,
 };
 use std::io::{self, Write};
@@ -93,27 +93,10 @@ pub fn resolve_worktree(
     let result = operations::create_worktree(&config.worktree, repo_root, branch, base)?;
 
     // Print user-facing message
-    match &result {
-        CreateResult::Resumed(path) => {
-            eprintln!(
-                "Resuming worktree for branch '{}' at {}",
-                branch,
-                path.display()
-            );
-        }
-        CreateResult::Created(path) => {
-            eprintln!(
-                "Created worktree for branch '{}' at {}",
-                branch,
-                path.display()
-            );
-        }
-    }
+    eprintln!("{}", result.message(branch));
 
     // Return the path
-    match result {
-        CreateResult::Resumed(path) | CreateResult::Created(path) => Ok(path),
-    }
+    Ok(result.path().clone())
 }
 
 #[cfg(test)]

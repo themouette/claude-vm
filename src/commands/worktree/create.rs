@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
-use crate::worktree::operations::{self, CreateResult};
+use crate::worktree::operations;
 use crate::worktree::validation::{check_git_version, check_submodules_and_warn};
 
 /// Execute the create worktree command
@@ -19,23 +19,8 @@ pub fn execute(config: &Config, project: &Project, branch: &str, base: Option<&s
     // Create or resume the worktree
     let result = operations::create_worktree(&config.worktree, repo_root, branch, base)?;
 
-    // Print user-facing message based on result
-    match result {
-        CreateResult::Resumed(path) => {
-            println!(
-                "Resuming worktree for branch '{}' at {}",
-                branch,
-                path.display()
-            );
-        }
-        CreateResult::Created(path) => {
-            println!(
-                "Created worktree for branch '{}' at {}",
-                branch,
-                path.display()
-            );
-        }
-    }
+    // Print user-facing message
+    println!("{}", result.message(branch));
 
     Ok(())
 }

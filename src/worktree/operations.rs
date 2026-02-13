@@ -27,6 +27,27 @@ pub enum CreateResult {
     Created(PathBuf),
 }
 
+impl CreateResult {
+    /// Get the worktree path regardless of whether it was created or resumed
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            CreateResult::Resumed(path) | CreateResult::Created(path) => path,
+        }
+    }
+
+    /// Generate user-facing message for this result
+    pub fn message(&self, branch: &str) -> String {
+        match self {
+            CreateResult::Resumed(path) => {
+                format!("Resuming worktree for branch '{}' at {}", branch, path.display())
+            }
+            CreateResult::Created(path) => {
+                format!("Created worktree for branch '{}' at {}", branch, path.display())
+            }
+        }
+    }
+}
+
 /// Detect the status of a branch
 ///
 /// Returns:
@@ -293,6 +314,32 @@ mod tests {
 
         assert_eq!(result1, result2);
         assert_ne!(result1, result3);
+    }
+
+    #[test]
+    fn test_create_result_path() {
+        let path1 = PathBuf::from("/test");
+        let result1 = CreateResult::Resumed(path1.clone());
+        assert_eq!(result1.path(), &path1);
+
+        let path2 = PathBuf::from("/test2");
+        let result2 = CreateResult::Created(path2.clone());
+        assert_eq!(result2.path(), &path2);
+    }
+
+    #[test]
+    fn test_create_result_message() {
+        let path = PathBuf::from("/tmp/worktrees/feature");
+
+        let resumed = CreateResult::Resumed(path.clone());
+        let msg = resumed.message("feature");
+        assert!(msg.contains("Resuming"));
+        assert!(msg.contains("feature"));
+
+        let created = CreateResult::Created(path.clone());
+        let msg = created.message("feature");
+        assert!(msg.contains("Created"));
+        assert!(msg.contains("feature"));
     }
 
     #[test]
