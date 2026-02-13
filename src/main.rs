@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use claude_vm::cli::{router, Cli, Commands, NetworkCommands};
+use claude_vm::cli::{router, Cli, Commands, NetworkCommands, WorktreeCommands};
 use claude_vm::config::Config;
 use claude_vm::project::Project;
 use claude_vm::{commands, error::ClaudeVmError};
@@ -44,6 +44,7 @@ fn main() -> Result<()> {
             | Some(Commands::Info)
             | Some(Commands::Clean { .. })
             | Some(Commands::Network { .. })
+            | Some(Commands::Worktree { .. })
     );
 
     let (project, config) = if requires_project {
@@ -165,6 +166,24 @@ fn main() -> Result<()> {
             }
             NetworkCommands::Test { domain } => {
                 commands::network::test::execute(&config, domain)?;
+            }
+        },
+        Some(Commands::Worktree { command }) => match command {
+            WorktreeCommands::Create { branch, base } => {
+                commands::worktree::create::execute(&config, &project, branch, base.as_deref())?;
+            }
+            WorktreeCommands::List => {
+                commands::worktree::list::execute()?;
+            }
+            WorktreeCommands::Delete { branch, yes } => {
+                // Placeholder - implemented in plan 02-03
+                let _ = (branch, yes);
+                eprintln!("worktree delete not yet implemented");
+            }
+            WorktreeCommands::Clean { merged, yes } => {
+                // Placeholder - implemented in plan 02-03
+                let _ = (merged, yes);
+                eprintln!("worktree clean not yet implemented");
             }
         },
         None => {
