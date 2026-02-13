@@ -108,3 +108,28 @@ pub fn get_git_root() -> Result<Option<PathBuf>> {
         Ok(None)
     }
 }
+
+/// Detect the repository's default branch from the remote origin HEAD ref.
+/// Falls back to "main" if the remote HEAD cannot be determined.
+pub fn get_default_branch() -> Result<String> {
+    let output = Command::new("git")
+        .args(["symbolic-ref", "refs/remotes/origin/HEAD"])
+        .output()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to run git: {}", e)))?;
+
+    if !output.status.success() {
+        eprintln!("Warning: Could not detect default branch (no remote HEAD ref). Falling back to 'main'.");
+        return Ok("main".to_string());
+    }
+
+    let symbolic_ref = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // Strip the "refs/remotes/origin/" prefix to get just the branch name
+    // Example: "refs/remotes/origin/main" -> "main"
+    let branch_name = symbolic_ref
+        .strip_prefix("refs/remotes/origin/")
+        .unwrap_or("main")
+        .to_string();
+
+    Ok(branch_name)
+}

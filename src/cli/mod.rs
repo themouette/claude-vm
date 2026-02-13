@@ -74,9 +74,9 @@ pub enum WorktreeCommands {
 
     /// Clean worktrees for branches that have been merged
     Clean {
-        /// Base branch to check merges against (default: main)
-        #[arg(long, default_value = "main")]
-        merged: String,
+        /// Base branch to check merges against
+        #[arg(long)]
+        merged: Option<String>,
 
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
