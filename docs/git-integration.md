@@ -82,12 +82,33 @@ Configure worktree behavior in `.claude-vm.toml`:
 location = "/path/to/worktrees"
 
 # Path template for worktree directories
-path_template = "{repo}-{branch}"
+template = "{repo}-{branch}"
 ```
 
 Available template variables:
 - `{repo}` - Repository name
 - `{branch}` - Branch name (sanitized)
+- `{user}` - Username from $USER environment variable
+- `{date}` - Current date in YYYY-MM-DD format
+- `{short_hash}` - Short commit hash (first 8 characters)
+
+Example templates:
+- `{branch}` (default) - Simple branch name
+- `{user}/{branch}` - Organize by user
+- `{date}-{branch}` - Prefix with date
+- `{repo}-{branch}-{short_hash}` - Include repo and commit info
+
+### Template Variable Sanitization
+
+Branch names and other variables with special characters are automatically sanitized for filesystem safety:
+- Slashes (`/`, `\`) are replaced with dashes (`-`)
+- Spaces and control characters are replaced with underscores (`_`)
+- Other characters are preserved
+
+Examples:
+- `feature/user-auth` → `feature-user-auth`
+- `my branch` → `my_branch`
+- `fix bug #123` → `fix_bug_#123`
 
 ### How It Works
 
