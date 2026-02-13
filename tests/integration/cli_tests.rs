@@ -255,10 +255,7 @@ fn test_list_help_no_runtime_flags() {
         !stdout.contains("--mount"),
         "list help should not contain --mount flag"
     );
-    assert!(
-        !stdout.contains("--verbose"),
-        "list help should not contain --verbose flag"
-    );
+    // Note: --verbose is now a global flag and will appear in all command helps
 }
 
 #[test]
@@ -270,8 +267,8 @@ fn test_clean_help_no_runtime_flags() {
         .success()
         .stdout(predicate::str::contains("--disk").not())
         .stdout(predicate::str::contains("--memory").not())
-        .stdout(predicate::str::contains("--mount").not())
-        .stdout(predicate::str::contains("--verbose").not());
+        .stdout(predicate::str::contains("--mount").not());
+    // Note: --verbose is now a global flag and will appear in all command helps
 }
 
 // Phase 1 Tests: Top-Level Help Shows Agent Subcommand

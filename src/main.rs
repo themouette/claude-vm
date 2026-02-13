@@ -58,17 +58,22 @@ fn main() -> Result<()> {
         let cfg = match &cli.command {
             Some(Commands::Agent(cmd)) => {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
-                    .with_runtime_overrides(&cmd.runtime)
+                    .with_runtime_overrides(&cmd.runtime, cli.verbose)
+                    .with_conversations(!cmd.no_conversations)
             }
             Some(Commands::Shell(cmd)) => {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
-                    .with_runtime_overrides(&cmd.runtime)
+                    .with_runtime_overrides(&cmd.runtime, cli.verbose)
             }
             Some(Commands::Setup(cmd)) => {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
-                    .with_setup_overrides(cmd)
+                    .with_setup_overrides(cmd, cli.verbose)
             }
-            _ => Config::load_with_main_repo(proj.root(), proj.main_repo_root())?,
+            _ => {
+                let mut cfg = Config::load_with_main_repo(proj.root(), proj.main_repo_root())?;
+                cfg.verbose = cli.verbose;
+                cfg
+            }
         };
 
         (Some(proj), Some(cfg))

@@ -995,10 +995,9 @@ impl Config {
     }
 
     /// Apply runtime flag overrides from agent or shell commands
-    pub fn with_runtime_overrides(mut self, runtime: &RuntimeFlags) -> Self {
-        self.verbose = runtime.verbose;
+    pub fn with_runtime_overrides(mut self, runtime: &RuntimeFlags, verbose: bool) -> Self {
+        self.verbose = verbose;
         self.forward_ssh_agent = runtime.forward_ssh_agent;
-        self.mount_conversations = !runtime.no_conversations;
 
         if runtime.auto_setup {
             self.auto_setup = true;
@@ -1041,8 +1040,16 @@ impl Config {
         self
     }
 
+    /// Set whether to mount Claude conversation folder (agent command only)
+    pub fn with_conversations(mut self, mount: bool) -> Self {
+        self.mount_conversations = mount;
+        self
+    }
+
     /// Apply setup command overrides (tools, VM sizing, setup scripts/mounts)
-    pub fn with_setup_overrides(mut self, cmd: &SetupCmd) -> Self {
+    pub fn with_setup_overrides(mut self, cmd: &SetupCmd, verbose: bool) -> Self {
+        self.verbose = verbose;
+
         // VM sizing from setup flags
         if let Some(disk) = cmd.vm_flags.disk {
             self.vm.disk = disk;

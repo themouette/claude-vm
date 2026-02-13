@@ -17,17 +17,9 @@ pub struct RuntimeFlags {
     #[arg(long)]
     pub cpus: Option<u32>,
 
-    /// Show verbose output including Lima logs
-    #[arg(short = 'v', long = "verbose")]
-    pub verbose: bool,
-
     /// Forward SSH agent to VM
     #[arg(short = 'A', long = "forward-ssh-agent")]
     pub forward_ssh_agent: bool,
-
-    /// Don't mount Claude conversation folder in VM
-    #[arg(long = "no-conversations")]
-    pub no_conversations: bool,
 
     /// Custom mount in docker-style format: /host/path[:vm/path][:ro|rw]
     #[arg(long = "mount")]

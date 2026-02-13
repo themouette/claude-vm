@@ -52,6 +52,10 @@ pub enum NetworkCommands {
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
 #[command(version = env!("CLAUDE_VM_VERSION"))]
 pub struct Cli {
+    /// Show verbose output including Lima logs
+    #[arg(short = 'v', long = "verbose", global = true)]
+    pub verbose: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -138,6 +142,10 @@ pub struct AgentCmd {
     /// Runtime configuration flags
     #[command(flatten)]
     pub runtime: RuntimeFlags,
+
+    /// Don't mount Claude conversation folder in VM
+    #[arg(long = "no-conversations")]
+    pub no_conversations: bool,
 
     /// Arguments to pass to Claude
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
