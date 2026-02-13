@@ -36,12 +36,12 @@ fn main() -> Result<()> {
     // For commands that must have a project, fail if not found
     let requires_project = matches!(
         &cli.command,
-        Some(Commands::Setup { .. })
-            | Some(Commands::Shell { .. })
+        Some(Commands::Agent(..))
+            | Some(Commands::Setup(..))
+            | Some(Commands::Shell(..))
             | Some(Commands::Info)
             | Some(Commands::Clean { .. })
             | Some(Commands::Network { .. })
-            | None // run command
     );
 
     let (project, config) = if requires_project {
@@ -53,16 +53,29 @@ fn main() -> Result<()> {
             }
             _ => e,
         })?;
-        let cfg = Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
-            .with_cli_overrides(&cli);
+
+        // Load config and apply command-specific overrides
+        let cfg = match &cli.command {
+            Some(Commands::Agent(cmd)) => {
+                Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
+                    .with_runtime_overrides(&cmd.runtime)
+            }
+            Some(Commands::Shell(cmd)) => {
+                Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
+                    .with_runtime_overrides(&cmd.runtime)
+            }
+            Some(Commands::Setup(cmd)) => {
+                Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
+                    .with_setup_overrides(cmd)
+            }
+            _ => Config::load_with_main_repo(proj.root(), proj.main_repo_root())?,
+        };
+
         (Some(proj), Some(cfg))
     } else if let Ok(proj) = project_result {
         // Optional project, but if we have one, validate config
         match Config::load_with_main_repo(proj.root(), proj.main_repo_root()) {
-            Ok(cfg) => {
-                let cfg = cfg.with_cli_overrides(&cli);
-                (Some(proj), Some(cfg))
-            }
+            Ok(cfg) => (Some(proj), Some(cfg)),
             Err(e) => {
                 // Config is invalid - fail even for optional-project commands
                 return Err(e.into());
@@ -94,8 +107,8 @@ fn main() -> Result<()> {
     let project = project.unwrap();
     let config = config.unwrap();
 
-    // Check for updates only on run command (default command)
-    if cli.command.is_none() {
+    // Check for updates only on agent command (replaces old default run behavior)
+    if matches!(&cli.command, Some(Commands::Agent(..))) {
         let update_config = claude_vm::update_check::UpdateCheckConfig {
             enabled: config.update_check.enabled,
             check_interval_hours: config.update_check.interval_hours,
@@ -105,20 +118,19 @@ fn main() -> Result<()> {
 
     // Execute command
     match &cli.command {
-        Some(Commands::Setup {
+        Some(Commands::Agent(cmd)) => {
+            commands::agent::execute(&project, &config, cmd)?;
+        }
+        Some(Commands::Shell(cmd)) => {
+            commands::shell::execute(&project, &config, cmd)?;
+        }
+        Some(Commands::Setup(cmd)) => {
             #[cfg(debug_assertions)]
-            no_agent_install,
-            ..
-        }) => {
-            #[cfg(debug_assertions)]
-            let skip_install = *no_agent_install;
+            let skip_install = cmd.no_agent_install;
             #[cfg(not(debug_assertions))]
             let skip_install = false;
 
             commands::setup::execute(&project, &config, skip_install)?;
-        }
-        Some(Commands::Shell { command }) => {
-            commands::shell::execute(&project, &config, &cli, command)?;
         }
         Some(Commands::Info) => {
             commands::info::execute()?;
@@ -149,8 +161,11 @@ fn main() -> Result<()> {
             }
         },
         None => {
-            // Default: run Claude with provided arguments
-            commands::run::execute(&project, &config, &cli, &cli.claude_args)?;
+            // Print usage hint directing users to use explicit subcommand
+            println!("Usage: claude-vm <COMMAND>\n");
+            println!("Run 'claude-vm agent [ARGS]' to start a Claude Code session.");
+            println!("Run 'claude-vm --help' for all available commands.");
+            std::process::exit(0);
         }
         _ => unreachable!(),
     }

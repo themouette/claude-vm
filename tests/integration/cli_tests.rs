@@ -129,9 +129,9 @@ fn test_clean_all_command_exists() {
 #[test]
 fn test_runtime_script_flag() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["--runtime-script", "/tmp/test.sh", "setup", "--help"]);
+    cmd.args(["agent", "--runtime-script", "/tmp/test.sh", "--help"]);
 
-    // Should accept the flag
+    // Should accept the flag (runtime-script is now on agent/shell only)
     cmd.assert().success();
 }
 

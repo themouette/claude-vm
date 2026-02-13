@@ -1,4 +1,5 @@
-use crate::cli::{Cli, Commands};
+use crate::cli::flags::RuntimeFlags;
+use crate::cli::SetupCmd;
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -674,7 +675,7 @@ fn default_update_check_interval() -> u64 {
 
 impl Config {
     /// Load configuration with precedence:
-    /// 1. CLI flags (applied later via with_cli_overrides)
+    /// 1. CLI flags (applied later via with_runtime_overrides or with_setup_overrides)
     /// 2. Environment variables
     /// 3. Project config (.claude-vm.toml in project root)
     /// 4. Global config (~/.claude-vm.toml)
@@ -993,26 +994,18 @@ impl Config {
         self
     }
 
-    /// Apply CLI overrides (highest precedence)
-    pub fn with_cli_overrides(mut self, cli: &Cli) -> Self {
-        // Verbose flag
-        self.verbose = cli.verbose;
+    /// Apply runtime flag overrides from agent or shell commands
+    pub fn with_runtime_overrides(mut self, runtime: &RuntimeFlags) -> Self {
+        self.verbose = runtime.verbose;
+        self.forward_ssh_agent = runtime.forward_ssh_agent;
+        self.mount_conversations = !runtime.no_conversations;
 
-        // SSH agent forwarding
-        self.forward_ssh_agent = cli.forward_ssh_agent;
-
-        // Mount conversations (inverted: --no-conversations means mount_conversations = false)
-        self.mount_conversations = !cli.no_conversations;
-
-        // Auto setup
-        if cli.auto_setup {
+        if runtime.auto_setup {
             self.auto_setup = true;
         }
 
-        // Custom mounts from CLI (accumulate with config mounts)
-        // Parse CLI mount specs immediately to validate and extract values
-        for mount_spec in &cli.mounts {
-            // Parse the mount spec to extract location, mount_point, and writable
+        // Custom mounts from CLI
+        for mount_spec in &runtime.mounts {
             match crate::vm::mount::Mount::from_spec(mount_spec) {
                 Ok(mount) => {
                     self.mounts.push(MountEntry {
@@ -1027,113 +1020,102 @@ impl Config {
             }
         }
 
-        // Global CLI overrides
-        if let Some(disk) = cli.disk {
+        // VM sizing overrides
+        if let Some(disk) = runtime.disk {
             self.vm.disk = disk;
         }
-        if let Some(memory) = cli.memory {
+        if let Some(memory) = runtime.memory {
             self.vm.memory = memory;
         }
-        if let Some(cpus) = cli.cpus {
+        if let Some(cpus) = runtime.cpus {
             self.vm.cpus = cpus;
         }
 
-        // Command-specific overrides
-        if let Some(Commands::Setup {
-            docker,
-            node,
-            python,
-            rust,
-            chromium,
-            gpg,
-            gh,
-            git,
-            network_isolation,
-            all,
-            disk,
-            memory,
-            setup_scripts,
-            mounts,
-            #[cfg(debug_assertions)]
-                no_agent_install: _,
-        }) = &cli.command
-        {
-            if *all {
-                self.tools.enable("docker");
-                self.tools.enable("node");
-                self.tools.enable("python");
-                self.tools.enable("rust");
-                self.tools.enable("chromium");
-                self.tools.enable("gpg");
-                self.tools.enable("gh");
-                self.tools.enable("git");
-                self.tools.enable("network-isolation");
-            } else {
-                if *docker {
-                    self.tools.enable("docker");
-                }
-                if *node {
-                    self.tools.enable("node");
-                }
-                if *python {
-                    self.tools.enable("python");
-                }
-                if *rust {
-                    self.tools.enable("rust");
-                }
-                if *chromium {
-                    self.tools.enable("chromium");
-                }
-                if *gpg {
-                    self.tools.enable("gpg");
-                }
-                if *gh {
-                    self.tools.enable("gh");
-                }
-                if *git {
-                    self.tools.enable("git");
-                }
-                if *network_isolation {
-                    self.tools.enable("network-isolation");
-                    self.security.network.enabled = true;
-                }
-            }
-
-            if let Some(d) = disk {
-                self.vm.disk = *d;
-            }
-            if let Some(m) = memory {
-                self.vm.memory = *m;
-            }
-
-            // Add setup scripts from CLI
-            for script in setup_scripts {
-                if let Some(script_str) = script.to_str() {
-                    self.setup.scripts.push(script_str.to_string());
-                }
-            }
-
-            // Add setup mounts from CLI (parse immediately like runtime mounts)
-            for mount_spec in mounts {
-                match crate::vm::mount::Mount::from_spec(mount_spec) {
-                    Ok(mount) => {
-                        self.setup.mounts.push(MountEntry {
-                            location: mount.location.to_string_lossy().to_string(),
-                            writable: mount.writable,
-                            mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
-                        });
-                    }
-                    Err(e) => {
-                        eprintln!("Warning: Invalid setup mount spec '{}': {}", mount_spec, e);
-                    }
-                }
+        // Runtime scripts from CLI
+        for script in &runtime.runtime_scripts {
+            if let Some(script_str) = script.to_str() {
+                self.runtime.scripts.push(script_str.to_string());
             }
         }
 
-        // Add runtime scripts from CLI
-        for script in &cli.runtime_scripts {
+        self
+    }
+
+    /// Apply setup command overrides (tools, VM sizing, setup scripts/mounts)
+    pub fn with_setup_overrides(mut self, cmd: &SetupCmd) -> Self {
+        // VM sizing from setup flags
+        if let Some(disk) = cmd.vm_flags.disk {
+            self.vm.disk = disk;
+        }
+        if let Some(memory) = cmd.vm_flags.memory {
+            self.vm.memory = memory;
+        }
+        if let Some(cpus) = cmd.vm_flags.cpus {
+            self.vm.cpus = cpus;
+        }
+
+        // Tool flags
+        if cmd.all {
+            self.tools.enable("docker");
+            self.tools.enable("node");
+            self.tools.enable("python");
+            self.tools.enable("rust");
+            self.tools.enable("chromium");
+            self.tools.enable("gpg");
+            self.tools.enable("gh");
+            self.tools.enable("git");
+            self.tools.enable("network-isolation");
+        } else {
+            if cmd.docker {
+                self.tools.enable("docker");
+            }
+            if cmd.node {
+                self.tools.enable("node");
+            }
+            if cmd.python {
+                self.tools.enable("python");
+            }
+            if cmd.rust {
+                self.tools.enable("rust");
+            }
+            if cmd.chromium {
+                self.tools.enable("chromium");
+            }
+            if cmd.gpg {
+                self.tools.enable("gpg");
+            }
+            if cmd.gh {
+                self.tools.enable("gh");
+            }
+            if cmd.git {
+                self.tools.enable("git");
+            }
+            if cmd.network_isolation {
+                self.tools.enable("network-isolation");
+                self.security.network.enabled = true;
+            }
+        }
+
+        // Setup scripts
+        for script in &cmd.setup_scripts {
             if let Some(script_str) = script.to_str() {
-                self.runtime.scripts.push(script_str.to_string());
+                self.setup.scripts.push(script_str.to_string());
+            }
+        }
+
+        // Setup mounts
+        for mount_spec in &cmd.mounts {
+            match crate::vm::mount::Mount::from_spec(mount_spec) {
+                Ok(mount) => {
+                    self.setup.mounts.push(MountEntry {
+                        location: mount.location.to_string_lossy().to_string(),
+                        writable: mount.writable,
+                        mount_point: mount.mount_point.map(|p| p.to_string_lossy().to_string()),
+                    });
+                }
+                Err(e) => {
+                    eprintln!("Warning: Invalid setup mount spec '{}': {}", mount_spec, e);
+                }
             }
         }
 

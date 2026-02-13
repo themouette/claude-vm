@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::ShellCmd;
 use crate::commands::helpers;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
@@ -8,11 +8,11 @@ use crate::utils::env as env_utils;
 use crate::utils::shell as shell_utils;
 use crate::vm::session::VmSession;
 
-pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]) -> Result<()> {
+pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()> {
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, config)?;
 
-    let is_interactive = command.is_empty();
+    let is_interactive = cmd.command.is_empty();
 
     if !config.verbose {
         if is_interactive {
@@ -36,7 +36,11 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
     let current_dir = std::env::current_dir()?;
 
     // Collect environment variables
-    let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
+    let env_vars = env_utils::collect_env_vars(
+        &cmd.runtime.env,
+        &cmd.runtime.env_file,
+        &cmd.runtime.inherit_env,
+    )?;
 
     let workdir = Some(current_dir.as_path());
 
@@ -64,7 +68,7 @@ pub fn execute(project: &Project, config: &Config, cli: &Cli, command: &[String]
         // Command execution mode
         eprintln!("Executing command in VM: {}", session.name());
 
-        let cmd_str = shell_utils::join_args(command);
+        let cmd_str = shell_utils::join_args(&cmd.command);
         match runner::execute_command_with_runtime_scripts(
             session.name(),
             project,

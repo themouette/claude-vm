@@ -1,4 +1,4 @@
-use crate::cli::Cli;
+use crate::cli::AgentCmd;
 use crate::commands::helpers;
 use crate::config::Config;
 use crate::error::Result;
@@ -7,12 +7,7 @@ use crate::scripts::runner;
 use crate::utils::env as env_utils;
 use crate::vm::session::VmSession;
 
-pub fn execute(
-    project: &Project,
-    config: &Config,
-    cli: &Cli,
-    claude_args: &[String],
-) -> Result<()> {
+pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()> {
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, config)?;
 
@@ -38,7 +33,7 @@ pub fn execute(
     }
 
     // Add user-provided Claude args
-    for arg in claude_args {
+    for arg in &cmd.claude_args {
         args.push(arg.as_str());
     }
 
@@ -57,7 +52,7 @@ pub fn execute(
         return Err(crate::error::ClaudeVmError::CommandFailed(
             "Claude CLI is not installed in the VM.\n\
              \n\
-             If you used --no-agent-install during setup, you cannot run 'claude-vm' without arguments.\n\
+             If you used --no-agent-install during setup, you cannot run 'claude-vm agent'.\n\
              Instead, use:\n\
              - 'claude-vm shell' to open a shell in the VM\n\
              - 'claude-vm shell <command>' to run a specific command\n\
@@ -68,7 +63,11 @@ pub fn execute(
     }
 
     // Collect environment variables
-    let env_vars = env_utils::collect_env_vars(&cli.env, &cli.env_file, &cli.inherit_env)?;
+    let env_vars = env_utils::collect_env_vars(
+        &cmd.runtime.env,
+        &cmd.runtime.env_file,
+        &cmd.runtime.inherit_env,
+    )?;
 
     // Execute Claude with runtime scripts using entrypoint pattern
     // This runs runtime scripts first, then execs Claude in a single shell invocation
