@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::worktree::{operations, recovery, validation};
 use std::io::{self, Write};
 
-pub fn execute(merged_base: Option<&str>, yes: bool, dry_run: bool) -> Result<()> {
+pub fn execute(merged_base: Option<&str>, yes: bool, dry_run: bool, locked: bool) -> Result<()> {
     // Validate git version supports worktrees
     validation::check_git_version()?;
 
@@ -24,8 +24,14 @@ pub fn execute(merged_base: Option<&str>, yes: bool, dry_run: bool) -> Result<()
 
     // Cross-reference: find worktrees whose branch is in the merged list
     // Skip the main worktree (first entry) and worktrees without a branch
+    // Also skip locked worktrees unless --locked flag is set
     let mut merged_worktrees = Vec::new();
     for worktree in worktrees.iter().skip(1) {
+        // Skip locked worktrees unless --locked flag is set
+        if !locked && worktree.locked.is_some() {
+            continue;
+        }
+
         if let Some(ref branch) = worktree.branch {
             if merged_branches.contains(branch) {
                 merged_worktrees.push((branch.as_str(), &worktree.path));

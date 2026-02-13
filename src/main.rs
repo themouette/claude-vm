@@ -172,14 +172,14 @@ fn main() -> Result<()> {
             WorktreeCommands::Create { branch, base } => {
                 commands::worktree::create::execute(&config, &project, branch, base.as_deref())?;
             }
-            WorktreeCommands::List => {
-                commands::worktree::list::execute()?;
+            WorktreeCommands::List { merged, locked, detached } => {
+                commands::worktree::list::execute(merged.as_deref(), *locked, *detached)?;
             }
             WorktreeCommands::Delete { branches, yes, dry_run } => {
                 commands::worktree::delete::execute(branches, *yes, *dry_run)?;
             }
-            WorktreeCommands::Clean { merged, yes, dry_run } => {
-                commands::worktree::clean::execute(merged.as_deref(), *yes, *dry_run)?;
+            WorktreeCommands::Clean { merged, yes, dry_run, locked } => {
+                commands::worktree::clean::execute(merged.as_deref(), *yes, *dry_run, *locked)?;
             }
         },
         None => {

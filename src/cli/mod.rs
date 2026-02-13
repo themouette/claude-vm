@@ -60,7 +60,19 @@ pub enum WorktreeCommands {
     },
 
     /// List all worktrees
-    List,
+    List {
+        /// Show only worktrees for branches merged into base
+        #[arg(long)]
+        merged: Option<String>,
+
+        /// Show only locked worktrees
+        #[arg(long)]
+        locked: bool,
+
+        /// Show only detached HEAD worktrees
+        #[arg(long)]
+        detached: bool,
+    },
 
     /// Delete a worktree (removes directory, preserves branch)
     Delete {
@@ -90,6 +102,10 @@ pub enum WorktreeCommands {
         /// Show what would be cleaned without actually cleaning
         #[arg(long)]
         dry_run: bool,
+
+        /// Also clean locked worktrees (by default locked worktrees are skipped)
+        #[arg(long)]
+        locked: bool,
     },
 }
 

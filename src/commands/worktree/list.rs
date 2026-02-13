@@ -1,48 +1,94 @@
 use crate::error::Result;
-use crate::worktree::operations::{format_activity, get_last_activity};
-use crate::worktree::recovery::ensure_clean_state;
+use crate::worktree::{operations, recovery, state, validation};
 
-/// Execute the list worktrees command
-///
-/// Displays all worktrees with branch name, path, and last activity
-pub fn execute() -> Result<()> {
-    let entries = ensure_clean_state()?;
+pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Result<()> {
+    // Validate git version
+    validation::check_git_version()?;
 
-    if entries.is_empty() {
-        println!("No worktrees found");
+    // Get worktree list with auto-prune
+    let worktrees = recovery::ensure_clean_state()?;
+
+    // Apply filters
+    let mut filtered_worktrees: Vec<&state::WorktreeEntry> = worktrees.iter().collect();
+
+    // Filter by merged status if requested
+    if let Some(base) = merged_base {
+        let merged_branches = operations::list_merged_branches(base)?;
+        filtered_worktrees.retain(|w| {
+            w.branch.as_ref()
+                .map(|b| merged_branches.contains(b))
+                .unwrap_or(false)
+        });
+    }
+
+    // Filter by locked status if requested
+    if locked {
+        filtered_worktrees.retain(|w| w.locked.is_some());
+    }
+
+    // Filter by detached status if requested
+    if detached {
+        filtered_worktrees.retain(|w| w.is_detached);
+    }
+
+    // Display results
+    if filtered_worktrees.is_empty() {
+        println!("No worktrees found matching filters.");
         return Ok(());
     }
 
-    // Print header
-    println!("{:<20} {:<50} {:<20}", "BRANCH", "PATH", "LAST ACTIVITY");
+    // Skip first entry (main worktree) for display
+    let display_worktrees: Vec<_> = filtered_worktrees
+        .iter()
+        .skip(1)
+        .collect();
 
-    // Print each worktree entry
-    for entry in entries {
-        // Format branch name or show detached HEAD with short hash
-        let branch_display = if let Some(ref branch) = entry.branch {
-            let mut display = branch.clone();
-            if entry.locked.is_some() {
-                display.push_str(" (locked)");
+    if display_worktrees.is_empty() {
+        println!("No additional worktrees found matching filters.");
+        return Ok(());
+    }
+
+    println!("Worktrees:");
+    for worktree in display_worktrees {
+        let branch_display = worktree
+            .branch
+            .as_deref()
+            .unwrap_or("<detached>");
+
+        let mut status_tags = Vec::new();
+        if worktree.is_bare {
+            status_tags.push("bare".to_string());
+        }
+        if worktree.is_detached {
+            status_tags.push("detached".to_string());
+        }
+        if let Some(ref reason) = worktree.locked {
+            if reason.is_empty() {
+                status_tags.push("locked".to_string());
+            } else {
+                status_tags.push(format!("locked: {}", reason));
             }
-            display
+        }
+
+        let status = if status_tags.is_empty() {
+            String::new()
         } else {
-            // Detached HEAD - show short hash
-            let short_hash = &entry.head[..7.min(entry.head.len())];
-            format!("(detached: {})", short_hash)
+            format!(" [{}]", status_tags.join(", "))
         };
 
-        // Get last activity timestamp
-        let activity = get_last_activity(&entry.path)
-            .map(format_activity)
-            .unwrap_or_else(|| "unknown".to_string());
-
-        // Format path as string
-        let path_display = entry.path.display().to_string();
-
-        println!(
-            "{:<20} {:<50} {:<20}",
-            branch_display, path_display, activity
-        );
+        // Show last activity if available
+        if let Some(last_activity) = operations::get_last_activity(&worktree.path) {
+            let formatted_time = operations::format_activity(last_activity);
+            println!(
+                "  {} -> {} ({}){}",
+                branch_display,
+                worktree.path.display(),
+                formatted_time,
+                status
+            );
+        } else {
+            println!("  {} -> {}{}", branch_display, worktree.path.display(), status);
+        }
     }
 
     Ok(())

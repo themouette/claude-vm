@@ -1047,3 +1047,32 @@ fn test_worktree_delete_requires_at_least_one_branch() {
     let result = cmd.assert();
     result.code(predicate::eq(2));
 }
+
+#[test]
+fn test_worktree_list_filter_flags_parse() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "list", "--merged", "main", "--help"]);
+    cmd.assert().success();
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["worktree", "list", "--locked", "--help"]);
+    cmd2.assert().success();
+
+    let mut cmd3 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd3.args(["worktree", "list", "--detached", "--help"]);
+    cmd3.assert().success();
+}
+
+#[test]
+fn test_worktree_list_multiple_filters() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "list", "--merged", "main", "--locked", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_clean_locked_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "clean", "--merged", "main", "--locked", "--help"]);
+    cmd.assert().success();
+}

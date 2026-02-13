@@ -259,6 +259,12 @@ pub fn list_merged_branches(base: &str) -> Result<Vec<String>> {
     Ok(branches)
 }
 
+/// Check if a specific branch is merged into the base branch
+pub fn is_branch_merged(branch: &str, base: &str) -> Result<bool> {
+    let merged = list_merged_branches(base)?;
+    Ok(merged.contains(&branch.to_string()))
+}
+
 /// Get the last activity time for a worktree directory
 pub fn get_last_activity(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).ok().and_then(|m| m.modified().ok())
