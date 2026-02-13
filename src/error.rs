@@ -56,6 +56,12 @@ pub enum ClaudeVmError {
 
     #[error("Git worktree error: {0}")]
     Worktree(String),
+
+    #[error("No worktree found for branch '{branch}'")]
+    WorktreeNotFound { branch: String },
+
+    #[error("Branch '{branch}' does not exist")]
+    BranchNotFound { branch: String },
 }
 
 impl From<self_update::errors::Error> for ClaudeVmError {
