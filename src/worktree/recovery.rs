@@ -6,9 +6,7 @@ use crate::worktree::state::{list_worktrees, WorktreeEntry};
 pub fn auto_prune() -> Result<()> {
     use std::process::Command;
 
-    let output = Command::new("git")
-        .args(["worktree", "prune"])
-        .output();
+    let output = Command::new("git").args(["worktree", "prune"]).output();
 
     match output {
         Ok(output) if !output.status.success() => {
@@ -35,9 +33,7 @@ pub fn auto_prune() -> Result<()> {
 pub fn try_repair() -> Result<()> {
     use std::process::Command;
 
-    let output = Command::new("git")
-        .args(["worktree", "repair"])
-        .output();
+    let output = Command::new("git").args(["worktree", "repair"]).output();
 
     match output {
         Ok(output) if !output.status.success() => {
