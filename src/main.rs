@@ -175,8 +175,8 @@ fn main() -> Result<()> {
             WorktreeCommands::List => {
                 commands::worktree::list::execute()?;
             }
-            WorktreeCommands::Delete { branch, yes, dry_run } => {
-                commands::worktree::delete::execute(branch, *yes, *dry_run)?;
+            WorktreeCommands::Delete { branches, yes, dry_run } => {
+                commands::worktree::delete::execute(branches, *yes, *dry_run)?;
             }
             WorktreeCommands::Clean { merged, yes, dry_run } => {
                 commands::worktree::clean::execute(merged.as_deref(), *yes, *dry_run)?;

@@ -1022,3 +1022,28 @@ fn test_dry_run_and_yes_together_parses() {
     cmd.args(["worktree", "delete", "branch", "--dry-run", "--yes", "--help"]);
     cmd.assert().success();
 }
+
+#[test]
+fn test_worktree_delete_single_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "delete", "feature-branch", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_delete_multiple_branches_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "delete", "branch-1", "branch-2", "branch-3", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_delete_requires_at_least_one_branch() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "delete"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Should fail - requires at least one branch
+    let result = cmd.assert();
+    result.code(predicate::eq(2));
+}

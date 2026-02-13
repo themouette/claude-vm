@@ -64,8 +64,9 @@ pub enum WorktreeCommands {
 
     /// Delete a worktree (removes directory, preserves branch)
     Delete {
-        /// Branch name of the worktree to delete
-        branch: String,
+        /// Branch name(s) of the worktree(s) to delete
+        #[arg(required = true)]
+        branches: Vec<String>,
 
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
