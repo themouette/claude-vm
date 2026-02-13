@@ -19,6 +19,45 @@ claude-vm shell
 
 Each run starts from the same clean template and automatically cleans up when done.
 
+## Command Structure
+
+Claude VM supports two equivalent invocation patterns:
+
+```bash
+# Shorthand — automatically routes to agent
+claude-vm "help me code"
+claude-vm /clear
+claude-vm --disk 50 /clear
+
+# Explicit agent command
+claude-vm agent "help me code"
+claude-vm agent /clear
+claude-vm agent --disk 50 /clear
+```
+
+Both forms work identically. The explicit `agent` command makes the default behavior discoverable — run `claude-vm agent --help` to see all agent-specific flags.
+
+**All existing usage continues to work without modification.** No changes are needed to your workflows or scripts.
+
+### Available Commands
+
+```bash
+claude-vm agent [flags] [args]   # Run Claude (also the default)
+claude-vm shell [flags] [args]   # Interactive shell or run commands
+claude-vm setup [flags] <name>   # Create a template VM
+claude-vm info                   # Show project information
+claude-vm config <subcommand>    # Configuration management
+claude-vm list [flags]           # List templates
+claude-vm clean [flags]          # Remove current template
+claude-vm clean-all [flags]      # Remove all templates
+claude-vm update [flags]         # Update claude-vm
+claude-vm network <subcommand>   # Network isolation management
+```
+
+Runtime flags like `--disk`, `--memory`, `--mount`, and `--env` are available on `agent`, `shell`, and `setup` commands. Other commands show only their own flags.
+
+See [Usage Guide](docs/usage.md) for complete command reference.
+
 ## Why Claude VM?
 
 **VM isolation is the only safe way to run Claude with `--dangerously-skip-permissions`.** Even if Claude executes unintended commands, the blast radius is limited to the disposable VM.
@@ -91,6 +130,9 @@ claude-vm setup --all
 ```bash
 # Run Claude in an ephemeral VM
 claude-vm "help me code"
+
+# Same thing, explicit agent command
+claude-vm agent "help me code"
 
 # With auto-setup if template doesn't exist
 claude-vm --auto-setup "help me code"
