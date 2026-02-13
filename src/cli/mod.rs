@@ -48,6 +48,42 @@ pub enum NetworkCommands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+pub enum WorktreeCommands {
+    /// Create a new worktree for a branch
+    Create {
+        /// Branch name for the worktree
+        branch: String,
+
+        /// Base branch or commit to create from (default: current HEAD)
+        base: Option<String>,
+    },
+
+    /// List all worktrees
+    List,
+
+    /// Delete a worktree (removes directory, preserves branch)
+    Delete {
+        /// Branch name of the worktree to delete
+        branch: String,
+
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+
+    /// Clean worktrees for branches that have been merged
+    Clean {
+        /// Base branch to check merges against (default: main)
+        #[arg(long, default_value = "main")]
+        merged: String,
+
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
@@ -156,6 +192,12 @@ pub enum Commands {
     Network {
         #[command(subcommand)]
         command: NetworkCommands,
+    },
+
+    /// Manage git worktrees for parallel development
+    Worktree {
+        #[command(subcommand)]
+        command: WorktreeCommands,
     },
 }
 

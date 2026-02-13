@@ -14,6 +14,7 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
     "version",
     "update",
     "network",
+    "worktree",
 ];
 
 /// Route CLI arguments to the appropriate command.
