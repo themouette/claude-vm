@@ -44,6 +44,18 @@ pub enum ClaudeVmError {
 
     #[error("Permission denied: {0}. Try running with sudo.")]
     PermissionDenied(String),
+
+    #[error("Git worktree is locked: {reason}\nTo unlock, run: git worktree unlock {path}")]
+    WorktreeLocked { reason: String, path: String },
+
+    #[error("Git version {version} is too old. Worktrees require Git 2.5+.\nDownload the latest version: https://git-scm.com/downloads")]
+    GitVersionTooOld { version: String },
+
+    #[error("Repository uses submodules. Git worktree support for submodules is experimental.\nSee: https://git-scm.com/docs/git-worktree#_bugs")]
+    SubmodulesDetected,
+
+    #[error("Git worktree error: {0}")]
+    Worktree(String),
 }
 
 impl From<self_update::errors::Error> for ClaudeVmError {
