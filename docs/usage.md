@@ -98,6 +98,15 @@ See [Custom Mounts](features/custom-mounts.md) for more details.
 
 Run Claude in an isolated VM. The VM is automatically created from your template and destroyed when Claude exits.
 
+Both invocation patterns work identically:
+
+```bash
+claude-vm "help me code"          # Shorthand
+claude-vm agent "help me code"    # Explicit agent command
+```
+
+The shorthand form automatically routes to the agent command. All examples below use the shorthand form — you can always prefix with `agent` for the same result.
+
 ### Basic Usage
 
 ```bash
@@ -178,6 +187,8 @@ claude-vm --runtime-script ./setup-env.sh
 ## Shell Access
 
 Open an interactive shell or execute commands in an ephemeral VM.
+
+Shell also supports the explicit command form: `claude-vm shell [flags] [args]`.
 
 ### Interactive Shell
 
@@ -424,9 +435,16 @@ claude-vm update --version 0.4.0
 
 Updates are downloaded from [GitHub Releases](https://github.com/themouette/claude-vm/releases).
 
-## Global Options
+## Runtime Flags
 
-Options that work with most commands.
+Runtime flags are available on the `agent`, `shell`, and `setup` commands. They are not shown on commands that don't use them (like `list` or `clean`).
+
+Both invocation patterns accept the same flags:
+
+```bash
+claude-vm --disk 30 "help me code"
+claude-vm agent --disk 30 "help me code"
+```
 
 ### VM Resources
 

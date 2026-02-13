@@ -120,6 +120,9 @@ This creates a template VM that will be cloned for each session. The setup takes
 # Start Claude in an isolated VM
 claude-vm "help me understand this codebase"
 
+# Same thing, using the explicit agent command
+claude-vm agent "help me understand this codebase"
+
 # Or just start Claude interactively
 claude-vm
 ```

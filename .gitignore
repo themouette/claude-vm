@@ -17,3 +17,6 @@
 
 # Lima VM mount points
 claude-tpl_*/
+
+# GSD planning directory
+.planning/

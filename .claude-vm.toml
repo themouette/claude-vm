@@ -66,7 +66,8 @@ With the new template you can run the shell command to check your changes.
 
 [security.network]
 enabled = true
-mode = "allowlist" # Block everything except allowed domains
+#mode = "allowlist" # Block everything except allowed domains
+mode = "denylist" # Allow everything except blocked domains
 
 # Domains to allow (for testing allowlist mode)
 allowed_domains = [
