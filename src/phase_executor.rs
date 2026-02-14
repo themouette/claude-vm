@@ -157,10 +157,8 @@ fn inject_capability_env_vars(
     }
 
     // Ensure empty strings for worktree vars if not detected
-    env.entry("PROJECT_WORKTREE_ROOT".to_string())
-        .or_insert_with(String::new);
-    env.entry("PROJECT_WORKTREE".to_string())
-        .or_insert_with(String::new);
+    env.entry("PROJECT_WORKTREE_ROOT".to_string()).or_default();
+    env.entry("PROJECT_WORKTREE".to_string()).or_default();
 
     Ok(())
 }
