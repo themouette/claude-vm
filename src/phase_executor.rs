@@ -121,7 +121,7 @@ pub fn handle_script_load_error(
         for file in &phase.script_files {
             eprintln!("   - {}", file);
         }
-        eprintln!("\n   Hint: Check that script files exist and are readable");
+        eprintln!("   Hint: Check that script files exist and are readable");
     }
 
     if phase.continue_on_error {
