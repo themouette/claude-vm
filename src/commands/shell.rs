@@ -9,8 +9,14 @@ use crate::utils::shell as shell_utils;
 use crate::vm::session::VmSession;
 
 pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()> {
+    // Clone config to allow merging capability phases
+    let mut config = config.clone();
+
+    // Merge capability-defined phases with user-defined phases
+    crate::capabilities::merge_capability_phases(&mut config)?;
+
     // Ensure template exists (create if missing and user confirms)
-    helpers::ensure_template_exists(project, config)?;
+    helpers::ensure_template_exists(project, &config)?;
 
     // Check resource allocation before creating VM
     crate::resources::check_before_vm_creation(&config.vm, cmd.force_resources, config.verbose)?;
@@ -66,7 +72,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
         runner::execute_command_with_runtime_scripts(
             session.name(),
             project,
-            config,
+            &config,
             &session,
             workdir,
             "bash",
@@ -81,7 +87,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
         match runner::execute_command_with_runtime_scripts(
             session.name(),
             project,
-            config,
+            &config,
             &session,
             workdir,
             "bash",

@@ -37,7 +37,8 @@ else
 fi
 """
 
-[vm_runtime]
+[[phase.runtime]]
+name = "node-environment"
 script = """
 #!/bin/bash
 # Set up Volta environment

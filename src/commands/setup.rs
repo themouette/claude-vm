@@ -12,6 +12,12 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
         return Err(ClaudeVmError::LimaNotInstalled);
     }
 
+    // Clone config to allow merging capability phases
+    let mut config = config.clone();
+
+    // Merge capability-defined phases with user-defined phases
+    capabilities::merge_capability_phases(&mut config)?;
+
     println!(
         "Setting up template for project: {}",
         project.root().display()
@@ -25,10 +31,10 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
     }
 
     // Create base template
-    create_base_template(project, config)?;
+    create_base_template(project, &config)?;
 
     // Run the setup process and clean up on failure
-    match run_setup_process(project, config, no_agent_install) {
+    match run_setup_process(project, &config, no_agent_install) {
         Ok(()) => {
             println!("\nTemplate ready for project: {}", project.root().display());
             println!("Run 'claude-vm' in this project directory to use it.");
@@ -82,11 +88,8 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
 
     // === END PACKAGE MANAGEMENT ===
 
-    // Execute vm_setup hooks (now primarily for post-install configuration)
-    capabilities::execute_vm_setup(project, config)?;
-
-    // Install vm_runtime scripts into template
-    capabilities::install_vm_runtime_scripts(project, config)?;
+    // NOTE: VM setup is now handled through capability phases merged into config
+    // No need for separate execute_vm_setup or install_vm_runtime_scripts calls
 
     // Install Claude Code (skip if --no-agent-install flag is set)
     if !no_agent_install {

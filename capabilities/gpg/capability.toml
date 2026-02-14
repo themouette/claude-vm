@@ -9,10 +9,12 @@ system = ["gnupg"]
 [host_setup]
 script_file = "host_setup.sh"
 
-[vm_setup]
-script_file = "vm_setup.sh"
+[[phase.setup]]
+name = "gpg-import-keys"
+script_files = ["vm_setup.sh"]
 
-[vm_runtime]
+[[phase.runtime]]
+name = "gpg-environment"
 script = """
 #!/bin/bash
 # Setup GPG environment for each session

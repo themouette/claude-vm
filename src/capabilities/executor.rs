@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Arc;
 
-/// Directory where capability runtime scripts are installed in the VM
-const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
+// NOTE: Runtime scripts are no longer pre-installed in a fixed directory.
+// They are now executed dynamically through the phase system.
 
 /// Ensure an environment variable exists in the map, setting it to empty string if not present
 fn ensure_env_var(env_vars: &mut HashMap<String, String>, key: &str) {
@@ -137,178 +137,9 @@ pub fn execute_host_setup(project: &Project, capability: &Arc<Capability>) -> Re
     Ok(())
 }
 
-/// Execute a capability's vm_setup hook (runs in VM)
-pub fn execute_vm_setup(project: &Project, capability: &Arc<Capability>) -> Result<()> {
-    let Some(vm_setup) = &capability.vm_setup else {
-        return Ok(());
-    };
-
-    println!("Setting up {}...", capability.capability.name);
-
-    let vm_name = project.template_name();
-    let env_vars = build_capability_env_vars(
-        project,
-        vm_name,
-        &capability.capability.id,
-        CapabilityPhase::Setup,
-    )?;
-
-    execute_vm_script(
-        vm_name,
-        vm_setup,
-        &capability.capability.id,
-        false,
-        &env_vars,
-    )?;
-
-    Ok(())
-}
-
-/// Execute a capability's vm_runtime hook (runs in VM before each session)
-pub fn execute_vm_runtime(project: &Project, capability: &Arc<Capability>) -> Result<()> {
-    let Some(vm_runtime) = &capability.vm_runtime else {
-        return Ok(());
-    };
-
-    let vm_name = project.template_name();
-    let env_vars = build_capability_env_vars(
-        project,
-        vm_name,
-        &capability.capability.id,
-        CapabilityPhase::Runtime,
-    )?;
-
-    // Runtime scripts are executed silently unless there's an error
-    execute_vm_script(
-        vm_name,
-        vm_runtime,
-        &capability.capability.id,
-        true,
-        &env_vars,
-    )?;
-
-    Ok(())
-}
-
-/// Execute a capability's vm_runtime hook in a specific VM instance
-pub fn execute_vm_runtime_in_vm(vm_name: &str, capability: &Arc<Capability>) -> Result<()> {
-    let Some(vm_runtime) = &capability.vm_runtime else {
-        return Ok(());
-    };
-
-    // Build minimal env vars (no Project available in this context)
-    //
-    // This function is called when running runtime scripts in an ephemeral VM
-    // where the Project context isn't available yet. This happens during VM
-    // initialization before the project directory is mounted.
-    //
-    // We provide essential runtime information (VM name, capability ID, phase, version)
-    // but set project-related variables to empty strings to ensure scripts don't
-    // fail on undefined variables. Scripts should check if these vars are non-empty
-    // before using them.
-    let mut env_vars = HashMap::new();
-    env_vars.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
-    env_vars.insert(
-        "CAPABILITY_ID".to_string(),
-        capability.capability.id.clone(),
-    );
-    env_vars.insert(
-        "CLAUDE_VM_PHASE".to_string(),
-        CapabilityPhase::Runtime.as_str().to_string(),
-    );
-    env_vars.insert(
-        "CLAUDE_VM_VERSION".to_string(),
-        version::VERSION.to_string(),
-    );
-
-    // Project-related vars are set to empty strings in this minimal context
-    // since the Project object isn't available during early VM initialization
-    ensure_env_var(&mut env_vars, "TEMPLATE_NAME");
-    ensure_env_var(&mut env_vars, "PROJECT_ROOT");
-    ensure_env_var(&mut env_vars, "PROJECT_NAME");
-    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE_ROOT");
-    ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
-
-    // Runtime scripts are executed silently unless there's an error
-    execute_vm_script(
-        vm_name,
-        vm_runtime,
-        &capability.capability.id,
-        true,
-        &env_vars,
-    )?;
-
-    Ok(())
-}
-
-/// Install vm_runtime scripts into the template at /usr/local/share/claude-vm/runtime/
-pub fn install_vm_runtime_scripts_to_template(
-    project: &Project,
-    capabilities: &[Arc<Capability>],
-) -> Result<()> {
-    let template_name = project.template_name();
-
-    // Create runtime directory in template
-    LimaCtl::shell(
-        template_name,
-        None,
-        "sudo",
-        &["mkdir", "-p", RUNTIME_SCRIPT_DIR],
-        false,
-    )?;
-
-    // Install each capability's vm_runtime script
-    for capability in capabilities {
-        let Some(vm_runtime) = &capability.vm_runtime else {
-            continue;
-        };
-
-        let script_content = get_script_content(vm_runtime, &capability.capability.id)?;
-        let script_name = format!("{}.sh", capability.capability.id);
-        let temp_path = format!("/tmp/claude-vm-runtime-{}", script_name);
-        let install_path = format!("{}/{}", RUNTIME_SCRIPT_DIR, script_name);
-
-        // Write script to temp file on host
-        let local_temp = std::env::temp_dir().join(&script_name);
-        std::fs::write(&local_temp, &script_content)?;
-
-        // Ensure cleanup happens even on error
-        let result = (|| -> Result<()> {
-            // Copy to VM temp location
-            LimaCtl::copy(&local_temp, template_name, &temp_path)?;
-
-            // Move to final location with sudo (overwrites if exists - idempotent)
-            LimaCtl::shell(
-                template_name,
-                None,
-                "sudo",
-                &["mv", "-f", &temp_path, &install_path],
-                false,
-            )?;
-
-            // Make executable
-            LimaCtl::shell(
-                template_name,
-                None,
-                "sudo",
-                &["chmod", "+x", &install_path],
-                false,
-            )?;
-
-            Ok(())
-        })();
-
-        // Always cleanup local temp file
-        let _ = std::fs::remove_file(&local_temp);
-
-        // Propagate error after cleanup
-        result?;
-
-        println!("  ✓ Installed {}", script_name);
-    }
-
-    Ok(())
-}
+// LEGACY FUNCTIONS REMOVED
+// VM setup and runtime are now handled through the phase system.
+// Capabilities define phases which are merged and executed dynamically.
 
 /// Execute a script on the host machine
 fn execute_host_script(
@@ -431,20 +262,28 @@ fn get_script_content(script_config: &ScriptConfig, capability_id: &str) -> Resu
 }
 
 /// Get embedded script content by capability ID and script filename
-fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
-    // Scripts are now embedded from capabilities/{id}/{script_name}
+pub(crate) fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
+    // Scripts are embedded from capabilities/{id}/{script_name}
     let content = match (capability_id, script_name) {
+        // gh
         ("gh", "vm_setup.sh") => include_str!("../../capabilities/gh/vm_setup.sh"),
         ("gh", "vm_runtime.sh") => include_str!("../../capabilities/gh/vm_runtime.sh"),
+
+        // git
         ("git", "host_setup.sh") => include_str!("../../capabilities/git/host_setup.sh"),
+
+        // gpg
         ("gpg", "host_setup.sh") => include_str!("../../capabilities/gpg/host_setup.sh"),
         ("gpg", "vm_setup.sh") => include_str!("../../capabilities/gpg/vm_setup.sh"),
+
+        // network-isolation
         ("network-isolation", "vm_setup.sh") => {
             include_str!("../../capabilities/network-isolation/vm_setup.sh")
         }
         ("network-isolation", "vm_runtime.sh") => {
             include_str!("../../capabilities/network-isolation/vm_runtime.sh")
         }
+
         _ => {
             return Err(ClaudeVmError::InvalidConfig(format!(
                 "Embedded script '{}' not found for capability '{}'",
