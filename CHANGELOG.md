@@ -41,7 +41,6 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Changed
 
-- **Unified worktree removal command**: The `worktree delete` and `worktree clean` commands have been merged into a single `worktree remove` command. This consolidates ~200 lines of duplicated code and provides a cleaner CLI interface. The new command supports both explicit branch removal (`remove <branches>...`) and merged branch filtering (`remove --merged`). The `rm` alias is available as a shorthand. All functionality from both original commands is preserved, including dry-run mode, confirmation prompts, locked worktree handling, and partial success support.
 - **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
 - **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
 
