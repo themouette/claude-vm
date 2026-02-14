@@ -26,12 +26,29 @@ pub fn delete(template_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// List all claude-vm templates
+/// Check if a template name matches the current build type
+/// Debug builds should only see templates ending with -dev
+/// Release builds should only see templates NOT ending with -dev
+fn matches_build_type(template_name: &str) -> bool {
+    #[cfg(debug_assertions)]
+    {
+        template_name.ends_with("-dev")
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        !template_name.ends_with("-dev")
+    }
+}
+
+/// List all claude-vm templates matching the current build type
+/// Debug builds only show templates with -dev suffix
+/// Release builds only show templates without -dev suffix
 pub fn list_all() -> Result<Vec<String>> {
     let vms = LimaCtl::list()?;
     let templates: Vec<String> = vms
         .into_iter()
         .filter(|vm| vm.name.starts_with("claude-tpl_"))
+        .filter(|vm| matches_build_type(&vm.name))
         .map(|vm| vm.name)
         .collect();
     Ok(templates)
@@ -208,5 +225,49 @@ mod tests {
         // Test that the function handles None gracefully
         let result = format_last_used("nonexistent");
         assert_eq!(result, "unknown");
+    }
+
+    #[test]
+    fn test_matches_build_type_dev() {
+        // Test that -dev suffix templates are correctly identified
+        #[cfg(debug_assertions)]
+        {
+            assert!(matches_build_type("claude-tpl_project_12345678-dev"));
+            assert!(!matches_build_type("claude-tpl_project_12345678"));
+            assert!(!matches_build_type("claude-tpl_another_abcdef12"));
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            assert!(!matches_build_type("claude-tpl_project_12345678-dev"));
+            assert!(matches_build_type("claude-tpl_project_12345678"));
+            assert!(matches_build_type("claude-tpl_another_abcdef12"));
+        }
+    }
+
+    #[test]
+    fn test_matches_build_type_edge_cases() {
+        // Test edge cases for template name matching
+        #[cfg(debug_assertions)]
+        {
+            // Should match only templates ending with -dev
+            assert!(matches_build_type("claude-tpl_dev-project_12345678-dev"));
+            assert!(matches_build_type("claude-tpl_x-dev"));
+            assert!(!matches_build_type("claude-tpl_dev-project_12345678"));
+            assert!(!matches_build_type(
+                "claude-tpl_project-development_12345678"
+            ));
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            // Should match templates NOT ending with -dev
+            assert!(!matches_build_type("claude-tpl_dev-project_12345678-dev"));
+            assert!(!matches_build_type("claude-tpl_x-dev"));
+            assert!(matches_build_type("claude-tpl_dev-project_12345678"));
+            assert!(matches_build_type(
+                "claude-tpl_project-development_12345678"
+            ));
+        }
     }
 }
