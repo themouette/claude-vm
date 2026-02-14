@@ -126,12 +126,7 @@ pub fn create_worktree(
             let context = TemplateContext::new(repo_name, branch, &short_hash);
             let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
-            let path_str = worktree_path.to_str().ok_or_else(|| {
-                ClaudeVmError::Worktree(format!(
-                    "Worktree path contains invalid UTF-8: {}",
-                    worktree_path.display()
-                ))
-            })?;
+            let path_str = crate::utils::git::path_to_str(&worktree_path, "worktree path")?;
             run_git_command(&["worktree", "add", path_str, branch], "create worktree")?;
 
             Ok(CreateResult::Created(worktree_path))
@@ -146,12 +141,7 @@ pub fn create_worktree(
             let context = TemplateContext::new(repo_name, branch, &short_hash);
             let worktree_path = compute_worktree_path(config, repo_root, &context)?;
 
-            let path_str = worktree_path.to_str().ok_or_else(|| {
-                ClaudeVmError::Worktree(format!(
-                    "Worktree path contains invalid UTF-8: {}",
-                    worktree_path.display()
-                ))
-            })?;
+            let path_str = crate::utils::git::path_to_str(&worktree_path, "worktree path")?;
             let mut args = vec!["worktree", "add", "-b", branch, path_str];
             if let Some(base_branch) = base {
                 args.push(base_branch);
@@ -182,12 +172,7 @@ pub fn delete_worktree(branch: &str) -> Result<()> {
         })?;
 
     // Use git worktree remove to delete the directory and update metadata
-    let path_str = worktree.path.to_str().ok_or_else(|| {
-        ClaudeVmError::Worktree(format!(
-            "Worktree path contains invalid UTF-8: {}",
-            worktree.path.display()
-        ))
-    })?;
+    let path_str = crate::utils::git::path_to_str(&worktree.path, "worktree path")?;
     run_git_command(&["worktree", "remove", path_str], "remove worktree")?;
 
     Ok(())

@@ -206,3 +206,25 @@ pub fn run_git_query(args: &[&str]) -> Result<Option<String>> {
         String::from_utf8_lossy(&output.stdout).trim().to_string(),
     ))
 }
+
+/// Convert a Path to &str with proper error handling
+///
+/// This helper ensures consistent error messages when paths contain invalid UTF-8.
+///
+/// # Arguments
+/// * `path` - The path to convert
+/// * `context` - A description of what this path represents (e.g., "worktree path")
+///
+/// # Example
+/// ```ignore
+/// let path_str = path_to_str(&worktree_path, "worktree path")?;
+/// ```
+pub fn path_to_str<'a>(path: &'a std::path::Path, context: &str) -> Result<&'a str> {
+    path.to_str().ok_or_else(|| {
+        ClaudeVmError::Worktree(format!(
+            "{} contains invalid UTF-8: {}",
+            context,
+            path.display()
+        ))
+    })
+}
