@@ -28,6 +28,12 @@ fn create_test_repo() -> TempDir {
         .current_dir(repo_path)
         .output()
         .unwrap();
+    // Disable GPG signing for test commits
+    StdCommand::new("git")
+        .args(["config", "commit.gpgsign", "false"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
 
     // Create initial commit
     fs::write(repo_path.join("README.md"), "# Test Project\n").unwrap();
