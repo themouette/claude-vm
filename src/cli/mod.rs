@@ -209,6 +209,7 @@ pub enum Commands {
     },
 
     /// Manage git worktrees for parallel development
+    #[command(alias = "w")]
     Worktree {
         #[command(subcommand)]
         command: WorktreeCommands,

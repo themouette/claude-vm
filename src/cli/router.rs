@@ -15,6 +15,7 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
     "update",
     "network",
     "worktree",
+    "w", // Short alias for worktree
 ];
 
 /// Route CLI arguments to the appropriate command.

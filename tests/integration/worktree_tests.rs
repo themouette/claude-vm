@@ -76,6 +76,45 @@ fn test_worktree_command_help() {
 }
 
 #[test]
+fn test_worktree_short_alias() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["w", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Manage git worktrees"))
+        .stdout(predicate::str::contains("create"))
+        .stdout(predicate::str::contains("list"))
+        .stdout(predicate::str::contains("remove"));
+}
+
+#[test]
+fn test_worktree_short_alias_functional() {
+    let repo = create_test_repo();
+    let repo_path = repo.path();
+
+    // Create worktree using short alias
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.current_dir(repo_path).args(["w", "create", "feature-w"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Created worktree"));
+
+    // List using short alias
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.current_dir(repo_path).args(["w", "list"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("feature-w"));
+
+    // Remove using short alias
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.current_dir(repo_path)
+        .args(["w", "remove", "feature-w", "--yes"]);
+    cmd.assert().success();
+}
+
+#[test]
 fn test_worktree_create_help() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["worktree", "create", "--help"]);
@@ -889,10 +928,6 @@ fn test_worktree_remove_during_git_lock() {
     cmd.current_dir(repo_path)
         .args(["worktree", "create", "feature1"]);
     cmd.assert().success();
-
-    // Simulate a locked state by creating .git/worktrees/feature1/locked file
-    let worktrees_dir = repo_path.join(format!("{}-worktrees", repo_path.file_name().unwrap().to_str().unwrap()));
-    let feature_worktree = worktrees_dir.join("feature1");
 
     // Lock the worktree in git metadata
     let git_dir = repo_path.join(".git").join("worktrees").join("feature1");

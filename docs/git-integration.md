@@ -120,16 +120,25 @@ Git worktrees allow you to check out multiple branches in different directories 
 
 ### Worktree Management Commands
 
-Claude-vm includes a full suite of worktree management commands:
+Claude-vm includes a full suite of worktree management commands.
+
+**Tip**: Use the short alias `w` instead of `worktree` for faster typing:
+```bash
+claude-vm w create feature    # Same as: claude-vm worktree create feature
+claude-vm w list              # Same as: claude-vm worktree list
+claude-vm w remove feature    # Same as: claude-vm worktree remove feature
+```
 
 #### Create Worktrees
 
 ```bash
 # Create worktree from current branch
 claude-vm worktree create feature-branch
+claude-vm w create feature-branch  # Short alias
 
 # Create worktree from specific base branch
 claude-vm worktree create feature-branch main
+claude-vm w create feature-branch main  # Short alias
 
 # Create and immediately start working
 claude-vm agent --worktree feature-branch
@@ -141,6 +150,7 @@ claude-vm shell --worktree feature-branch
 ```bash
 # List all worktrees with branch, path, and status
 claude-vm worktree list
+claude-vm w list  # Short alias
 ```
 
 #### Remove Worktrees
@@ -148,8 +158,10 @@ claude-vm worktree list
 ```bash
 # Remove specific worktree (preserves branch)
 claude-vm worktree remove feature-branch
-# or use the short alias
+claude-vm w remove feature-branch  # Short alias
+# or use the rm alias
 claude-vm worktree rm feature-branch
+claude-vm w rm feature-branch  # Both aliases work together!
 
 # Remove multiple worktrees at once
 claude-vm worktree remove feature-1 feature-2 feature-3

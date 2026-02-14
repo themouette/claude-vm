@@ -7,12 +7,12 @@ All notable changes to claude-vm will be documented in this file.
 ### Added
 
 - **Git worktree management**: Comprehensive worktree support for parallel branch development
-  - **Worktree commands**: New `worktree` subcommand with create, list, and remove operations
-    - `claude-vm worktree create <branch> [base]` - Create new worktree with branch name
-    - `claude-vm worktree list` - List all worktrees with branch, path, and status
-    - `claude-vm worktree remove <branches>...` - Remove specific worktree(s) by branch name (preserves branches)
-    - `claude-vm worktree remove --merged [base]` - Remove worktrees for merged branches
-    - `claude-vm worktree rm` - Short alias for remove command
+  - **Worktree commands**: New `worktree` subcommand (alias: `w`) with create, list, and remove operations
+    - `claude-vm worktree create <branch> [base]` or `claude-vm w create <branch> [base]` - Create new worktree with branch name
+    - `claude-vm worktree list` or `claude-vm w list` - List all worktrees with branch, path, and status
+    - `claude-vm worktree remove <branches>...` or `claude-vm w remove <branches>...` - Remove specific worktree(s) by branch name (preserves branches)
+    - `claude-vm worktree remove --merged [base]` or `claude-vm w remove --merged [base]` - Remove worktrees for merged branches
+    - `claude-vm worktree rm` or `claude-vm w rm` - Short alias for remove command
     - Dry-run support with `--dry-run` flag to preview changes
     - Confirmation prompt can be skipped with `--yes` flag
     - Include locked worktrees in merged removal with `--locked` flag
