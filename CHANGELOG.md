@@ -6,6 +6,16 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Host phases**: Five new host phase types for executing operations on the HOST machine at specific lifecycle points
+  - `[[phase.host.before_setup]]` - Runs on host before VM setup scripts (e.g., export host configuration)
+  - `[[phase.host.after_setup]]` - Runs on host after VM setup, before template save (e.g., validate setup, backup template)
+  - `[[phase.host.before_runtime]]` - Runs on host before VM runtime scripts (e.g., refresh tokens, prepare session)
+  - `[[phase.host.after_runtime]]` - Runs on host after runtime scripts complete (e.g., validate session, collect metrics)
+  - `[[phase.host.teardown]]` - Runs on host when session ends (e.g., cleanup, save logs, notify)
+  - All phase features supported: `name`, `script`, `script_files`, `env`, `when`, `continue_on_error`
+  - Available in both capability definitions and user `.claude-vm.toml` files
+  - Standard environment variables provided: `PROJECT_ROOT`, `TEMPLATE_NAME`, `LIMA_INSTANCE`, `PHASE_TYPE`
+
 - **Git worktree management**: Comprehensive worktree support for parallel branch development
   - **Worktree commands**: New `worktree` subcommand (alias: `w`) with create, list, and remove operations
     - `claude-vm worktree create <branch> [base]` or `claude-vm w create <branch> [base]` - Create new worktree with branch name
@@ -44,6 +54,23 @@ All notable changes to claude-vm will be documented in this file.
 - **Common phase execution module**: Introduced `phase_executor` module providing shared utilities for phase execution across setup and runtime contexts. Includes validation, error handling, and environment setup functions for consistent behavior.
 
 ### Changed
+
+- **BREAKING: Removed `host_setup` hook from capabilities**: The legacy `[host_setup]` hook has been replaced with the new host phase system
+  - **Impact**: Capabilities using `[host_setup]` must migrate to `[[phase.host.before_setup]]`
+  - **Migration**: Replace `[host_setup]` with `[[phase.host.before_setup]]` and change `script_file` to `script_files`
+  - Example:
+    ```toml
+    # Before
+    [host_setup]
+    script_file = "host_setup.sh"
+
+    # After
+    [[phase.host.before_setup]]
+    name = "export-config"
+    script_files = ["host_setup.sh"]
+    ```
+  - Built-in git and gpg capabilities already migrated
+  - User configurations unaffected (unless using custom host operations)
 
 - **BREAKING: Capability definitions migrated to phase-based execution**: All built-in capabilities now use the `[[phase.setup]]` and `[[phase.runtime]]` format instead of `vm_setup` and `vm_runtime` top-level keys.
   - **Impact**: Custom capabilities using the old format must be migrated to the new phase-based format

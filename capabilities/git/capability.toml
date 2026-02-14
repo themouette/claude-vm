@@ -3,8 +3,9 @@ id = "git"
 name = "Git Configuration"
 description = "Configure git identity and signing from host configuration"
 
-[host_setup]
-script_file = "host_setup.sh"
+[[phase.host.before_setup]]
+name = "export-git-config"
+script_files = ["host_setup.sh"]
 
 [[phase.runtime]]
 name = "git-environment"

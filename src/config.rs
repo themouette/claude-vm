@@ -389,13 +389,33 @@ impl ScriptPhase {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PhaseConfig {
-    /// Setup phases (run during template creation)
+    /// Setup phases (run during template creation, inside VM)
     #[serde(default)]
     pub setup: Vec<ScriptPhase>,
 
-    /// Runtime phases (run before each session)
+    /// Runtime phases (run before each session, inside VM)
     #[serde(default)]
     pub runtime: Vec<ScriptPhase>,
+
+    /// Host phases - run on HOST machine before VM setup scripts
+    #[serde(default)]
+    pub before_setup: Vec<ScriptPhase>,
+
+    /// Host phases - run on HOST machine after VM setup, before template save
+    #[serde(default)]
+    pub after_setup: Vec<ScriptPhase>,
+
+    /// Host phases - run on HOST machine before VM runtime scripts
+    #[serde(default)]
+    pub before_runtime: Vec<ScriptPhase>,
+
+    /// Host phases - run on HOST machine after VM runtime, before shell/agent
+    #[serde(default)]
+    pub after_runtime: Vec<ScriptPhase>,
+
+    /// Host phases - run on HOST machine when session ends
+    #[serde(default)]
+    pub teardown: Vec<ScriptPhase>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
