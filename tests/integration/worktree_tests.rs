@@ -95,7 +95,8 @@ fn test_worktree_short_alias_functional() {
 
     // Create worktree using short alias
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.current_dir(repo_path).args(["w", "create", "feature-w"]);
+    cmd.current_dir(repo_path)
+        .args(["w", "create", "feature-w"]);
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Created worktree"));
@@ -952,12 +953,17 @@ fn test_worktree_remove_with_invalid_base_branch() {
     let repo_path = repo.path();
 
     let mut cmd = Command::cargo_bin("claude-vm").unwrap();
-    cmd.current_dir(repo_path)
-        .args(["worktree", "remove", "--merged", "nonexistent-branch", "--yes"]);
+    cmd.current_dir(repo_path).args([
+        "worktree",
+        "remove",
+        "--merged",
+        "nonexistent-branch",
+        "--yes",
+    ]);
 
-    cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("Branch 'nonexistent-branch' does not exist"));
+    cmd.assert().failure().stderr(predicate::str::contains(
+        "Branch 'nonexistent-branch' does not exist",
+    ));
 }
 
 #[test]
@@ -978,8 +984,7 @@ fn test_worktree_list_in_non_git_repo() {
     let temp_dir = TempDir::new().unwrap();
 
     let mut cmd = Command::cargo_bin("claude-vm").unwrap();
-    cmd.current_dir(temp_dir.path())
-        .args(["worktree", "list"]);
+    cmd.current_dir(temp_dir.path()).args(["worktree", "list"]);
 
     cmd.assert()
         .failure()
@@ -1022,7 +1027,10 @@ fn test_worktree_remove_with_missing_directory() {
     cmd.assert().success();
 
     // Find and manually delete the worktree directory
-    let worktrees_dir = repo_path.join(format!("{}-worktrees", repo_path.file_name().unwrap().to_str().unwrap()));
+    let worktrees_dir = repo_path.join(format!(
+        "{}-worktrees",
+        repo_path.file_name().unwrap().to_str().unwrap()
+    ));
     let orphaned_dir = worktrees_dir.join("orphaned");
 
     if orphaned_dir.exists() {
@@ -1085,10 +1093,8 @@ fn test_worktree_remove_all_branches_separately() {
     let mut cmd = Command::cargo_bin("claude-vm").unwrap();
     cmd.current_dir(repo_path).args(["worktree", "list"]);
 
-    cmd.assert()
-        .success()
-        .stdout(
-            predicate::str::contains("No additional worktrees")
-                .or(predicate::str::contains("feature1").not())
-        );
+    cmd.assert().success().stdout(
+        predicate::str::contains("No additional worktrees")
+            .or(predicate::str::contains("feature1").not()),
+    );
 }
