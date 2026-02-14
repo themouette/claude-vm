@@ -1,10 +1,10 @@
 use crate::error::{ClaudeVmError, Result};
+use crate::utils::git::{run_git_command, run_git_query};
 use crate::worktree::config::WorktreeConfig;
 use crate::worktree::recovery::ensure_clean_state;
 use crate::worktree::template::{compute_worktree_path, TemplateContext};
 use crate::worktree::validation;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::SystemTime;
 
 /// Represents the status of a branch in relation to worktrees
@@ -76,17 +76,15 @@ pub fn detect_branch_status(branch: &str) -> Result<BranchStatus> {
     }
 
     // Check if branch exists as a ref
-    let output = Command::new("git")
-        .args([
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{}", branch),
-        ])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to check branch existence: {}", e)))?;
+    let exists = run_git_query(&[
+        "show-ref",
+        "--verify",
+        "--quiet",
+        &format!("refs/heads/{}", branch),
+    ])?
+    .is_some();
 
-    if output.status.success() {
+    if exists {
         Ok(BranchStatus::ExistsNotCheckedOut)
     } else {
         Ok(BranchStatus::DoesNotExist)
@@ -134,17 +132,7 @@ pub fn create_worktree(
                     worktree_path.display()
                 ))
             })?;
-            let output = Command::new("git")
-                .args(["worktree", "add", path_str, branch])
-                .output()
-                .map_err(|e| ClaudeVmError::Git(format!("Failed to create worktree: {}", e)))?;
-
-            if !output.status.success() {
-                return Err(ClaudeVmError::Git(format!(
-                    "git worktree add failed: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                )));
-            }
+            run_git_command(&["worktree", "add", path_str, branch], "create worktree")?;
 
             Ok(CreateResult::Created(worktree_path))
         }
@@ -169,17 +157,7 @@ pub fn create_worktree(
                 args.push(base_branch);
             }
 
-            let output = Command::new("git")
-                .args(&args)
-                .output()
-                .map_err(|e| ClaudeVmError::Git(format!("Failed to create worktree: {}", e)))?;
-
-            if !output.status.success() {
-                return Err(ClaudeVmError::Git(format!(
-                    "git worktree add failed: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                )));
-            }
+            run_git_command(&args, "create worktree")?;
 
             Ok(CreateResult::Created(worktree_path))
         }
@@ -210,17 +188,7 @@ pub fn delete_worktree(branch: &str) -> Result<()> {
             worktree.path.display()
         ))
     })?;
-    let output = Command::new("git")
-        .args(["worktree", "remove", path_str])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to remove worktree: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(ClaudeVmError::Git(format!(
-            "git worktree remove failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
+    run_git_command(&["worktree", "remove", path_str], "remove worktree")?;
 
     Ok(())
 }
@@ -237,12 +205,7 @@ pub fn list_merged_branches(base: &str) -> Result<Vec<String>> {
 
     let mut branch_exists = false;
     for ref_path in &ref_paths {
-        let output = Command::new("git")
-            .args(["show-ref", "--verify", ref_path])
-            .output()
-            .map_err(|e| ClaudeVmError::Git(format!("Failed to verify base branch: {}", e)))?;
-
-        if output.status.success() {
+        if run_git_query(&["show-ref", "--verify", ref_path])?.is_some() {
             branch_exists = true;
             break;
         }
@@ -255,19 +218,11 @@ pub fn list_merged_branches(base: &str) -> Result<Vec<String>> {
     }
 
     // Get merged branches
-    let output = Command::new("git")
-        .args(["branch", "--merged", base, "--format=%(refname:short)"])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to list merged branches: {}", e)))?;
+    let output_str = run_git_command(
+        &["branch", "--merged", base, "--format=%(refname:short)"],
+        "list merged branches",
+    )?;
 
-    if !output.status.success() {
-        return Err(ClaudeVmError::Git(format!(
-            "git branch --merged failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    let output_str = String::from_utf8_lossy(&output.stdout);
     let branches: Vec<String> = output_str
         .lines()
         .map(|s| s.trim().to_string())
@@ -297,19 +252,7 @@ pub fn format_activity(time: SystemTime) -> String {
 
 /// Get the short hash of the current HEAD
 fn get_short_hash() -> Result<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to get short hash: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(ClaudeVmError::Git(format!(
-            "git rev-parse failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    run_git_command(&["rev-parse", "--short", "HEAD"], "get short hash")
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::utils::git::run_git_command;
 use std::path::PathBuf;
 
 /// Represents a git worktree entry parsed from porcelain output
@@ -72,22 +73,7 @@ fn parse_porcelain_output(output: &str) -> Vec<WorktreeEntry> {
 
 /// Query git worktree list and return parsed entries
 pub fn list_worktrees() -> Result<Vec<WorktreeEntry>> {
-    use crate::error::ClaudeVmError;
-    use std::process::Command;
-
-    let output = Command::new("git")
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to run git worktree list: {}", e)))?;
-
-    if !output.status.success() {
-        return Err(ClaudeVmError::Git(format!(
-            "git worktree list failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    let output_str = String::from_utf8_lossy(&output.stdout);
+    let output_str = run_git_command(&["worktree", "list", "--porcelain"], "list worktrees")?;
     Ok(parse_porcelain_output(&output_str))
 }
 

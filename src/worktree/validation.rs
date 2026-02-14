@@ -1,6 +1,6 @@
 use crate::error::{ClaudeVmError, Result};
+use crate::utils::git::run_git_command;
 use std::path::Path;
-use std::process::Command;
 use std::sync::OnceLock;
 
 /// Parse git version output into (major, minor, patch) tuple
@@ -44,12 +44,7 @@ fn meets_minimum_version(version: (u32, u32, u32), minimum: (u32, u32, u32)) -> 
 
 /// Check git version meets minimum requirement (2.5+)
 pub fn check_git_version() -> Result<()> {
-    let output = Command::new("git")
-        .arg("--version")
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to run git: {}", e)))?;
-
-    let output_str = String::from_utf8_lossy(&output.stdout);
+    let output_str = run_git_command(&["--version"], "check git version")?;
 
     let version = parse_git_version(&output_str)
         .ok_or_else(|| ClaudeVmError::Worktree("Could not parse git version".to_string()))?;

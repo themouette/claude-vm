@@ -151,3 +151,58 @@ pub fn get_current_branch() -> Result<String> {
     let branch_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
     Ok(branch_name)
 }
+
+/// Run a git command and return stdout on success.
+/// Errors if the command fails to spawn or exits with non-zero status.
+///
+/// # Arguments
+/// * `args` - Command arguments (e.g., `&["status", "--short"]`)
+/// * `operation` - Human-readable operation description for error messages
+///
+/// # Example
+/// ```ignore
+/// let output = run_git_command(&["rev-parse", "HEAD"], "get commit hash")?;
+/// ```
+pub fn run_git_command(args: &[&str], operation: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to {}: {}", operation, e)))?;
+
+    if !output.status.success() {
+        return Err(ClaudeVmError::Git(format!(
+            "git {} failed: {}",
+            args[0],
+            String::from_utf8_lossy(&output.stderr)
+        )));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Run a git query command that may legitimately return non-zero exit.
+/// Returns None on non-zero exit instead of erroring.
+///
+/// # Arguments
+/// * `args` - Command arguments (e.g., `&["show-ref", "--verify", "refs/heads/main"]`)
+///
+/// # Example
+/// ```ignore
+/// if let Some(sha) = run_git_query(&["show-ref", "--verify", "refs/heads/main"])? {
+///     println!("Branch exists: {}", sha);
+/// }
+/// ```
+pub fn run_git_query(args: &[&str]) -> Result<Option<String>> {
+    let output = Command::new("git")
+        .args(args)
+        .output()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to run git {}: {}", args[0], e)))?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    Ok(Some(
+        String::from_utf8_lossy(&output.stdout).trim().to_string(),
+    ))
+}
