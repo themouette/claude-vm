@@ -7,11 +7,15 @@ All notable changes to claude-vm will be documented in this file.
 ### Added
 
 - **Git worktree management**: Comprehensive worktree support for parallel branch development
-  - **Worktree commands**: New `worktree` subcommand with create, list, delete, and clean operations
+  - **Worktree commands**: New `worktree` subcommand with create, list, and remove operations
     - `claude-vm worktree create <branch> [base]` - Create new worktree with branch name
     - `claude-vm worktree list` - List all worktrees with branch, path, and status
-    - `claude-vm worktree delete <branch>` - Remove worktree directory (preserves branch)
-    - `claude-vm worktree clean --merged [base]` - Clean worktrees for merged branches
+    - `claude-vm worktree remove <branches>...` - Remove specific worktree(s) by branch name (preserves branches)
+    - `claude-vm worktree remove --merged [base]` - Remove worktrees for merged branches
+    - `claude-vm worktree rm` - Short alias for remove command
+    - Dry-run support with `--dry-run` flag to preview changes
+    - Confirmation prompt can be skipped with `--yes` flag
+    - Include locked worktrees in merged removal with `--locked` flag
   - **Automatic detection**: System detects when branch exists and automatically resumes in existing worktree or creates new one
   - **Flag integration**: `--worktree` flag on agent and shell commands for seamless worktree creation
     - `claude-vm agent --worktree my-feature` - Create/resume worktree and run agent in one command
@@ -37,6 +41,7 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Changed
 
+- **Unified worktree removal command**: The `worktree delete` and `worktree clean` commands have been merged into a single `worktree remove` command. This consolidates ~200 lines of duplicated code and provides a cleaner CLI interface. The new command supports both explicit branch removal (`remove <branches>...`) and merged branch filtering (`remove --merged`). The `rm` alias is available as a shorthand. All functionality from both original commands is preserved, including dry-run mode, confirmation prompts, locked worktree handling, and partial success support.
 - **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
 - **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
 

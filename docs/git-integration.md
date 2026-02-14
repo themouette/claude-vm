@@ -40,15 +40,28 @@ claude-vm shell --worktree feature-branch
 claude-vm worktree list
 ```
 
-#### Delete Worktrees
+#### Remove Worktrees
 
 ```bash
-# Delete specific worktree (preserves branch)
-claude-vm worktree delete feature-branch
+# Remove specific worktree (preserves branch)
+claude-vm worktree remove feature-branch
+# or use the short alias
+claude-vm worktree rm feature-branch
 
-# Clean merged worktrees
-claude-vm worktree clean --merged
-claude-vm worktree clean --merged main
+# Remove multiple worktrees at once
+claude-vm worktree remove feature-1 feature-2 feature-3
+
+# Remove merged worktrees
+claude-vm worktree remove --merged
+claude-vm worktree remove --merged main
+
+# Preview removal without making changes
+claude-vm worktree remove feature-branch --dry-run
+claude-vm worktree remove --merged --dry-run
+
+# Skip confirmation prompt
+claude-vm worktree remove feature-branch --yes
+claude-vm worktree remove --merged --yes
 ```
 
 ### Flag Integration

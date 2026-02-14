@@ -388,36 +388,57 @@ claude-vm worktree list
 
 The `+` indicates the main repository.
 
-### Delete Worktrees
+### Remove Worktrees
 
-Remove worktree directories while preserving branches:
+Remove worktree directories while preserving branches. The `remove` command supports two modes:
 
-```bash
-# Delete specific worktree
-claude-vm worktree delete feature-branch
+#### Remove Specific Worktrees
 
-# Delete with confirmation
-claude-vm worktree delete feature-branch
-```
-
-**Note:** This only removes the worktree directory. The branch is preserved.
-
-### Clean Merged Worktrees
-
-Automatically clean worktrees for branches that have been merged:
+Remove one or more worktrees by name:
 
 ```bash
-# Clean worktrees merged into current default branch
-claude-vm worktree clean --merged
+# Remove single worktree
+claude-vm worktree remove feature-branch
 
-# Clean worktrees merged into specific branch
-claude-vm worktree clean --merged main
+# Remove multiple worktrees
+claude-vm worktree remove feature-1 feature-2 feature-3
+
+# Use short alias
+claude-vm worktree rm feature-branch
+
+# Skip confirmation prompt
+claude-vm worktree remove feature-branch --yes
+
+# Preview what would be removed (dry-run)
+claude-vm worktree remove feature-branch --dry-run
 ```
 
-The system automatically:
-- Detects the default branch if not specified
-- Lists merged branches
-- Removes worktrees (best-effort, continues on failures)
+#### Remove Merged Worktrees
+
+Automatically remove worktrees for branches that have been merged:
+
+```bash
+# Remove worktrees merged into default branch
+claude-vm worktree remove --merged
+
+# Remove worktrees merged into specific branch
+claude-vm worktree remove --merged main
+
+# Include locked worktrees
+claude-vm worktree remove --merged main --locked
+
+# Preview merged worktrees (dry-run)
+claude-vm worktree remove --merged --dry-run
+
+# Skip confirmation
+claude-vm worktree remove --merged --yes
+```
+
+**Notes:**
+- Only removes the worktree directory; branches are preserved
+- Best-effort deletion: continues on failures
+- When using `--merged`, the system auto-detects the default branch if not specified
+- Locked worktrees are excluded by default (use `--locked` to include them)
 
 ### Configuration
 
