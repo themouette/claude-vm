@@ -338,10 +338,18 @@ mod tests {
         use clap::CommandFactory;
 
         let cli_cmd = Cli::command();
-        let subcommands: Vec<&str> = cli_cmd.get_subcommands().map(|c| c.get_name()).collect();
+
+        // Collect both command names and their aliases
+        let mut valid_names = std::collections::HashSet::new();
+        for subcmd in cli_cmd.get_subcommands() {
+            valid_names.insert(subcmd.get_name());
+            for alias in subcmd.get_all_aliases() {
+                valid_names.insert(alias);
+            }
+        }
 
         // Verify every subcommand from Commands enum is in KNOWN_SUBCOMMANDS
-        for name in &subcommands {
+        for name in &valid_names {
             assert!(
                 KNOWN_SUBCOMMANDS.contains(name),
                 "Commands enum has '{}' but KNOWN_SUBCOMMANDS does not",
@@ -349,11 +357,11 @@ mod tests {
             );
         }
 
-        // Verify every entry in KNOWN_SUBCOMMANDS exists in Commands enum
+        // Verify every entry in KNOWN_SUBCOMMANDS exists in Commands enum (including aliases)
         for name in KNOWN_SUBCOMMANDS {
             assert!(
-                subcommands.contains(name),
-                "KNOWN_SUBCOMMANDS has '{}' but Commands enum does not",
+                valid_names.contains(name),
+                "KNOWN_SUBCOMMANDS has '{}' but Commands enum does not (neither as command nor alias)",
                 name
             );
         }
