@@ -1,6 +1,8 @@
 use crate::error::{ClaudeVmError, Result};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use wait_timeout::ChildExt;
 
 /// Get the git common directory (handles worktrees)
 pub fn get_git_common_dir() -> Result<Option<PathBuf>> {
@@ -152,8 +154,66 @@ pub fn get_current_branch() -> Result<String> {
     Ok(branch_name)
 }
 
+/// Default timeout for git operations (30 seconds)
+const DEFAULT_GIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Run a git command and return stdout on success with timeout support.
+///
+/// # Arguments
+/// * `args` - Command arguments (e.g., `&["status", "--short"]`)
+/// * `operation` - Human-readable operation description for error messages
+/// * `timeout` - Optional timeout duration (defaults to 30 seconds)
+///
+/// # Example
+/// ```ignore
+/// let output = run_git_command_timeout(&["rev-parse", "HEAD"], "get commit hash", None)?;
+/// ```
+fn run_git_command_timeout(
+    args: &[&str],
+    operation: &str,
+    timeout: Option<Duration>,
+) -> Result<String> {
+    let timeout = timeout.unwrap_or(DEFAULT_GIT_TIMEOUT);
+
+    let mut child = Command::new("git")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to {}: {}", operation, e)))?;
+
+    match child.wait_timeout(timeout).map_err(|e| {
+        ClaudeVmError::Git(format!("Failed to wait for git command: {}", e))
+    })? {
+        Some(status) => {
+            let output = child
+                .wait_with_output()
+                .map_err(|e| ClaudeVmError::Git(format!("Failed to read git output: {}", e)))?;
+
+            if !status.success() {
+                return Err(ClaudeVmError::Git(format!(
+                    "git {} failed: {}",
+                    args[0],
+                    String::from_utf8_lossy(&output.stderr)
+                )));
+            }
+
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        }
+        None => {
+            // Timeout occurred, kill the process
+            let _ = child.kill();
+            Err(ClaudeVmError::Git(format!(
+                "git {} timed out after {} seconds",
+                args[0],
+                timeout.as_secs()
+            )))
+        }
+    }
+}
+
 /// Run a git command and return stdout on success.
-/// Errors if the command fails to spawn or exits with non-zero status.
+/// Uses a default 30-second timeout.
 ///
 /// # Arguments
 /// * `args` - Command arguments (e.g., `&["status", "--short"]`)
@@ -164,24 +224,12 @@ pub fn get_current_branch() -> Result<String> {
 /// let output = run_git_command(&["rev-parse", "HEAD"], "get commit hash")?;
 /// ```
 pub fn run_git_command(args: &[&str], operation: &str) -> Result<String> {
-    let output = Command::new("git")
-        .args(args)
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to {}: {}", operation, e)))?;
-
-    if !output.status.success() {
-        return Err(ClaudeVmError::Git(format!(
-            "git {} failed: {}",
-            args[0],
-            String::from_utf8_lossy(&output.stderr)
-        )));
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    run_git_command_timeout(args, operation, None)
 }
 
 /// Run a git query command that may legitimately return non-zero exit.
 /// Returns None on non-zero exit instead of erroring.
+/// Uses a default 30-second timeout.
 ///
 /// # Arguments
 /// * `args` - Command arguments (e.g., `&["show-ref", "--verify", "refs/heads/main"]`)
@@ -193,18 +241,41 @@ pub fn run_git_command(args: &[&str], operation: &str) -> Result<String> {
 /// }
 /// ```
 pub fn run_git_query(args: &[&str]) -> Result<Option<String>> {
-    let output = Command::new("git")
+    let timeout = DEFAULT_GIT_TIMEOUT;
+
+    let mut child = Command::new("git")
         .args(args)
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .map_err(|e| ClaudeVmError::Git(format!("Failed to run git {}: {}", args[0], e)))?;
 
-    if !output.status.success() {
-        return Ok(None);
-    }
+    match child.wait_timeout(timeout).map_err(|e| {
+        ClaudeVmError::Git(format!("Failed to wait for git command: {}", e))
+    })? {
+        Some(status) => {
+            if !status.success() {
+                return Ok(None);
+            }
 
-    Ok(Some(
-        String::from_utf8_lossy(&output.stdout).trim().to_string(),
-    ))
+            let output = child.wait_with_output().map_err(|e| {
+                ClaudeVmError::Git(format!("Failed to read git output: {}", e))
+            })?;
+
+            Ok(Some(
+                String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            ))
+        }
+        None => {
+            // Timeout occurred, kill the process
+            let _ = child.kill();
+            Err(ClaudeVmError::Git(format!(
+                "git {} timed out after {} seconds",
+                args[0],
+                timeout.as_secs()
+            )))
+        }
+    }
 }
 
 /// Convert a Path to &str with proper error handling
