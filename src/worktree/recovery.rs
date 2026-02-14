@@ -1,11 +1,47 @@
 use crate::error::Result;
 use crate::worktree::state::{list_worktrees, WorktreeEntry};
+use std::io::{self, Write};
 
-/// Auto-prune orphaned worktree metadata silently before operations
+/// Auto-prune orphaned worktree metadata with user confirmation
 /// Best-effort operation - logs warnings on failure but doesn't error
 pub fn auto_prune() -> Result<()> {
     use std::process::Command;
 
+    // First, do a dry-run to see what would be pruned
+    let dry_run = Command::new("git")
+        .args(["worktree", "prune", "--dry-run", "--verbose"])
+        .output();
+
+    let to_prune = match dry_run {
+        Ok(output) => String::from_utf8_lossy(&output.stderr).to_string(),
+        Err(e) => {
+            eprintln!("Warning: failed to check for orphaned worktrees: {}", e);
+            return Ok(());
+        }
+    };
+
+    // Only prompt if there's something to prune
+    if !to_prune.trim().is_empty() {
+        eprintln!("Found orphaned worktree metadata:");
+        eprintln!("{}", to_prune);
+        eprintln!();
+
+        // Prompt for confirmation
+        print!("Prune orphaned worktrees? [y/N] ");
+        let _ = io::stdout().flush();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).ok();
+        let input = input.trim().to_lowercase();
+
+        // If user doesn't confirm, skip prune
+        if input != "y" && input != "yes" {
+            eprintln!("Skipped pruning worktrees.");
+            return Ok(());
+        }
+    }
+
+    // Actually prune
     let output = Command::new("git").args(["worktree", "prune"]).output();
 
     match output {
@@ -20,7 +56,10 @@ pub fn auto_prune() -> Result<()> {
             eprintln!("Warning: failed to run git worktree prune: {}", e);
         }
         _ => {
-            // Success or no error - continue
+            // Success - optionally show success message if something was pruned
+            if !to_prune.trim().is_empty() {
+                eprintln!("Pruned orphaned worktrees.");
+            }
         }
     }
 
