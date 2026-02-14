@@ -61,23 +61,31 @@ script = """
 # Can validate prerequisites, copy files to VM
 """
 
-# Optional: Run in guest VM during template setup
-[vm_setup]
-script_file = "setup.sh"  # Reference embedded script
+# Phase-based execution (replaces vm_setup/vm_runtime)
+# Setup phases run during template creation
+[[phase.setup]]
+name = "capability-setup"
+script_files = ["vm_setup.sh"]  # Reference embedded script
 # OR
-script = """
-#!/bin/bash
-# Inline script content
-# Note: Use [packages] for installing system packages instead
-"""
+# script = """
+# #!/bin/bash
+# # Inline script content
+# # Note: Use [packages] for installing system packages instead
+# """
 
-# Optional: Run in VM before each session (vm_runtime)
-[vm_runtime]
+# Runtime phases run before each session
+[[phase.runtime]]
+name = "capability-init"
 script = """
 #!/bin/bash
 # Initialize environment for session
 export SOME_VAR=value
 """
+# Optional phase features:
+# env = { "CUSTOM_VAR" = "value" }  # Phase-specific environment variables
+# continue_on_error = true          # Don't fail if this phase fails
+# when = "command -v tool"          # Conditional execution
+# source = true                     # Source instead of executing in subprocess
 
 # Optional: Register MCP servers
 [[mcp]]
@@ -169,7 +177,8 @@ fi
 
 **Before (imperative):**
 ```toml
-[vm_setup]
+[[phase.setup]]
+name = "install-python"
 script = """
 #!/bin/bash
 set -e
@@ -183,7 +192,7 @@ sudo apt-get install -y python3 python3-pip python3-venv
 [packages]
 system = ["python3", "python3-pip", "python3-venv"]
 
-# vm_setup now only handles post-install configuration if needed
+# phase.setup now only handles post-install configuration if needed
 ```
 
 ## Available Capabilities
@@ -216,8 +225,9 @@ Copies public keys and configures SSH for socket forwarding.
    name = "My Capability"
    description = "What this capability provides"
 
-   [vm_setup]
-   script_file = "setup.sh"  # Or use inline script
+   [[phase.setup]]
+   name = "my-capability-setup"
+   script_files = ["setup.sh"]  # Or use inline script
    ```
 
 3. Create setup script if needed: `capabilities/my-capability/setup.sh`
@@ -230,9 +240,9 @@ Copies public keys and configures SSH for socket forwarding.
    ];
    ```
 
-5. Add script loading in `src/capabilities/executor.rs` (if using script_file):
+5. Add script loading in `src/capabilities/executor.rs` (if using script_files):
    ```rust
-   fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
+   pub(crate) fn get_embedded_script(capability_id: &str, script_name: &str) -> Result<String> {
        let content = match (capability_id, script_name) {
            // ... existing cases ...
            ("my-capability", "setup.sh") => include_str!("../../capabilities/my-capability/setup.sh"),
@@ -263,14 +273,70 @@ Copies public keys and configures SSH for socket forwarding.
 
 That's it! The capability system handles everything else automatically.
 
-## Lifecycle Hooks
+## Phase-Based Execution
+
+Capabilities use a phase-based execution model that provides more flexibility than the legacy `vm_setup`/`vm_runtime` hooks:
+
+### Setup Phases (`[[phase.setup]]`)
+Run during template creation. Each capability can define multiple setup phases that run sequentially.
+
+**Features:**
+- Multiple phases per capability for better organization
+- Named phases for easier debugging
+- Optional execution with `when` conditions
+- Error handling with `continue_on_error`
+- Phase-specific environment variables
+
+**Example:**
+```toml
+[[phase.setup]]
+name = "install-tools"
+script_files = ["vm_setup.sh"]
+
+[[phase.setup]]
+name = "configure-tools"
+script = """
+#!/bin/bash
+# Post-installation configuration
+"""
+when = "command -v tool"  # Only run if tool is installed
+```
+
+### Runtime Phases (`[[phase.runtime]]`)
+Run before each Claude Code session. Use these for environment initialization.
+
+**Features:**
+- Lightweight and fast (should complete in < 1 second)
+- Can source scripts to persist exports
+- Conditional execution
+- Phase-specific environment variables
+
+**Example:**
+```toml
+[[phase.runtime]]
+name = "check-auth"
+script = """
+#!/bin/bash
+if ! gh auth status &>/dev/null; then
+  echo "⚠ Warning: GitHub CLI not authenticated"
+fi
+"""
+source = false  # Run in subprocess (default)
+
+[[phase.runtime]]
+name = "export-env"
+script = """
+export CUSTOM_VAR=value
+"""
+source = true  # Source to persist exports
+```
 
 ### Environment Variables Reference
 
 All capability scripts automatically receive environment variables providing context about the VM, project, and execution phase. Here's a quick reference:
 
-| Variable | host_setup | vm_setup | vm_runtime | Description |
-|----------|------------|----------|------------|-------------|
+| Variable | host_setup | phase.setup | phase.runtime | Description |
+|----------|------------|-------------|---------------|-------------|
 | `CAPABILITY_ID` | ✓ | ✓ | ✓ | Capability identifier (e.g., "gh", "docker") |
 | `TEMPLATE_NAME` | ✓ | ✓ | ✓ | VM template name |
 | `LIMA_INSTANCE` | ✓ | ✓ | ✓ | VM instance name (same as template for setup, ephemeral for runtime) |
@@ -283,20 +349,25 @@ All capability scripts automatically receive environment variables providing con
 
 **Note**: All variables are automatically exported as environment variables. No manual parsing needed!
 
-### host_setup
+## Lifecycle Hooks
+
+### host_setup (Optional)
 - **When**: On host before VM is created
 - **Where**: macOS/Linux host machine
 - **Purpose**: Validate prerequisites, detect resources, copy files to VM
+- **Format**: Single script block in `[host_setup]` section
 - **Environment Variables**:
   - `PROJECT_ROOT` - Project directory path on host
   - `TEMPLATE_NAME` - VM template name
   - `LIMA_INSTANCE` - VM instance name (same as template)
   - `CAPABILITY_ID` - Capability identifier (e.g., "gh", "git")
 
-### vm_setup
+### phase.setup (Setup Phases)
 - **When**: In guest VM during `claude-vm setup`
 - **Where**: Inside Lima VM (guest)
 - **Purpose**: Install software, configure system
+- **Format**: Array of phase blocks `[[phase.setup]]`
+- **Features**: Multiple phases, conditional execution, error handling
 - **Environment Variables**:
   - `TEMPLATE_NAME` - VM template name
   - `LIMA_INSTANCE` - VM instance name
@@ -308,11 +379,13 @@ All capability scripts automatically receive environment variables providing con
   - `PROJECT_WORKTREE_ROOT` - Main project root (if worktree, else empty)
   - `PROJECT_WORKTREE` - Current worktree path (if worktree, else empty)
 
-### vm_runtime
-- **When**: In VM before each `claude-vm run`
+### phase.runtime (Runtime Phases)
+- **When**: In VM before each `claude-vm agent`
 - **Where**: Inside ephemeral VM session
-- **Purpose**: Initialize environment variables, start services
-- **Note**: Runs silently (only errors shown)
+- **Purpose**: Initialize environment variables, check status, start services
+- **Format**: Array of phase blocks `[[phase.runtime]]`
+- **Features**: Multiple phases, sourcing support, conditional execution
+- **Note**: Keep lightweight (< 1 second total)
 - **Environment Variables**:
   - `TEMPLATE_NAME` - VM template name
   - `LIMA_INSTANCE` - Ephemeral VM instance name (different from template)
@@ -328,9 +401,10 @@ All capability scripts automatically receive environment variables providing con
 
 All environment variables are automatically available in your capability scripts. Here's how to use them:
 
-**Example: Basic usage in vm_setup**
+**Example: Basic usage in phase.setup**
 ```toml
-[vm_setup]
+[[phase.setup]]
+name = "install-my-capability"
 script = """
 #!/bin/bash
 set -e
@@ -349,7 +423,8 @@ fi
 
 **Example: Worktree detection**
 ```toml
-[vm_setup]
+[[phase.setup]]
+name = "configure-worktree"
 script = """
 #!/bin/bash
 set -e
@@ -366,7 +441,8 @@ fi
 
 **Example: Phase-specific behavior**
 ```toml
-[vm_runtime]
+[[phase.runtime]]
+name = "generate-context"
 script = """
 #!/bin/bash
 
@@ -386,7 +462,7 @@ fi
 
 **Example: Using in external script files**
 ```bash
-# capabilities/my-capability/vm_setup.sh
+# capabilities/my-capability/setup.sh
 #!/bin/bash
 set -e
 
