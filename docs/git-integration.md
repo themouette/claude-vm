@@ -29,8 +29,8 @@ claude-vm worktree create feature-branch
 claude-vm worktree create feature-branch main
 
 # Create and immediately start working
-claude-vm agent --worktree=feature-branch
-claude-vm shell --worktree=feature-branch
+claude-vm agent --worktree feature-branch
+claude-vm shell --worktree feature-branch
 ```
 
 #### List Worktrees
@@ -57,13 +57,17 @@ The `--worktree` flag on agent and shell commands provides seamless worktree int
 
 ```bash
 # Create or resume worktree and run agent
-claude-vm agent --worktree=my-feature
+claude-vm agent --worktree my-feature
 
-# Specify base branch for new worktrees (comma-separated)
-claude-vm agent --worktree=my-feature,main
+# Specify base branch for new worktrees
+claude-vm agent --worktree my-feature main
 
 # Open shell in worktree
-claude-vm shell --worktree=my-feature
+claude-vm shell --worktree my-feature
+
+# Use -- to separate worktree args from Claude/shell args
+claude-vm agent --worktree my-feature -- /clear
+claude-vm shell --worktree my-feature -- ls -la
 ```
 
 The system automatically:

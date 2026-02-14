@@ -3,13 +3,21 @@
 /// This test suite verifies that all claude-vm runtime flags
 /// (--worktree, --env, --disk, etc.) are properly parsed and filtered
 /// out before arguments are passed to the Claude CLI.
-
 use clap::Parser;
-use claude_vm::cli::{AgentCmd, Cli, Commands};
+use claude_vm::cli::router::route_args;
+use claude_vm::cli::{Cli, Commands};
 
 #[test]
-fn test_worktree_flag_not_forwarded_to_claude() {
-    let args = vec!["claude-vm", "agent", "--worktree=feature-branch", "/clear"];
+fn test_worktree_single_arg() {
+    // Use -- to explicitly consume only 1 arg
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature-branch",
+        "--",
+        "/clear",
+    ];
 
     let cli = Cli::parse_from(args);
 
@@ -19,7 +27,6 @@ fn test_worktree_flag_not_forwarded_to_claude() {
 
         // Verify --worktree is NOT in claude_args
         assert!(!cmd.claude_args.contains(&"--worktree".to_string()));
-        assert!(!cmd.claude_args.contains(&"--worktree=feature-branch".to_string()));
         assert!(!cmd.claude_args.contains(&"feature-branch".to_string()));
 
         // Verify only Claude args remain
@@ -30,10 +37,18 @@ fn test_worktree_flag_not_forwarded_to_claude() {
 }
 
 #[test]
-fn test_worktree_with_base_not_forwarded() {
-    let args = vec!["claude-vm", "agent", "--worktree=feature,develop", "/clear"];
+fn test_worktree_two_args() {
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature",
+        "develop",
+        "/clear",
+    ];
 
-    let cli = Cli::parse_from(args);
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
 
     if let Some(Commands::Agent(cmd)) = cli.command {
         // Verify --worktree with base was parsed
@@ -41,13 +56,183 @@ fn test_worktree_with_base_not_forwarded() {
 
         // Verify neither value is in claude_args
         assert!(!cmd.claude_args.contains(&"--worktree".to_string()));
-        assert!(!cmd
-            .claude_args
-            .contains(&"--worktree=feature,develop".to_string()));
         assert!(!cmd.claude_args.contains(&"feature".to_string()));
         assert!(!cmd.claude_args.contains(&"develop".to_string()));
 
         // Verify only Claude args remain
+        assert_eq!(cmd.claude_args, vec!["/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_worktree_with_explicit_separator() {
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature",
+        "--",
+        "/clear",
+    ];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify --worktree parsed only one arg (stopped at --)
+        assert_eq!(cmd.runtime.worktree, vec!["feature"]);
+
+        // Verify only Claude args remain (-- is consumed by clap as separator)
+        assert_eq!(cmd.claude_args, vec!["/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_worktree_stops_at_known_flag() {
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature",
+        "--disk",
+        "50",
+        "/clear",
+    ];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify --worktree parsed only one arg (stopped at --disk)
+        assert_eq!(cmd.runtime.worktree, vec!["feature"]);
+
+        // Verify --disk was parsed
+        assert_eq!(cmd.runtime.disk, Some(50));
+
+        // Verify only Claude args remain
+        assert_eq!(cmd.claude_args, vec!["/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_worktree_stops_at_unknown_flag() {
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature",
+        "--unknown-flag",
+        "/clear",
+    ];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify --worktree parsed only one arg (stopped at --unknown-flag)
+        assert_eq!(cmd.runtime.worktree, vec!["feature"]);
+
+        // Verify unknown flag goes to Claude
+        assert_eq!(cmd.claude_args, vec!["--unknown-flag", "/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_worktree_stops_at_short_flag() {
+    let args = vec![
+        "claude-vm",
+        "agent",
+        "--worktree",
+        "feature",
+        "-v",
+        "/clear",
+    ];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    // -v should go to global verbose, not worktree
+    assert!(cli.verbose);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify --worktree parsed only one arg (stopped at -v)
+        assert_eq!(cmd.runtime.worktree, vec!["feature"]);
+
+        // Verify only Claude args remain
+        assert_eq!(cmd.claude_args, vec!["/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_worktree_with_shell_command() {
+    // Use -- to separate worktree args from shell command
+    let args = vec![
+        "claude-vm",
+        "shell",
+        "--worktree",
+        "feature",
+        "--",
+        "ls",
+        "-la",
+    ];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Shell(cmd)) = cli.command {
+        // Verify --worktree was parsed
+        assert_eq!(cmd.runtime.worktree, vec!["feature"]);
+
+        // Verify shell command remains
+        assert_eq!(cmd.command, vec!["ls", "-la"]);
+    } else {
+        panic!("Expected Shell command");
+    }
+}
+
+#[test]
+fn test_worktree_equals_syntax_backward_compat() {
+    // Equals syntax should still work (used internally by normalization)
+    let args = vec!["claude-vm", "agent", "--worktree=feature,main", "/clear"];
+
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify --worktree was parsed
+        assert_eq!(cmd.runtime.worktree, vec!["feature", "main"]);
+
+        // Verify only Claude args remain
+        assert_eq!(cmd.claude_args, vec!["/clear"]);
+    } else {
+        panic!("Expected Agent command");
+    }
+}
+
+#[test]
+fn test_no_worktree_backward_compat() {
+    // Without --worktree, everything should work as before
+    let args = vec!["claude-vm", "/clear"];
+
+    // Route args first (simulates what main.rs does)
+    let routed = route_args(args);
+    let cli = Cli::parse_from(routed);
+
+    if let Some(Commands::Agent(cmd)) = cli.command {
+        // Verify no worktree
+        assert!(cmd.runtime.worktree.is_empty());
+
+        // Verify Claude args passed through
         assert_eq!(cmd.claude_args, vec!["/clear"]);
     } else {
         panic!("Expected Agent command");
@@ -257,7 +442,8 @@ fn test_multiple_flags_with_claude_args() {
         "claude-vm",
         "--verbose",
         "agent",
-        "--worktree=feature",
+        "--worktree",
+        "feature",
         "--env",
         "DEBUG=1",
         "--disk",
@@ -318,7 +504,9 @@ fn test_all_runtime_flags_comprehensive() {
         "--runtime-script",
         "script.sh",
         "--auto-setup",
-        "--worktree=branch,base",
+        "--worktree",
+        "branch",
+        "base",
         "--no-conversations",
         "/clear",
     ];

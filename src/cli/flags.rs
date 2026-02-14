@@ -46,12 +46,23 @@ pub struct RuntimeFlags {
     pub auto_setup: bool,
 
     /// Create or resume worktree for branch development.
-    /// Usage: --worktree=<branch> or --worktree=<branch>,<base-ref>
+    ///
+    /// Usage: --worktree <branch> [base]
+    ///
+    /// The command will intelligently parse arguments:
+    /// - Consumes up to 2 arguments after --worktree (branch and optional base)
+    /// - Stops at -- (explicit separator)
+    /// - Stops at any flag (--flag or -f)
+    ///
+    /// Examples:
+    ///   --worktree feature
+    ///   --worktree feature main
+    ///   --worktree feature -- /clear       (use -- when needed)
+    ///   --worktree feature --disk 50       (stops at --disk)
     #[arg(
         long = "worktree",
-        value_name = "BRANCH[,BASE]",
+        value_names = ["BRANCH", "BASE"],
         value_delimiter = ',',
-        require_equals = true,
         num_args = 1..=2
     )]
     pub worktree: Vec<String>,
