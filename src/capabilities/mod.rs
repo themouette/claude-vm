@@ -171,6 +171,16 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
                 phase_copy.script = Some(combined_script);
                 phase_copy.script_files.clear();
             }
+
+            // Mark this as a capability phase by adding CAPABILITY_ID
+            // This signals to the phase executor to inject full capability env vars
+            phase_copy
+                .env
+                .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+            phase_copy
+                .env
+                .insert("CLAUDE_VM_PHASE".to_string(), "setup".to_string());
+
             capability_setup_phases.push(phase_copy);
         }
 
@@ -188,6 +198,16 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
                 phase_copy.script = Some(combined_script);
                 phase_copy.script_files.clear();
             }
+
+            // Mark this as a capability phase by adding CAPABILITY_ID
+            // This signals to the phase executor to inject full capability env vars
+            phase_copy
+                .env
+                .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+            phase_copy
+                .env
+                .insert("CLAUDE_VM_PHASE".to_string(), "runtime".to_string());
+
             capability_runtime_phases.push(phase_copy);
         }
     }
