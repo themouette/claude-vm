@@ -121,10 +121,11 @@ fn select_by_merged_status(
 ) -> Result<Vec<(String, std::path::PathBuf)>> {
     // Resolve the actual base branch
     let merged_base = match merged_base {
-        Some(base) => base.to_string(),
-        None => {
-            let branch = crate::utils::git::get_default_branch()?;
-            println!("Using default branch: {}", branch);
+        Some(base) if !base.is_empty() => base.to_string(),
+        _ => {
+            // None or empty string - use current branch
+            let branch = crate::utils::git::get_current_branch()?;
+            println!("Using current branch: {}", branch);
             branch
         }
     };

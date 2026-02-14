@@ -418,11 +418,12 @@ claude-vm worktree remove feature-branch --dry-run
 Automatically remove worktrees for branches that have been merged:
 
 ```bash
-# Remove worktrees merged into default branch
+# Remove worktrees merged into current branch
 claude-vm worktree remove --merged
 
-# Remove worktrees merged into specific branch
+# Remove worktrees merged into specific branch (supports local and remote)
 claude-vm worktree remove --merged main
+claude-vm worktree remove --merged origin/main
 
 # Include locked worktrees
 claude-vm worktree remove --merged main --locked
@@ -437,7 +438,8 @@ claude-vm worktree remove --merged --yes
 **Notes:**
 - Only removes the worktree directory; branches are preserved
 - Best-effort deletion: continues on failures
-- When using `--merged`, the system auto-detects the default branch if not specified
+- When using `--merged` without a branch, uses the current branch
+- Supports both local branches (e.g., `main`) and remote branches (e.g., `origin/main`)
 - Locked worktrees are excluded by default (use `--locked` to include them)
 
 ### Configuration

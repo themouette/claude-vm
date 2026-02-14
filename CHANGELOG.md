@@ -41,6 +41,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Changed
 
+- **Worktree `--merged` flag now defaults to current branch**: When using `--merged` without specifying a branch (e.g., `claude-vm worktree remove --merged`), the command now uses the current branch instead of trying to detect the repository's default branch. This provides more intuitive behavior for workflows where you want to see what's merged into your current feature branch.
+- **Worktree commands now support remote branches**: The `--merged` flag now accepts remote branch references (e.g., `origin/main`, `upstream/develop`). Previously, only local branches were supported.
 - **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
 - **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
 

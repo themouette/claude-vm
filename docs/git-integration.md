@@ -51,9 +51,11 @@ claude-vm worktree rm feature-branch
 # Remove multiple worktrees at once
 claude-vm worktree remove feature-1 feature-2 feature-3
 
-# Remove merged worktrees
+# Remove merged worktrees (defaults to current branch)
 claude-vm worktree remove --merged
+# Or specify a branch (supports local and remote branches)
 claude-vm worktree remove --merged main
+claude-vm worktree remove --merged origin/main
 
 # Preview removal without making changes
 claude-vm worktree remove feature-branch --dry-run

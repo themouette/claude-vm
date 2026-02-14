@@ -711,11 +711,11 @@ fn test_worktree_remove_merged_dry_run() {
 }
 
 #[test]
-fn test_worktree_remove_merged_uses_default_branch() {
+fn test_worktree_remove_merged_uses_current_branch() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
-    // Create and merge a branch
+    // Create and merge a branch into master
     StdCommand::new("git")
         .args(["checkout", "-b", "feature"])
         .current_dir(repo_path)
@@ -743,19 +743,20 @@ fn test_worktree_remove_merged_uses_default_branch() {
         .output()
         .unwrap();
 
-    // Create worktree
+    // Create worktree for the merged branch
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
 
-    // Remove without specifying base (should use default branch - explicitly use master)
+    // Remove without specifying base (should use current branch which is master)
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
+    cmd.args(["worktree", "remove", "--merged", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
+        .stdout(predicate::str::contains("Using current branch: master"))
         .stdout(predicate::str::contains("Removed 1 merged worktree"));
 }
 

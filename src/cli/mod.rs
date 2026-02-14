@@ -80,8 +80,8 @@ pub enum WorktreeCommands {
         /// Branch name(s) of the worktree(s) to remove
         branches: Vec<String>,
 
-        /// Remove worktrees for branches merged into base (defaults to default branch)
-        #[arg(long, conflicts_with = "branches")]
+        /// Remove worktrees for branches merged into base (defaults to current branch)
+        #[arg(long, conflicts_with = "branches", num_args(0..=1), default_missing_value = "")]
         merged: Option<String>,
 
         /// Include locked worktrees when using --merged

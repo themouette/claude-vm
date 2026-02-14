@@ -229,13 +229,26 @@ pub fn delete_worktree(branch: &str) -> Result<()> {
 ///
 /// Returns a list of branch names (excluding the base branch itself)
 pub fn list_merged_branches(base: &str) -> Result<Vec<String>> {
-    // First validate that base branch exists
-    let output = Command::new("git")
-        .args(["show-ref", "--verify", &format!("refs/heads/{}", base)])
-        .output()
-        .map_err(|e| ClaudeVmError::Git(format!("Failed to verify base branch: {}", e)))?;
+    // First validate that base branch exists (check both local and remote)
+    let ref_paths = vec![
+        format!("refs/heads/{}", base),   // Local branch
+        format!("refs/remotes/{}", base), // Remote branch (e.g., origin/main)
+    ];
 
-    if !output.status.success() {
+    let mut branch_exists = false;
+    for ref_path in &ref_paths {
+        let output = Command::new("git")
+            .args(["show-ref", "--verify", ref_path])
+            .output()
+            .map_err(|e| ClaudeVmError::Git(format!("Failed to verify base branch: {}", e)))?;
+
+        if output.status.success() {
+            branch_exists = true;
+            break;
+        }
+    }
+
+    if !branch_exists {
         return Err(ClaudeVmError::BranchNotFound {
             branch: base.to_string(),
         });

@@ -133,3 +133,21 @@ pub fn get_default_branch() -> Result<String> {
 
     Ok(branch_name)
 }
+
+/// Get the current branch name.
+/// Returns an error if not on a branch (detached HEAD).
+pub fn get_current_branch() -> Result<String> {
+    let output = Command::new("git")
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to run git: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(ClaudeVmError::Git(
+            "Not on a branch (detached HEAD)".to_string(),
+        ));
+    }
+
+    let branch_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(branch_name)
+}
