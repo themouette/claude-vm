@@ -11,6 +11,12 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, config)?;
 
+    // Resolve worktree if --worktree flag present
+    if !cmd.runtime.worktree.is_empty() {
+        let worktree_path = helpers::resolve_worktree(&cmd.runtime.worktree, config, project)?;
+        std::env::set_current_dir(&worktree_path)?;
+    }
+
     if !config.verbose {
         eprintln!("Starting ephemeral VM session...");
     }

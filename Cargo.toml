@@ -19,6 +19,8 @@ self_update = { version = "0.42", default-features = false, features = ["archive
 semver = "1.0"
 indicatif = "0.18"
 uzers = "0.12"
+chrono = "0.4"
+wait-timeout = "0.2"
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -26,6 +28,7 @@ predicates = "3.1"
 tempfile = "3.10"
 serial_test = "3.2"
 once_cell = "1.19"
+regex = "1.11"
 
 [profile.release]
 strip = true

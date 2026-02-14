@@ -41,6 +41,9 @@ pub struct Config {
     #[serde(default)]
     pub update_check: UpdateCheckSettings,
 
+    #[serde(default)]
+    pub worktree: crate::worktree::config::WorktreeConfig,
+
     /// Automatically create template if missing (default: false)
     #[serde(default)]
     pub auto_setup: bool,

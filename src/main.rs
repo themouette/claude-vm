@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use claude_vm::cli::{router, Cli, Commands, NetworkCommands};
+use claude_vm::cli::{router, Cli, Commands, NetworkCommands, WorktreeCommands};
 use claude_vm::config::Config;
 use claude_vm::project::Project;
 use claude_vm::{commands, error::ClaudeVmError};
@@ -44,6 +44,7 @@ fn main() -> Result<()> {
             | Some(Commands::Info)
             | Some(Commands::Clean { .. })
             | Some(Commands::Network { .. })
+            | Some(Commands::Worktree { .. })
     );
 
     let (project, config) = if requires_project {
@@ -131,9 +132,9 @@ fn main() -> Result<()> {
         Some(Commands::Shell(cmd)) => {
             commands::shell::execute(&project, &config, cmd)?;
         }
-        Some(Commands::Setup(cmd)) => {
+        Some(Commands::Setup(_cmd)) => {
             #[cfg(debug_assertions)]
-            let skip_install = cmd.no_agent_install;
+            let skip_install = _cmd.no_agent_install;
             #[cfg(not(debug_assertions))]
             let skip_install = false;
 
@@ -165,6 +166,38 @@ fn main() -> Result<()> {
             }
             NetworkCommands::Test { domain } => {
                 commands::network::test::execute(&config, domain)?;
+            }
+        },
+        Some(Commands::Worktree { command }) => match command {
+            WorktreeCommands::Create { branch, base } => {
+                commands::worktree::create::execute(&config, &project, branch, base.as_deref())?;
+            }
+            WorktreeCommands::List {
+                merged,
+                locked,
+                detached,
+            } => {
+                commands::worktree::list::execute(merged.as_deref(), *locked, *detached)?;
+            }
+            WorktreeCommands::Remove {
+                branches,
+                merged,
+                yes,
+                dry_run,
+                locked,
+            } => {
+                let branches_opt = if branches.is_empty() {
+                    None
+                } else {
+                    Some(branches.as_slice())
+                };
+                commands::worktree::remove::execute(
+                    branches_opt,
+                    merged.as_deref(),
+                    *yes,
+                    *dry_run,
+                    *locked,
+                )?;
             }
         },
         None => {

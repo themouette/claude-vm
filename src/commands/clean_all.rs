@@ -20,7 +20,7 @@ pub fn execute(yes: bool) -> Result<()> {
     // Prompt for confirmation unless --yes was provided
     if !yes {
         print!("Delete {} template(s)? [y/N] ", templates.len());
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
 
         let mut input = String::new();
         io::stdin().read_line(&mut input).ok();

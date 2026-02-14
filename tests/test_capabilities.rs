@@ -1,5 +1,6 @@
 use claude_vm::capabilities::registry::CapabilityRegistry;
 use claude_vm::config::Config;
+use serial_test::serial;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -175,6 +176,7 @@ fn create_test_git_repo(base_dir: &std::path::Path, repo_name: &str) -> PathBuf 
 /// Integration test for Project worktree detection
 /// This test verifies that Project correctly identifies git worktrees
 #[test]
+#[serial]
 fn test_project_worktree_detection() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let base_path = temp_dir.path();
@@ -237,6 +239,7 @@ fn test_project_worktree_detection() {
 
 /// Integration test for regular (non-worktree) project detection
 #[test]
+#[serial]
 fn test_project_regular_repo_detection() {
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
     let base_path = temp_dir.path();

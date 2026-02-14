@@ -44,6 +44,28 @@ pub struct RuntimeFlags {
     /// Automatically create template if missing
     #[arg(long = "auto-setup")]
     pub auto_setup: bool,
+
+    /// Create or resume worktree for branch development.
+    ///
+    /// Usage: --worktree <branch> [base]
+    ///
+    /// The command will intelligently parse arguments:
+    /// - Consumes up to 2 arguments after --worktree (branch and optional base)
+    /// - Stops at -- (explicit separator)
+    /// - Stops at any flag (--flag or -f)
+    ///
+    /// Examples:
+    ///   --worktree feature
+    ///   --worktree feature main
+    ///   --worktree feature -- /clear       (use -- when needed)
+    ///   --worktree feature --disk 50       (stops at --disk)
+    #[arg(
+        long = "worktree",
+        value_names = ["BRANCH", "BASE"],
+        value_delimiter = ',',
+        num_args = 1..=2
+    )]
+    pub worktree: Vec<String>,
 }
 
 /// VM sizing flags for the setup command.

@@ -48,6 +48,56 @@ pub enum NetworkCommands {
     },
 }
 
+#[derive(Subcommand, Debug)]
+pub enum WorktreeCommands {
+    /// Create a new worktree for a branch
+    Create {
+        /// Branch name for the worktree
+        branch: String,
+
+        /// Base branch or commit to create from (default: current HEAD)
+        base: Option<String>,
+    },
+
+    /// List all worktrees
+    List {
+        /// Show only worktrees for branches merged into base
+        #[arg(long)]
+        merged: Option<String>,
+
+        /// Show only locked worktrees
+        #[arg(long)]
+        locked: bool,
+
+        /// Show only detached HEAD worktrees
+        #[arg(long)]
+        detached: bool,
+    },
+
+    /// Remove worktrees (by name or merged status)
+    #[command(alias = "rm")]
+    Remove {
+        /// Branch name(s) of the worktree(s) to remove
+        branches: Vec<String>,
+
+        /// Remove worktrees for branches merged into base (defaults to current branch)
+        #[arg(long, conflicts_with = "branches", num_args(0..=1), default_missing_value = "")]
+        merged: Option<String>,
+
+        /// Include locked worktrees when using --merged
+        #[arg(long, requires = "merged")]
+        locked: bool,
+
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+
+        /// Show what would be removed without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "claude-vm")]
 #[command(about = "Run Claude Code inside sandboxed Lima VMs", long_about = None)]
@@ -156,6 +206,13 @@ pub enum Commands {
     Network {
         #[command(subcommand)]
         command: NetworkCommands,
+    },
+
+    /// Manage git worktrees for parallel development
+    #[command(alias = "w")]
+    Worktree {
+        #[command(subcommand)]
+        command: WorktreeCommands,
     },
 }
 

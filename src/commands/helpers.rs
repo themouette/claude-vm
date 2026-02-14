@@ -2,7 +2,9 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
 use crate::vm::template;
+use crate::worktree::{operations, validation};
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 /// Ensure template exists, prompting user to create it if missing
 ///
@@ -54,6 +56,44 @@ pub fn ensure_template_exists(project: &Project, config: &Config) -> Result<()> 
 fn create_template(project: &Project, config: &Config) -> Result<()> {
     // Auto-setup always installs the agent (no_agent_install = false)
     crate::commands::setup::execute(project, config, false)
+}
+
+/// Resolve worktree from command-line arguments
+///
+/// This function handles the --worktree flag for agent and shell commands.
+/// It validates git version and submodules, then creates or resumes a worktree.
+///
+/// Returns the path to the worktree directory.
+pub fn resolve_worktree(
+    worktree_args: &[String],
+    config: &Config,
+    project: &Project,
+) -> Result<PathBuf> {
+    let repo_root = project.root();
+
+    // Validate git version and check for submodules
+    validation::check_git_version()?;
+    validation::check_submodules_and_warn(repo_root);
+
+    // Parse arguments: length 1 = (branch, None), length 2 = (branch, Some(base))
+    let (branch, base) = match worktree_args.len() {
+        1 => (worktree_args[0].as_str(), None),
+        2 => (worktree_args[0].as_str(), Some(worktree_args[1].as_str())),
+        _ => {
+            return Err(crate::error::ClaudeVmError::Worktree(
+                "Invalid worktree arguments".to_string(),
+            ))
+        }
+    };
+
+    // Create or resume worktree
+    let result = operations::create_worktree(&config.worktree, repo_root, branch, base)?;
+
+    // Print user-facing message
+    eprintln!("{}", result.message(branch));
+
+    // Return the path
+    Ok(result.path().clone())
 }
 
 #[cfg(test)]

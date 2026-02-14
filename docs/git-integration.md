@@ -11,9 +11,238 @@ Claude-vm provides seamless git integration for projects:
 - **Conversation history**: Shares Claude conversation history between host and VM
 - **Project isolation**: Each project has its own conversation folder
 
+## Architecture
+
+The worktree management feature is built with a layered architecture that separates concerns and ensures security:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLI Commands Layer                          │
+│  (commands/worktree/{create,list,remove}.rs, commands/agent.rs) │
+│                                                                  │
+│  • User interaction & confirmation prompts                      │
+│  • Argument parsing & validation                                │
+│  • Message formatting & display                                 │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Operations Layer                             │
+│              (worktree/operations.rs)                           │
+│                                                                  │
+│  • create_worktree() - High-level worktree creation             │
+│  • delete_worktree() - Worktree removal                         │
+│  • list_merged_branches() - Branch status queries              │
+│  • detect_branch_status() - Branch state detection             │
+└────────────┬────────────────────────────────┬──────────────────┘
+             │                                │
+             │                                │
+             ▼                                ▼
+┌────────────────────────────┐  ┌───────────────────────────────┐
+│   Validation Layer         │  │    State Management          │
+│  (worktree/validation.rs)  │  │   (worktree/state.rs)        │
+│                            │  │                               │
+│  • Branch name validation  │  │  • Parse git worktree list   │
+│  • Git version checking    │  │  • WorktreeEntry structs     │
+│  • Submodule detection     │  │  • Locked worktree detection │
+└────────────┬───────────────┘  └──────────┬────────────────────┘
+             │                              │
+             └──────────────┬───────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Template & Path System                        │
+│           (worktree/template.rs)                                │
+│                                                                  │
+│  • TemplateContext - Variable expansion ({branch}, {repo}, etc) │
+│  • compute_worktree_path() - Path computation & validation     │
+│  • Path traversal prevention - Security checks                 │
+│  • Path sanitization - Replace unsafe characters               │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Filter System                                  │
+│              (worktree/filter.rs)                               │
+│                                                                  │
+│  • Composable iterator filters                                 │
+│  • filter_merged() - Select merged branches                    │
+│  • filter_locked() / exclude_locked() - Lock filtering        │
+│  • skip_main() - Exclude main worktree                         │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 Recovery & Cleanup                              │
+│            (worktree/recovery.rs)                               │
+│                                                                  │
+│  • auto_prune() - Clean orphaned metadata (with confirmation)  │
+│  • try_repair() - Repair broken worktree links                │
+│  • ensure_clean_state() - Pre-operation validation            │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Git Command Layer                            │
+│                 (utils/git.rs)                                  │
+│                                                                  │
+│  • run_git_command() - Execute git with 30s timeout            │
+│  • run_git_query() - Query git (non-zero OK)                   │
+│  • run_git_best_effort() - Cleanup operations                  │
+│  • path_to_str() - UTF-8 path conversion                       │
+│  • Command injection prevention                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Data Flow:
+─────────
+1. User invokes command (e.g., `claude-vm worktree create feature`)
+2. CLI layer validates arguments and determines operation
+3. Operations layer orchestrates the workflow:
+   - Validates branch name (validation layer)
+   - Checks current state (state layer)
+   - Computes target path (template layer)
+   - Executes git commands (git layer)
+   - Handles errors and recovery (recovery layer)
+4. Results displayed to user with appropriate messages
+
+Security Boundaries:
+───────────────────
+• Branch name validation prevents command injection
+• Path computation validates against traversal attacks
+• All git commands use Command::args() (no shell)
+• Timeouts prevent indefinite hangs
+• UTF-8 validation prevents path-related panics
+```
+
 ## Git Worktree Support
 
-Git worktrees allow you to check out multiple branches in different directories from the same repository. Claude-vm automatically detects and handles worktrees correctly.
+Git worktrees allow you to check out multiple branches in different directories from the same repository. Claude-vm provides comprehensive worktree management with dedicated commands and automatic detection.
+
+### Worktree Management Commands
+
+Claude-vm includes a full suite of worktree management commands.
+
+**Tip**: Use the short alias `w` instead of `worktree` for faster typing:
+```bash
+claude-vm w create feature    # Same as: claude-vm worktree create feature
+claude-vm w list              # Same as: claude-vm worktree list
+claude-vm w remove feature    # Same as: claude-vm worktree remove feature
+```
+
+#### Create Worktrees
+
+```bash
+# Create worktree from current branch
+claude-vm worktree create feature-branch
+claude-vm w create feature-branch  # Short alias
+
+# Create worktree from specific base branch
+claude-vm worktree create feature-branch main
+claude-vm w create feature-branch main  # Short alias
+
+# Create and immediately start working
+claude-vm agent --worktree feature-branch
+claude-vm shell --worktree feature-branch
+```
+
+#### List Worktrees
+
+```bash
+# List all worktrees with branch, path, and status
+claude-vm worktree list
+claude-vm w list  # Short alias
+```
+
+#### Remove Worktrees
+
+```bash
+# Remove specific worktree (preserves branch)
+claude-vm worktree remove feature-branch
+claude-vm w remove feature-branch  # Short alias
+# or use the rm alias
+claude-vm worktree rm feature-branch
+claude-vm w rm feature-branch  # Both aliases work together!
+
+# Remove multiple worktrees at once
+claude-vm worktree remove feature-1 feature-2 feature-3
+
+# Remove merged worktrees (defaults to current branch)
+claude-vm worktree remove --merged
+# Or specify a branch (supports local and remote branches)
+claude-vm worktree remove --merged main
+claude-vm worktree remove --merged origin/main
+
+# Preview removal without making changes
+claude-vm worktree remove feature-branch --dry-run
+claude-vm worktree remove --merged --dry-run
+
+# Skip confirmation prompt
+claude-vm worktree remove feature-branch --yes
+claude-vm worktree remove --merged --yes
+```
+
+### Flag Integration
+
+The `--worktree` flag on agent and shell commands provides seamless worktree integration:
+
+```bash
+# Create or resume worktree and run agent
+claude-vm agent --worktree my-feature
+
+# Specify base branch for new worktrees
+claude-vm agent --worktree my-feature main
+
+# Open shell in worktree
+claude-vm shell --worktree my-feature
+
+# Use -- to separate worktree args from Claude/shell args
+claude-vm agent --worktree my-feature -- /clear
+claude-vm shell --worktree my-feature -- ls -la
+```
+
+The system automatically:
+- Creates the worktree if the branch doesn't exist
+- Resumes the existing worktree if the branch is already checked out
+- Uses current HEAD as base when base-ref not specified
+- Provides clear messaging about whether it created or resumed
+
+### Configuration
+
+Configure worktree behavior in `.claude-vm.toml`:
+
+```toml
+[worktree]
+# Default location for worktrees (default: {repo_root}-worktrees/)
+location = "/path/to/worktrees"
+
+# Path template for worktree directories
+template = "{repo}-{branch}"
+```
+
+Available template variables:
+- `{repo}` - Repository name
+- `{branch}` - Branch name (sanitized)
+- `{user}` - Username from $USER environment variable
+- `{date}` - Current date in YYYY-MM-DD format
+- `{short_hash}` - Short commit hash (first 8 characters)
+
+Example templates:
+- `{branch}` (default) - Simple branch name
+- `{user}/{branch}` - Organize by user
+- `{date}-{branch}` - Prefix with date
+- `{repo}-{branch}-{short_hash}` - Include repo and commit info
+
+### Template Variable Sanitization
+
+Branch names and other variables with special characters are automatically sanitized for filesystem safety:
+- Slashes (`/`, `\`) are replaced with dashes (`-`)
+- Spaces and control characters are replaced with underscores (`_`)
+- Other characters are preserved
+
+Examples:
+- `feature/user-auth` → `feature-user-auth`
+- `my branch` → `my_branch`
+- `fix bug #123` → `fix_bug_#123`
 
 ### How It Works
 
@@ -171,6 +400,532 @@ Worktree detection is automatic and cannot be disabled. If you need to prevent m
 - **Shared state**: Changes in VM affect host git state
 - **Commit signing**: Use agent forwarding for signed commits (see agent-forwarding.md)
 - **Isolated changes**: VM modifications are contained to the project directory
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### "Branch name cannot start with a dash"
+
+**Problem**: Attempting to create a worktree with a branch name starting with `-`.
+
+**Cause**: Branch names starting with `-` are rejected to prevent command injection and flag confusion.
+
+**Solution**: Use a valid branch name without leading dash:
+```bash
+# ✗ Won't work
+claude-vm worktree create -feature
+
+# ✓ Use instead
+claude-vm worktree create feature
+```
+
+#### "Path contains invalid UTF-8"
+
+**Problem**: Error message about invalid UTF-8 in path.
+
+**Cause**: The worktree path contains characters that cannot be represented in UTF-8.
+
+**Solution**: This is rare but can occur with unusual filesystem configurations. Check your worktree configuration template and ensure it uses standard characters.
+
+#### "git worktree timed out after 30 seconds"
+
+**Problem**: Git command hangs and times out.
+
+**Cause**: Network issues (remote branches), repository problems, or very large repositories.
+
+**Solutions**:
+1. Check network connectivity if using remote branches
+2. Try with a local branch: `claude-vm worktree create feature main`
+3. Verify repository health: `git fsck`
+4. For large repos, consider using shallow clones
+
+#### "No worktree found for branch 'feature'"
+
+**Problem**: Trying to remove a worktree that doesn't exist.
+
+**Cause**: The branch exists but isn't checked out in any worktree, or the worktree was already removed.
+
+**Solutions**:
+1. List current worktrees: `claude-vm worktree list`
+2. Check if branch exists: `git branch -a`
+3. Create the worktree first: `claude-vm worktree create feature`
+
+#### Orphaned Worktree Metadata
+
+**Problem**: Git tracks worktrees that no longer exist on disk.
+
+**Symptoms**:
+- `git worktree list` shows paths that don't exist
+- Errors about missing worktree directories
+
+**Solution**: The system automatically prompts to prune orphaned metadata:
+```bash
+# Automatic on most operations
+claude-vm worktree list
+# Prompts: "Found orphaned worktree metadata. Prune? [y/N]"
+
+# Manual prune
+git worktree prune
+```
+
+#### Locked Worktrees
+
+**Problem**: Worktree is locked and cannot be removed.
+
+**Symptoms**:
+- `--merged` flag skips certain worktrees
+- Cannot remove specific worktree
+
+**Check if locked**:
+```bash
+claude-vm worktree list --locked
+```
+
+**Solutions**:
+1. Include locked worktrees in removal:
+   ```bash
+   claude-vm worktree remove --merged --locked --yes
+   ```
+
+2. Manually unlock:
+   ```bash
+   git worktree unlock /path/to/worktree
+   ```
+
+3. Understand why it's locked:
+   ```bash
+   # Check lock reason
+   cat .git/worktrees/<branch>/locked
+   ```
+
+#### "This repository contains submodules"
+
+**Problem**: Warning message when using worktrees with submodules.
+
+**Cause**: Git's worktree support for submodules is experimental.
+
+**Solutions**:
+- The warning is informational only
+- Worktrees will work but submodules may behave unexpectedly
+- Test carefully if using submodules with worktrees
+- See: https://git-scm.com/docs/git-worktree#_bugs
+
+#### Worktree Directory Exists but Git Doesn't Know About It
+
+**Problem**: The worktree directory exists but `claude-vm worktree list` doesn't show it.
+
+**Cause**: Directory was created manually or git metadata is out of sync.
+
+**Solutions**:
+1. Remove the directory manually:
+   ```bash
+   rm -rf /path/to/worktree
+   ```
+
+2. Try repair:
+   ```bash
+   git worktree repair
+   ```
+
+3. Create fresh worktree with correct setup:
+   ```bash
+   claude-vm worktree create branch-name
+   ```
+
+#### "Git version X.Y.Z is too old"
+
+**Problem**: Git version doesn't support worktrees.
+
+**Cause**: Worktrees require Git 2.5+.
+
+**Solution**: Update git:
+```bash
+# macOS
+brew upgrade git
+
+# Ubuntu/Debian
+sudo apt update && sudo apt upgrade git
+
+# Check version
+git --version
+```
+
+#### Branch Creation Fails with "Invalid reference"
+
+**Problem**: Creating worktree with base branch fails.
+
+**Cause**: Base branch doesn't exist or isn't accessible.
+
+**Solutions**:
+1. Check branch exists:
+   ```bash
+   git branch -a | grep base-branch
+   ```
+
+2. Fetch remote branches:
+   ```bash
+   git fetch origin
+   ```
+
+3. Use correct branch reference:
+   ```bash
+   # For local branch
+   claude-vm worktree create feature main
+
+   # For remote branch
+   claude-vm worktree create feature origin/main
+   ```
+
+#### Worktree Path Contains Spaces
+
+**Problem**: Spaces in worktree paths cause issues.
+
+**Cause**: Branch names with spaces get sanitized to underscores in paths.
+
+**Expected Behavior**: This is intentional. Branch names with spaces like "my feature" become "my_feature" in the filesystem path. The branch name itself remains unchanged.
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check git status**: Run `git worktree list` and `git status` to understand current state
+2. **Review logs**: Look for error messages in command output
+3. **Try repair**: Run `git worktree repair` for metadata issues
+4. **File an issue**: Report bugs at https://github.com/anthropics/claude-vm/issues with:
+   - Full error message
+   - Git version (`git --version`)
+   - claude-vm version (`claude-vm --version`)
+   - Steps to reproduce
+
+## Recovery Procedures
+
+This section covers procedures for recovering from various failure states and inconsistencies.
+
+### Recovery Workflow Overview
+
+When you encounter worktree issues, follow this general workflow:
+
+```
+1. Assess the situation
+   ├─→ List worktrees: claude-vm worktree list
+   ├─→ Check git status: git status
+   └─→ Inspect git metadata: git worktree list --porcelain
+
+2. Identify the problem
+   ├─→ Orphaned metadata (git knows, directory missing)
+   ├─→ Orphaned directories (directory exists, git doesn't know)
+   ├─→ Locked worktrees (intentional or stale locks)
+   └─→ Corrupted metadata (broken links, invalid paths)
+
+3. Apply recovery
+   ├─→ Auto-prune for orphaned metadata
+   ├─→ Manual cleanup for orphaned directories
+   ├─→ Unlock or force-remove for locked worktrees
+   └─→ Repair for corrupted metadata
+
+4. Verify recovery
+   └─→ Confirm: claude-vm worktree list
+```
+
+### Recovering from Orphaned Worktree Metadata
+
+**Scenario**: Git tracks worktrees whose directories were manually deleted.
+
+**Symptoms**:
+```bash
+$ git worktree list
+/path/to/main      abc123 [main]
+/path/to/feature   def456 [feature]    # Directory doesn't exist!
+```
+
+**Recovery**:
+
+1. **Automatic (Recommended)**:
+   ```bash
+   # The system automatically detects and offers to prune
+   claude-vm worktree list
+   # Prompts: "Found orphaned worktree metadata:"
+   # Select: y
+   ```
+
+2. **Manual**:
+   ```bash
+   # Preview what will be pruned
+   git worktree prune --dry-run --verbose
+
+   # Prune orphaned metadata
+   git worktree prune
+
+   # Verify
+   claude-vm worktree list
+   ```
+
+**When to use manual**: When you want full control or the automatic prompt doesn't appear.
+
+### Recovering from Orphaned Worktree Directories
+
+**Scenario**: Worktree directories exist but git doesn't know about them.
+
+**Symptoms**:
+```bash
+$ ls /path/to/repo-worktrees/
+feature1/  feature2/  feature3/
+
+$ git worktree list
+/path/to/main  abc123 [main]
+# feature1, feature2, feature3 not listed
+```
+
+**Recovery**:
+
+1. **Try repair first**:
+   ```bash
+   git worktree repair
+   claude-vm worktree list  # Check if fixed
+   ```
+
+2. **If repair doesn't work, manual cleanup**:
+   ```bash
+   # Option A: Remove orphaned directories
+   rm -rf /path/to/repo-worktrees/feature1
+   rm -rf /path/to/repo-worktrees/feature2
+   rm -rf /path/to/repo-worktrees/feature3
+
+   # Option B: Re-create worktrees properly
+   claude-vm worktree create feature1
+   ```
+
+3. **Verify**:
+   ```bash
+   claude-vm worktree list
+   git status  # In each worktree
+   ```
+
+### Recovering from Locked Worktrees
+
+**Scenario**: Worktree is locked and operations fail.
+
+**Symptoms**:
+```bash
+$ claude-vm worktree remove feature --yes
+Error: Worktree is locked: being worked on
+```
+
+**Recovery**:
+
+1. **Check lock status**:
+   ```bash
+   claude-vm worktree list --locked
+   # Shows: feature -> /path [locked: being worked on]
+   ```
+
+2. **Understand the lock**:
+   ```bash
+   # Check lock reason
+   cat .git/worktrees/feature/locked
+   ```
+
+3. **Remove based on context**:
+
+   **If lock is intentional** (you're actively working):
+   ```bash
+   # Keep it locked, use --locked flag if needed
+   claude-vm worktree remove --merged --locked --yes
+   ```
+
+   **If lock is stale** (work is done):
+   ```bash
+   # Unlock first
+   git worktree unlock /path/to/feature
+
+   # Then remove normally
+   claude-vm worktree remove feature --yes
+   ```
+
+   **If worktree directory is missing**:
+   ```bash
+   # Force remove from git metadata
+   git worktree remove --force feature
+   ```
+
+### Recovering from Corrupted Worktree Metadata
+
+**Scenario**: Worktree metadata is corrupted or links are broken.
+
+**Symptoms**:
+- `git worktree list` shows errors
+- Operations fail with "administrative files appear to be broken"
+- Invalid paths or missing `.git` files in worktrees
+
+**Recovery**:
+
+1. **Try automated repair**:
+   ```bash
+   git worktree repair
+   git worktree repair --verbose  # See what's being fixed
+   ```
+
+2. **If repair fails, identify damaged worktrees**:
+   ```bash
+   git worktree list
+   # Note which worktrees show errors
+   ```
+
+3. **Remove and recreate damaged worktrees**:
+   ```bash
+   # For each damaged worktree:
+
+   # Step 1: Save any uncommitted work
+   cd /path/to/damaged-worktree
+   git stash push -m "backup before repair"
+   # or commit changes
+
+   # Step 2: Get branch name
+   git branch --show-current  # Note: might fail if very corrupted
+
+   # Step 3: Force remove the worktree
+   git worktree remove --force damaged-branch
+
+   # Step 4: Clean up directory if it still exists
+   rm -rf /path/to/damaged-worktree
+
+   # Step 5: Recreate properly
+   claude-vm worktree create damaged-branch
+
+   # Step 6: Restore work
+   cd /path/to/new-worktree
+   git stash pop  # if you stashed
+   ```
+
+### Recovering from Failed Operations
+
+**Scenario**: A worktree operation was interrupted (network issue, ctrl-c, crash).
+
+**Symptoms**:
+- Incomplete worktree directory
+- Partially updated git metadata
+- Lock files present
+
+**Recovery**:
+
+1. **Check current state**:
+   ```bash
+   git worktree list --porcelain
+   claude-vm worktree list
+   ```
+
+2. **Look for lock files**:
+   ```bash
+   # Check for stale locks
+   ls -la .git/*.lock
+   ls -la .git/worktrees/*/locked
+   ```
+
+3. **Clean up based on findings**:
+
+   **If worktree is incomplete**:
+   ```bash
+   # Remove and retry
+   claude-vm worktree remove failed-branch --yes
+   claude-vm worktree create failed-branch
+   ```
+
+   **If lock files are stale**:
+   ```bash
+   # Remove lock files (ONLY if you're sure no git operation is running)
+   rm .git/index.lock  # Main repo lock
+   rm .git/worktrees/branch/locked  # Worktree lock
+   ```
+
+4. **Verify and retry**:
+   ```bash
+   git status
+   claude-vm worktree list
+   # Retry original operation
+   ```
+
+### Complete Repository Reset (Last Resort)
+
+**Scenario**: Multiple issues or complete corruption, need to start fresh.
+
+**⚠️ Warning**: This is destructive. Only use when other recovery methods fail.
+
+**Steps**:
+
+1. **Backup everything important**:
+   ```bash
+   # Backup uncommitted changes from all worktrees
+   cd /path/to/main-repo
+   git stash push -m "main repo backup"
+
+   cd /path/to/worktree1
+   git stash push -m "worktree1 backup"
+
+   # ... repeat for all worktrees
+
+   # Backup your stash refs
+   git stash list > ~/git-stashes-backup.txt
+   ```
+
+2. **Clean all worktrees**:
+   ```bash
+   # Remove all worktree metadata
+   git worktree prune
+
+   # Force remove any remaining
+   for dir in /path/to/repo-worktrees/*; do
+       rm -rf "$dir"
+   done
+   ```
+
+3. **Verify main repository is healthy**:
+   ```bash
+   cd /path/to/main-repo
+   git fsck
+   git status
+   ```
+
+4. **Recreate needed worktrees**:
+   ```bash
+   claude-vm worktree create feature1
+   claude-vm worktree create feature2
+   ```
+
+5. **Restore work**:
+   ```bash
+   cd /path/to/worktree1
+   git stash list
+   git stash apply stash@{N}  # Use correct stash number
+   ```
+
+### Preventive Measures
+
+To avoid needing recovery:
+
+1. **Always use claude-vm commands** instead of manual git worktree commands
+2. **Don't manually delete worktree directories** - use `claude-vm worktree remove`
+3. **Commit or stash changes** before risky operations
+4. **Let auto-prune run** when prompted - it keeps metadata clean
+5. **Monitor disk space** - full disk can cause incomplete operations
+6. **Regular health checks**:
+   ```bash
+   # Weekly maintenance
+   claude-vm worktree list
+   git worktree prune --dry-run  # Preview cleanup
+   git fsck  # Check repository health
+   ```
+
+### Emergency Contacts
+
+If recovery procedures fail:
+
+1. **Preserve state**: Don't delete anything yet
+2. **Document the issue**: Screenshot errors, save command output
+3. **Get help**:
+   - File issue: https://github.com/anthropics/claude-vm/issues
+   - Include: git version, claude-vm version, full error output
+   - Attach: output of `git worktree list --porcelain`
 
 ## Related Documentation
 

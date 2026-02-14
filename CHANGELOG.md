@@ -6,12 +6,31 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Git worktree management**: Comprehensive worktree support for parallel branch development
+  - **Worktree commands**: New `worktree` subcommand (alias: `w`) with create, list, and remove operations
+    - `claude-vm worktree create <branch> [base]` or `claude-vm w create <branch> [base]` - Create new worktree with branch name
+    - `claude-vm worktree list` or `claude-vm w list` - List all worktrees with branch, path, and status
+    - `claude-vm worktree remove <branches>...` or `claude-vm w remove <branches>...` - Remove specific worktree(s) by branch name (preserves branches)
+    - `claude-vm worktree remove --merged [base]` or `claude-vm w remove --merged [base]` - Remove worktrees for merged branches
+    - `claude-vm worktree rm` or `claude-vm w rm` - Short alias for remove command
+    - Dry-run support with `--dry-run` flag to preview changes
+    - Confirmation prompt can be skipped with `--yes` flag
+    - Include locked worktrees in merged removal with `--locked` flag
+  - **Automatic detection**: System detects when branch exists and automatically resumes in existing worktree or creates new one
+  - **Flag integration**: `--worktree` flag on agent and shell commands for seamless worktree creation
+    - `claude-vm agent --worktree my-feature` - Create/resume worktree and run agent in one command
+    - `claude-vm shell --worktree my-feature main` - Specify base branch for new worktrees
+    - System defaults to current HEAD as base when base-ref not specified
+  - **Configuration**: Configurable worktree location and path templates via `.claude-vm.toml`
+    - Default location: `{repo_root}-worktrees/` for easy discovery
+    - Path templates: `{repo}-{branch}` format with variable substitution
+  - **Safety features**: Automatic git worktree metadata pruning, locked worktree detection, submodule warnings, and git version validation (2.5+)
+  - Clear messaging distinguishing resume vs create behavior
 - **Build-specific template filtering**: `list` and `clean-all` commands now filter templates by build type to prevent interference between development and production environments
   - Debug builds only show and operate on templates with `-dev` suffix
   - Release builds only show and operate on templates without `-dev` suffix
   - Prevents accidental deletion of release templates when using debug builds
   - Ensures clean separation between development and production template namespaces
-
 - **Explicit agent command**: Users can invoke the agent explicitly via `claude-vm agent [flags] [args]`
   - Both `claude-vm [args]` and `claude-vm agent [args]` work identically
   - Existing usage continues to work without modification — no changes required to workflows or scripts
@@ -22,6 +41,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Changed
 
+- **Worktree `--merged` flag now defaults to current branch**: When using `--merged` without specifying a branch (e.g., `claude-vm worktree remove --merged`), the command now uses the current branch instead of trying to detect the repository's default branch. This provides more intuitive behavior for workflows where you want to see what's merged into your current feature branch.
+- **Worktree commands now support remote branches**: The `--merged` flag now accepts remote branch references (e.g., `origin/main`, `upstream/develop`). Previously, only local branches were supported.
 - **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
 - **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
 
@@ -62,6 +83,7 @@ All notable changes to claude-vm will be documented in this file.
   - Named phases for better logging/debugging
   - Script sourcing via `source` field to persist exports (like PATH modifications) across phases
   - Example:
+
     ```toml
     [[phase.runtime]]
     name = "start-services"

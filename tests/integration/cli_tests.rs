@@ -932,3 +932,154 @@ fn test_regression_all_subcommands_parseable() {
         eprintln!("✓ Subcommand '{}' --help works", subcommand);
     }
 }
+
+// Phase 5 Tests: Worktree Flag Integration
+
+#[test]
+fn test_agent_help_shows_worktree_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--worktree"));
+}
+
+#[test]
+fn test_shell_help_shows_worktree_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--worktree"));
+}
+
+#[test]
+fn test_worktree_flag_with_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree=my-feature", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_with_branch_and_base_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree=my-feature,main", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_shell_worktree_flag_with_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["shell", "--worktree=my-feature", "--help"]);
+
+    // --help short-circuits execution, but flag should parse
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_implicit_agent_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["--worktree=my-feature", "--help"]);
+
+    // Implicit agent routing with --worktree flag
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_flag_requires_branch_name() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["agent", "--worktree"]);
+    cmd.env("CLAUDE_VM_CONFIG", "");
+
+    // Should fail with CLI parse error (exit code 2) since --worktree requires a value with =
+    let result = cmd.assert();
+    result.code(predicate::eq(2));
+}
+
+#[test]
+fn test_worktree_remove_dry_run_flag_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "remove", "branch-name", "--dry-run", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_remove_dry_run_with_merged_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args([
+        "worktree",
+        "remove",
+        "--merged",
+        "main",
+        "--dry-run",
+        "--help",
+    ]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_dry_run_and_yes_together_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args([
+        "worktree",
+        "remove",
+        "branch",
+        "--dry-run",
+        "--yes",
+        "--help",
+    ]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_remove_single_branch_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "remove", "feature-branch", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_remove_multiple_branches_parses() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args([
+        "worktree", "remove", "branch-1", "branch-2", "branch-3", "--help",
+    ]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_list_filter_flags_parse() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "list", "--merged", "main", "--help"]);
+    cmd.assert().success();
+
+    let mut cmd2 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd2.args(["worktree", "list", "--locked", "--help"]);
+    cmd2.assert().success();
+
+    let mut cmd3 = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd3.args(["worktree", "list", "--detached", "--help"]);
+    cmd3.assert().success();
+}
+
+#[test]
+fn test_worktree_list_multiple_filters() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "list", "--merged", "main", "--locked", "--help"]);
+    cmd.assert().success();
+}
+
+#[test]
+fn test_worktree_remove_locked_flag() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args([
+        "worktree", "remove", "--merged", "main", "--locked", "--help",
+    ]);
+    cmd.assert().success();
+}
