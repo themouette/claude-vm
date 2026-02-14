@@ -279,3 +279,65 @@ fn test_project_regular_repo_detection() {
         "Main repo root should be the same as project root for regular repos"
     );
 }
+
+#[test]
+fn test_capability_phases_run_before_user_phases() {
+    use claude_vm::capabilities::merge_capability_phases;
+    use claude_vm::config::ScriptPhase;
+
+    let mut config = Config::default();
+
+    // Add user-defined setup and runtime phases
+    config.phase.setup.push(ScriptPhase {
+        name: "user-setup".to_string(),
+        script: Some("echo 'user setup'".to_string()),
+        ..Default::default()
+    });
+
+    config.phase.runtime.push(ScriptPhase {
+        name: "user-runtime".to_string(),
+        script: Some("echo 'user runtime'".to_string()),
+        ..Default::default()
+    });
+
+    // Enable a capability that has both setup and runtime phases
+    config.tools.gh = true;
+
+    // Merge capability phases
+    merge_capability_phases(&mut config).expect("Failed to merge capability phases");
+
+    // Verify setup phases: capability phases should come first
+    assert!(!config.phase.setup.is_empty(), "Should have setup phases");
+    let first_setup = &config.phase.setup[0];
+    // First phase should be a capability phase (has CAPABILITY_ID env var)
+    assert!(
+        first_setup.env.contains_key("CAPABILITY_ID"),
+        "First setup phase should be a capability phase with CAPABILITY_ID"
+    );
+
+    // User phase should come after capability phases
+    let last_setup = config.phase.setup.last().unwrap();
+    assert_eq!(
+        &last_setup.name, "user-setup",
+        "User setup phase should come after capability phases"
+    );
+
+    // Verify runtime phases: capability phases should come first
+    assert!(
+        !config.phase.runtime.is_empty(),
+        "Should have runtime phases"
+    );
+    let first_runtime = &config.phase.runtime[0];
+    // First phase should be a capability phase (has CAPABILITY_ID env var)
+    assert!(
+        first_runtime.env.contains_key("CAPABILITY_ID"),
+        "First runtime phase should be a capability phase with CAPABILITY_ID"
+    );
+
+    // User phase should come after capability phases
+    let last_runtime = config.phase.runtime.last().unwrap();
+    assert_eq!(
+        &last_runtime.name, "user-runtime",
+        "User runtime phase should come after capability phases"
+    );
+}
