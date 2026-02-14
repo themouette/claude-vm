@@ -31,7 +31,7 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
             }
             Err(e) => {
                 println!("✗ Configuration is invalid!");
-                println!("  Error: {}", e);
+                println!("   Error: {}", e);
                 Err(e)
             }
         }
@@ -74,7 +74,7 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
             }
             Err(e) => {
                 println!("✗ Configuration is invalid!");
-                println!("  Error: {}", e);
+                println!("   Error: {}", e);
                 Err(e)
             }
         }

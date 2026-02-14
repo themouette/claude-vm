@@ -51,7 +51,7 @@ fn main() -> Result<()> {
         // Must have project
         let proj = project_result.map_err(|e| match e {
             ClaudeVmError::ProjectDetection(msg) => {
-                eprintln!("Error: {}", msg);
+                eprintln!("❌ Error: {}", msg);
                 std::process::exit(1);
             }
             _ => e,
