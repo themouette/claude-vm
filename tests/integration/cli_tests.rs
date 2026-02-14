@@ -1003,16 +1003,23 @@ fn test_worktree_flag_requires_branch_name() {
 }
 
 #[test]
-fn test_worktree_delete_dry_run_flag_parses() {
+fn test_worktree_remove_dry_run_flag_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "branch-name", "--dry-run", "--help"]);
+    cmd.args(["worktree", "remove", "branch-name", "--dry-run", "--help"]);
     cmd.assert().success();
 }
 
 #[test]
-fn test_worktree_clean_dry_run_flag_parses() {
+fn test_worktree_remove_dry_run_with_merged_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--dry-run", "--help"]);
+    cmd.args([
+        "worktree",
+        "remove",
+        "--merged",
+        "main",
+        "--dry-run",
+        "--help",
+    ]);
     cmd.assert().success();
 }
 
@@ -1021,7 +1028,7 @@ fn test_dry_run_and_yes_together_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args([
         "worktree",
-        "delete",
+        "remove",
         "branch",
         "--dry-run",
         "--yes",
@@ -1031,30 +1038,19 @@ fn test_dry_run_and_yes_together_parses() {
 }
 
 #[test]
-fn test_worktree_delete_single_branch_parses() {
+fn test_worktree_remove_single_branch_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "feature-branch", "--help"]);
+    cmd.args(["worktree", "remove", "feature-branch", "--help"]);
     cmd.assert().success();
 }
 
 #[test]
-fn test_worktree_delete_multiple_branches_parses() {
+fn test_worktree_remove_multiple_branches_parses() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args([
-        "worktree", "delete", "branch-1", "branch-2", "branch-3", "--help",
+        "worktree", "remove", "branch-1", "branch-2", "branch-3", "--help",
     ]);
     cmd.assert().success();
-}
-
-#[test]
-fn test_worktree_delete_requires_at_least_one_branch() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete"]);
-    cmd.env("CLAUDE_VM_CONFIG", "");
-
-    // Should fail - requires at least one branch
-    let result = cmd.assert();
-    result.code(predicate::eq(2));
 }
 
 #[test]
@@ -1080,10 +1076,10 @@ fn test_worktree_list_multiple_filters() {
 }
 
 #[test]
-fn test_worktree_clean_locked_flag() {
+fn test_worktree_remove_locked_flag() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
     cmd.args([
-        "worktree", "clean", "--merged", "main", "--locked", "--help",
+        "worktree", "remove", "--merged", "main", "--locked", "--help",
     ]);
     cmd.assert().success();
 }

@@ -74,38 +74,27 @@ pub enum WorktreeCommands {
         detached: bool,
     },
 
-    /// Delete a worktree (removes directory, preserves branch)
-    Delete {
-        /// Branch name(s) of the worktree(s) to delete
-        #[arg(required = true)]
+    /// Remove worktrees (by name or merged status)
+    #[command(alias = "rm")]
+    Remove {
+        /// Branch name(s) of the worktree(s) to remove
         branches: Vec<String>,
 
-        /// Skip confirmation prompt
-        #[arg(short = 'y', long)]
-        yes: bool,
-
-        /// Show what would be deleted without actually deleting
-        #[arg(long)]
-        dry_run: bool,
-    },
-
-    /// Clean worktrees for branches that have been merged
-    Clean {
-        /// Base branch to check merges against
-        #[arg(long)]
+        /// Remove worktrees for branches merged into base (defaults to default branch)
+        #[arg(long, conflicts_with = "branches")]
         merged: Option<String>,
 
+        /// Include locked worktrees when using --merged
+        #[arg(long, requires = "merged")]
+        locked: bool,
+
         /// Skip confirmation prompt
         #[arg(short = 'y', long)]
         yes: bool,
 
-        /// Show what would be cleaned without actually cleaning
+        /// Show what would be removed without making changes
         #[arg(long)]
         dry_run: bool,
-
-        /// Also clean locked worktrees (by default locked worktrees are skipped)
-        #[arg(long)]
-        locked: bool,
     },
 }
 

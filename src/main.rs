@@ -179,20 +179,25 @@ fn main() -> Result<()> {
             } => {
                 commands::worktree::list::execute(merged.as_deref(), *locked, *detached)?;
             }
-            WorktreeCommands::Delete {
+            WorktreeCommands::Remove {
                 branches,
-                yes,
-                dry_run,
-            } => {
-                commands::worktree::delete::execute(branches, *yes, *dry_run)?;
-            }
-            WorktreeCommands::Clean {
                 merged,
                 yes,
                 dry_run,
                 locked,
             } => {
-                commands::worktree::clean::execute(merged.as_deref(), *yes, *dry_run, *locked)?;
+                let branches_opt = if branches.is_empty() {
+                    None
+                } else {
+                    Some(branches.as_slice())
+                };
+                commands::worktree::remove::execute(
+                    branches_opt,
+                    merged.as_deref(),
+                    *yes,
+                    *dry_run,
+                    *locked,
+                )?;
             }
         },
         None => {

@@ -72,8 +72,7 @@ fn test_worktree_command_help() {
         .stdout(predicate::str::contains("Manage git worktrees"))
         .stdout(predicate::str::contains("create"))
         .stdout(predicate::str::contains("list"))
-        .stdout(predicate::str::contains("delete"))
-        .stdout(predicate::str::contains("clean"));
+        .stdout(predicate::str::contains("remove"));
 }
 
 #[test]
@@ -102,30 +101,94 @@ fn test_worktree_list_help() {
 }
 
 #[test]
-fn test_worktree_delete_help() {
+fn test_worktree_remove_help() {
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "--help"]);
+    cmd.args(["worktree", "remove", "--help"]);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Delete a worktree"))
-        .stdout(predicate::str::contains("<BRANCHES>"))
-        .stdout(predicate::str::contains("--yes"))
-        .stdout(predicate::str::contains("--dry-run"));
-}
-
-#[test]
-fn test_worktree_clean_help() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--help"]);
-
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Clean worktrees"))
+        .stdout(predicate::str::contains("Remove worktrees"))
+        .stdout(predicate::str::contains("[BRANCHES]"))
         .stdout(predicate::str::contains("--merged"))
         .stdout(predicate::str::contains("--yes"))
         .stdout(predicate::str::contains("--dry-run"))
         .stdout(predicate::str::contains("--locked"));
+}
+
+#[test]
+fn test_worktree_rm_alias() {
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "rm", "--help"]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Remove worktrees"));
+}
+
+#[test]
+fn test_worktree_remove_conflict_merged_and_branches() {
+    let repo_dir = create_test_repo();
+    let repo_path = repo_dir.path();
+
+    // Try to use both branches and --merged (should fail)
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "remove", "feature", "--merged", "main"])
+        .current_dir(repo_path);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn test_worktree_remove_locked_without_merged() {
+    let repo_dir = create_test_repo();
+    let repo_path = repo_dir.path();
+
+    // Try to use --locked without --merged (should fail)
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "remove", "feature", "--locked"])
+        .current_dir(repo_path);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("requires"));
+}
+
+#[test]
+fn test_worktree_remove_no_arguments() {
+    let repo_dir = create_test_repo();
+    let repo_path = repo_dir.path();
+
+    // Try to remove without any branches or --merged (should fail)
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "remove", "--yes"])
+        .current_dir(repo_path);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Must specify"));
+}
+
+#[test]
+fn test_worktree_rm_alias_works() {
+    let repo_dir = create_test_repo();
+    let repo_path = repo_dir.path();
+
+    // Create worktree
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "create", "feature"])
+        .current_dir(repo_path);
+    cmd.assert().success();
+
+    // Use rm alias to remove
+    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    cmd.args(["worktree", "rm", "feature", "--yes"])
+        .current_dir(repo_path);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Worktree removed"));
 }
 
 // ========== Create Worktree Tests ==========
@@ -372,7 +435,7 @@ fn test_worktree_list_merged_filter() {
 // ========== Delete Worktree Tests ==========
 
 #[test]
-fn test_worktree_delete_single_with_yes_flag() {
+fn test_worktree_remove_single_with_yes_flag() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -383,20 +446,20 @@ fn test_worktree_delete_single_with_yes_flag() {
     cmd.assert().success();
 
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
-    assert!(worktree_dir.exists(), "Worktree should exist before delete");
+    assert!(worktree_dir.exists(), "Worktree should exist before remove");
 
-    // Delete with --yes flag
+    // Remove with --yes flag
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "feature", "--yes"])
+    cmd.args(["worktree", "remove", "feature", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Worktree deleted"))
+        .stdout(predicate::str::contains("Worktree removed"))
         .stdout(predicate::str::contains("feature"));
 
     // Verify worktree is removed
-    assert!(!worktree_dir.exists(), "Worktree should be deleted");
+    assert!(!worktree_dir.exists(), "Worktree should be removed");
 
     // Verify branch still exists
     let output = StdCommand::new("git")
@@ -409,7 +472,7 @@ fn test_worktree_delete_single_with_yes_flag() {
 }
 
 #[test]
-fn test_worktree_delete_multiple_branches() {
+fn test_worktree_remove_multiple_branches() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -424,18 +487,18 @@ fn test_worktree_delete_multiple_branches() {
         .current_dir(repo_path);
     cmd.assert().success();
 
-    // Delete both
+    // Remove both
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "feature-1", "feature-2", "--yes"])
+    cmd.args(["worktree", "remove", "feature-1", "feature-2", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Deleted 2 of 2 worktree"));
+        .stdout(predicate::str::contains("Removed 2 of 2 worktree"));
 }
 
 #[test]
-fn test_worktree_delete_dry_run() {
+fn test_worktree_remove_dry_run() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -447,9 +510,9 @@ fn test_worktree_delete_dry_run() {
 
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
 
-    // Dry run delete
+    // Dry run remove
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "feature", "--dry-run"])
+    cmd.args(["worktree", "remove", "feature", "--dry-run"])
         .current_dir(repo_path);
 
     cmd.assert()
@@ -464,12 +527,12 @@ fn test_worktree_delete_dry_run() {
 }
 
 #[test]
-fn test_worktree_delete_nonexistent_branch() {
+fn test_worktree_remove_nonexistent_branch() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "nonexistent", "--yes"])
+    cmd.args(["worktree", "remove", "nonexistent", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
@@ -478,7 +541,7 @@ fn test_worktree_delete_nonexistent_branch() {
 }
 
 #[test]
-fn test_worktree_delete_partial_success() {
+fn test_worktree_remove_partial_success() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -488,22 +551,22 @@ fn test_worktree_delete_partial_success() {
         .current_dir(repo_path);
     cmd.assert().success();
 
-    // Try to delete one existing and one non-existing
+    // Try to remove one existing and one non-existing
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete", "feature-1", "nonexistent", "--yes"])
+    cmd.args(["worktree", "remove", "feature-1", "nonexistent", "--yes"])
         .current_dir(repo_path);
 
     // Should warn about missing but succeed for the valid one
     cmd.assert()
         .success()
         .stderr(predicate::str::contains("no worktree"))
-        .stdout(predicate::str::contains("Worktree deleted: feature-1"));
+        .stdout(predicate::str::contains("Worktree removed: feature-1"));
 }
 
-// ========== Clean Worktree Tests ==========
+// ========== Remove Merged Worktree Tests ==========
 
 #[test]
-fn test_worktree_clean_merged_with_yes() {
+fn test_worktree_remove_merged_with_yes() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -544,21 +607,21 @@ fn test_worktree_clean_merged_with_yes() {
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
     assert!(worktree_dir.exists());
 
-    // Clean merged worktrees
+    // Remove merged worktrees
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "master", "--yes"])
+    cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Cleaned 1 merged worktree"));
+        .stdout(predicate::str::contains("Removed 1 merged worktree"));
 
     // Verify worktree is removed
     assert!(!worktree_dir.exists());
 }
 
 #[test]
-fn test_worktree_clean_no_merged_worktrees() {
+fn test_worktree_remove_no_merged_worktrees() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -582,18 +645,18 @@ fn test_worktree_clean_no_merged_worktrees() {
         .output()
         .unwrap();
 
-    // Try to clean merged (should find none)
+    // Try to remove merged (should find none)
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "master", "--yes"])
+    cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("No merged worktrees to clean"));
+        .stdout(predicate::str::contains("No merged worktrees to remove"));
 }
 
 #[test]
-fn test_worktree_clean_dry_run() {
+fn test_worktree_remove_merged_dry_run() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -633,9 +696,9 @@ fn test_worktree_clean_dry_run() {
 
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
 
-    // Dry run clean
+    // Dry run remove
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "master", "--dry-run"])
+    cmd.args(["worktree", "remove", "--merged", "master", "--dry-run"])
         .current_dir(repo_path);
 
     cmd.assert()
@@ -648,7 +711,7 @@ fn test_worktree_clean_dry_run() {
 }
 
 #[test]
-fn test_worktree_clean_uses_default_branch() {
+fn test_worktree_remove_merged_uses_default_branch() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
@@ -686,14 +749,14 @@ fn test_worktree_clean_uses_default_branch() {
         .current_dir(repo_path);
     cmd.assert().success();
 
-    // Clean without specifying base (should use default branch - explicitly use master)
+    // Remove without specifying base (should use default branch - explicitly use master)
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "master", "--yes"])
+    cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Cleaned 1 merged worktree"));
+        .stdout(predicate::str::contains("Removed 1 merged worktree"));
 }
 
 // ========== End-to-End Workflow Tests ==========
@@ -744,13 +807,13 @@ fn test_complete_worktree_workflow() {
         .output()
         .unwrap();
 
-    // Step 5: Clean merged worktrees
+    // Step 5: Remove merged worktrees
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "clean", "--merged", "master", "--yes"])
+    cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Cleaned 1 merged worktree"));
+        .stdout(predicate::str::contains("Removed 1 merged worktree"));
 
     // Step 6: Verify worktree is gone but branch remains
     assert!(!worktree_dir.exists());
@@ -787,14 +850,14 @@ fn test_multiple_worktrees_parallel_work() {
         assert!(stdout.contains(branch));
     }
 
-    // Batch delete all
+    // Batch remove all
     let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
-    cmd.args(["worktree", "delete"])
+    cmd.args(["worktree", "remove"])
         .args(branches)
         .arg("--yes")
         .current_dir(repo_path);
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Deleted 3 of 3 worktree"));
+        .stdout(predicate::str::contains("Removed 3 of 3 worktree"));
 }
