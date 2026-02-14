@@ -11,6 +11,109 @@ Claude-vm provides seamless git integration for projects:
 - **Conversation history**: Shares Claude conversation history between host and VM
 - **Project isolation**: Each project has its own conversation folder
 
+## Architecture
+
+The worktree management feature is built with a layered architecture that separates concerns and ensures security:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     CLI Commands Layer                          │
+│  (commands/worktree/{create,list,remove}.rs, commands/agent.rs) │
+│                                                                  │
+│  • User interaction & confirmation prompts                      │
+│  • Argument parsing & validation                                │
+│  • Message formatting & display                                 │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Operations Layer                             │
+│              (worktree/operations.rs)                           │
+│                                                                  │
+│  • create_worktree() - High-level worktree creation             │
+│  • delete_worktree() - Worktree removal                         │
+│  • list_merged_branches() - Branch status queries              │
+│  • detect_branch_status() - Branch state detection             │
+└────────────┬────────────────────────────────┬──────────────────┘
+             │                                │
+             │                                │
+             ▼                                ▼
+┌────────────────────────────┐  ┌───────────────────────────────┐
+│   Validation Layer         │  │    State Management          │
+│  (worktree/validation.rs)  │  │   (worktree/state.rs)        │
+│                            │  │                               │
+│  • Branch name validation  │  │  • Parse git worktree list   │
+│  • Git version checking    │  │  • WorktreeEntry structs     │
+│  • Submodule detection     │  │  • Locked worktree detection │
+└────────────┬───────────────┘  └──────────┬────────────────────┘
+             │                              │
+             └──────────────┬───────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   Template & Path System                        │
+│           (worktree/template.rs)                                │
+│                                                                  │
+│  • TemplateContext - Variable expansion ({branch}, {repo}, etc) │
+│  • compute_worktree_path() - Path computation & validation     │
+│  • Path traversal prevention - Security checks                 │
+│  • Path sanitization - Replace unsafe characters               │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  Filter System                                  │
+│              (worktree/filter.rs)                               │
+│                                                                  │
+│  • Composable iterator filters                                 │
+│  • filter_merged() - Select merged branches                    │
+│  • filter_locked() / exclude_locked() - Lock filtering        │
+│  • skip_main() - Exclude main worktree                         │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                 Recovery & Cleanup                              │
+│            (worktree/recovery.rs)                               │
+│                                                                  │
+│  • auto_prune() - Clean orphaned metadata (with confirmation)  │
+│  • try_repair() - Repair broken worktree links                │
+│  • ensure_clean_state() - Pre-operation validation            │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Git Command Layer                            │
+│                 (utils/git.rs)                                  │
+│                                                                  │
+│  • run_git_command() - Execute git with 30s timeout            │
+│  • run_git_query() - Query git (non-zero OK)                   │
+│  • run_git_best_effort() - Cleanup operations                  │
+│  • path_to_str() - UTF-8 path conversion                       │
+│  • Command injection prevention                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+Data Flow:
+─────────
+1. User invokes command (e.g., `claude-vm worktree create feature`)
+2. CLI layer validates arguments and determines operation
+3. Operations layer orchestrates the workflow:
+   - Validates branch name (validation layer)
+   - Checks current state (state layer)
+   - Computes target path (template layer)
+   - Executes git commands (git layer)
+   - Handles errors and recovery (recovery layer)
+4. Results displayed to user with appropriate messages
+
+Security Boundaries:
+───────────────────
+• Branch name validation prevents command injection
+• Path computation validates against traversal attacks
+• All git commands use Command::args() (no shell)
+• Timeouts prevent indefinite hangs
+• UTF-8 validation prevents path-related panics
+```
+
 ## Git Worktree Support
 
 Git worktrees allow you to check out multiple branches in different directories from the same repository. Claude-vm provides comprehensive worktree management with dedicated commands and automatic detection.
