@@ -200,7 +200,7 @@ fn confirm_removal(
     };
 
     print!("{}", prompt);
-    io::stdout().flush().unwrap();
+    let _ = io::stdout().flush();
 
     let mut input = String::new();
     io::stdin().read_line(&mut input).ok();
@@ -221,7 +221,7 @@ fn execute_deletion(
     for (branch, _path) in to_remove {
         if multi_worktree {
             print!("Removing: {}...", branch);
-            io::stdout().flush().unwrap();
+            let _ = io::stdout().flush();
         }
 
         match operations::delete_worktree(branch.as_str()) {
