@@ -31,7 +31,11 @@ pub fn auto_prune() -> Result<()> {
         let _ = io::stdout().flush();
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input).ok();
+        if let Err(e) = io::stdin().read_line(&mut input) {
+            eprintln!("Warning: failed to read input: {}", e);
+            eprintln!("Skipped pruning worktrees.");
+            return Ok(());
+        }
         let input = input.trim().to_lowercase();
 
         // If user doesn't confirm, skip prune

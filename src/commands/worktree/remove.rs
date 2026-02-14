@@ -200,10 +200,10 @@ fn confirm_removal(
     };
 
     print!("{}", prompt);
-    let _ = io::stdout().flush();
+    io::stdout().flush()?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).ok();
+    io::stdin().read_line(&mut input)?;
     let input = input.trim().to_lowercase();
 
     Ok(input == "y" || input == "yes")
