@@ -301,7 +301,7 @@ pub fn execute_command_with_runtime_scripts(
     }
 
     // New phase-based runtime scripts
-    use crate::phase_executor::{load_phase_scripts, PhaseContext};
+    use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
 
     for phase in &config.phase.runtime {
         // Validate phase and emit warnings for potential issues
@@ -313,20 +313,29 @@ pub fn execute_command_with_runtime_scripts(
             continue; // continue_on_error was true
         };
 
-        // Validate environment variable keys before adding to script_contents
-        for key in phase.env.keys() {
-            if let Err(e) = crate::utils::env::validate_env_key(key) {
+        // Build environment setup with validation and capability env var injection
+        // This automatically validates env keys and injects capability vars if CAPABILITY_ID is present
+        let phase_env_setup = match build_phase_env_setup(phase, project, vm_name) {
+            Ok(setup) => setup,
+            Err(e) => {
                 use crate::phase_executor::handle_phase_error;
                 handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
                 continue;
             }
-        }
+        };
 
         for (name, content) in scripts {
+            // Prepend environment setup to script content
+            let content_with_env = if phase_env_setup.is_empty() {
+                content
+            } else {
+                format!("{}\\n\\n{}", phase_env_setup, content)
+            };
+
             script_contents.push((
                 name,
-                content,
-                phase.env.clone(),
+                content_with_env,
+                HashMap::new(), // Env vars already injected into script content
                 phase.source,
                 phase.when.clone(), // Store condition for runtime evaluation
                 phase.continue_on_error,
@@ -480,7 +489,7 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        let (name, _content, script_env, source_script, when_condition, continue_on_error) =
+        let (name, _content, _script_env, source_script, when_condition, continue_on_error) =
             &script_contents[i];
 
         // Wrap in conditional block if 'when' is specified
@@ -498,54 +507,18 @@ pub fn execute_command_with_runtime_scripts(
         // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
         let run_cmd = if *source_script { "." } else { "bash" };
 
-        // Set phase-specific environment variables if any
-        if !script_env.is_empty() {
-            entrypoint.push_str("  # Phase-specific environment variables\n");
+        // Note: Environment variables are now prepended to script content by build_phase_env_setup()
+        // This includes both user-defined env vars and capability env vars (if CAPABILITY_ID present)
 
-            // Only use subshell if NOT sourcing (sourcing needs exports to persist)
-            if !*source_script {
-                entrypoint.push_str("  (\n"); // Start subshell to isolate env vars
-            }
-
-            for (key, value) in script_env {
-                let escaped_value = value.replace('\'', "'\\''");
-                let indent = if *source_script { "  " } else { "    " };
-                entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
-            }
-
-            // Use shell_escape to prevent injection attacks
-            let indent = if *source_script { "  " } else { "    " };
-            if *continue_on_error {
-                entrypoint.push_str(&format!(
-                    "{}{} {} || true\n",
-                    indent,
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            } else {
-                entrypoint.push_str(&format!(
-                    "{}{} {}\n",
-                    indent,
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            }
-
-            if !*source_script {
-                entrypoint.push_str("  )\n"); // End subshell
-            }
-            entrypoint.push('\n');
+        // Use shell_escape to prevent injection attacks
+        if *continue_on_error {
+            entrypoint.push_str(&format!(
+                "  {} {} || true\n\n",
+                run_cmd,
+                shell_escape(vm_path)
+            ));
         } else {
-            // Use shell_escape to prevent injection attacks
-            if *continue_on_error {
-                entrypoint.push_str(&format!(
-                    "  {} {} || true\n\n",
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            } else {
-                entrypoint.push_str(&format!("  {} {}\n\n", run_cmd, shell_escape(vm_path)));
-            }
+            entrypoint.push_str(&format!("  {} {}\n\n", run_cmd, shell_escape(vm_path)));
         }
 
         // Close conditional block if 'when' was specified
