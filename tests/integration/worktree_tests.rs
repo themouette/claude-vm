@@ -295,7 +295,6 @@ fn test_worktree_list_shows_worktrees() {
 }
 
 #[test]
-#[ignore = "Bug: list command skip(1) logic incorrectly filters out merged worktrees when main worktree is also merged"]
 fn test_worktree_list_merged_filter() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();

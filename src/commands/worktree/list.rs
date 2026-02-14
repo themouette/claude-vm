@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::worktree::{operations, recovery, state, validation};
+use crate::worktree::{filter, operations, recovery, state, validation};
 
 pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Result<()> {
     // Validate git version
@@ -8,43 +8,51 @@ pub fn execute(merged_base: Option<&str>, locked: bool, detached: bool) -> Resul
     // Get worktree list with auto-prune
     let worktrees = recovery::ensure_clean_state()?;
 
-    // Apply filters
-    let mut filtered_worktrees: Vec<&state::WorktreeEntry> = worktrees.iter().collect();
+    // Apply filters - IMPORTANT: skip main BEFORE other filters to avoid the bug
+    // where skip(1) removes the wrong entry when main doesn't match filters
 
-    // Filter by merged status if requested
-    if let Some(base) = merged_base {
-        let merged_branches = operations::list_merged_branches(base)?;
-        filtered_worktrees.retain(|w| {
-            w.branch
-                .as_ref()
-                .map(|b| merged_branches.contains(b))
-                .unwrap_or(false)
-        });
-    }
+    // Get merged branches if needed (must live long enough for the iterator)
+    let merged_branches = if let Some(base) = merged_base {
+        Some(operations::list_merged_branches(base)?)
+    } else {
+        None
+    };
 
-    // Filter by locked status if requested
-    if locked {
-        filtered_worktrees.retain(|w| w.locked.is_some());
-    }
+    // Build filter chain
+    let iter = filter::skip_main(worktrees.iter());
 
-    // Filter by detached status if requested
-    if detached {
-        filtered_worktrees.retain(|w| w.is_detached);
-    }
+    // Apply merged filter if requested
+    let filtered_worktrees: Vec<&state::WorktreeEntry> = if let Some(ref branches) = merged_branches
+    {
+        let iter = filter::filter_merged(iter, branches);
+
+        // Chain additional filters
+        if locked {
+            filter::filter_locked(iter).collect()
+        } else if detached {
+            filter::filter_detached(iter).collect()
+        } else {
+            iter.collect()
+        }
+    } else {
+        // No merged filter, just apply locked/detached if requested
+        if locked {
+            filter::filter_locked(iter).collect()
+        } else if detached {
+            filter::filter_detached(iter).collect()
+        } else {
+            iter.collect()
+        }
+    };
 
     // Display results
     if filtered_worktrees.is_empty() {
-        println!("No worktrees found matching filters.");
-        return Ok(());
-    }
-
-    // Skip first entry (main worktree) for display
-    let display_worktrees: Vec<_> = filtered_worktrees.iter().skip(1).collect();
-
-    if display_worktrees.is_empty() {
         println!("No additional worktrees found matching filters.");
         return Ok(());
     }
+
+    // Note: No need for skip(1) here - we already skipped main above
+    let display_worktrees = &filtered_worktrees;
 
     println!("Worktrees:");
     for worktree in display_worktrees {

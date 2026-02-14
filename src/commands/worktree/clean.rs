@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::worktree::{operations, recovery, validation};
+use crate::worktree::{filter, operations, recovery, validation};
 use std::io::{self, Write};
 
 pub fn execute(merged_base: Option<&str>, yes: bool, dry_run: bool, locked: bool) -> Result<()> {
@@ -22,22 +22,23 @@ pub fn execute(merged_base: Option<&str>, yes: bool, dry_run: bool, locked: bool
     // Get current worktree list with auto-prune
     let worktrees = recovery::ensure_clean_state()?;
 
-    // Cross-reference: find worktrees whose branch is in the merged list
-    // Skip the main worktree (first entry) and worktrees without a branch
-    // Also skip locked worktrees unless --locked flag is set
-    let mut merged_worktrees = Vec::new();
-    for worktree in worktrees.iter().skip(1) {
-        // Skip locked worktrees unless --locked flag is set
-        if !locked && worktree.locked.is_some() {
-            continue;
-        }
+    // Apply filters: skip main, filter merged, conditionally exclude locked
+    let iter = filter::skip_main(worktrees.iter());
+    let iter = filter::filter_merged(iter, &merged_branches);
 
-        if let Some(ref branch) = worktree.branch {
-            if merged_branches.contains(branch) {
-                merged_worktrees.push((branch.as_str(), &worktree.path));
-            }
-        }
-    }
+    let filtered_worktrees: Vec<_> = if locked {
+        // Include locked worktrees when --locked flag is set
+        iter.collect()
+    } else {
+        // Exclude locked worktrees by default
+        filter::exclude_locked(iter).collect()
+    };
+
+    // Extract branch and path for display and deletion
+    let merged_worktrees: Vec<(&str, _)> = filtered_worktrees
+        .iter()
+        .filter_map(|w| w.branch.as_ref().map(|b| (b.as_str(), &w.path)))
+        .collect();
 
     // If no merged worktrees found, exit early
     if merged_worktrees.is_empty() {
