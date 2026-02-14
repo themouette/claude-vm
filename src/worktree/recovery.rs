@@ -1,18 +1,13 @@
 use crate::error::Result;
+use crate::utils::git::run_git_best_effort;
 use crate::worktree::state::{list_worktrees, WorktreeEntry};
 use std::io::{self, Write};
 
 /// Auto-prune orphaned worktree metadata with user confirmation
 /// Best-effort operation - logs warnings on failure but doesn't error
 pub fn auto_prune() -> Result<()> {
-    use std::process::Command;
-
     // First, do a dry-run to see what would be pruned
-    let dry_run = Command::new("git")
-        .args(["worktree", "prune", "--dry-run", "--verbose"])
-        .output();
-
-    let to_prune = match dry_run {
+    let to_prune = match run_git_best_effort(&["worktree", "prune", "--dry-run", "--verbose"]) {
         Ok(output) => String::from_utf8_lossy(&output.stderr).to_string(),
         Err(e) => {
             eprintln!("Warning: failed to check for orphaned worktrees: {}", e);
@@ -46,9 +41,7 @@ pub fn auto_prune() -> Result<()> {
     }
 
     // Actually prune
-    let output = Command::new("git").args(["worktree", "prune"]).output();
-
-    match output {
+    match run_git_best_effort(&["worktree", "prune"]) {
         Ok(output) if !output.status.success() => {
             // Log warning but don't fail - prune is best-effort cleanup
             eprintln!(
@@ -74,11 +67,7 @@ pub fn auto_prune() -> Result<()> {
 /// Attempt to repair worktree metadata links
 /// Best-effort operation - logs warnings on failure but doesn't error
 pub fn try_repair() -> Result<()> {
-    use std::process::Command;
-
-    let output = Command::new("git").args(["worktree", "repair"]).output();
-
-    match output {
+    match run_git_best_effort(&["worktree", "repair"]) {
         Ok(output) if !output.status.success() => {
             // Log warning but don't fail - repair is best-effort
             eprintln!(

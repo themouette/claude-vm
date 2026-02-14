@@ -278,6 +278,53 @@ pub fn run_git_query(args: &[&str]) -> Result<Option<String>> {
     }
 }
 
+/// Run a git command in best-effort mode, returning raw output without erroring on failures.
+/// This is useful for cleanup operations that should log warnings but not fail the main operation.
+///
+/// # Arguments
+/// * `args` - Command arguments (e.g., `&["worktree", "prune"]`)
+///
+/// # Example
+/// ```ignore
+/// match run_git_best_effort(&["worktree", "prune"]) {
+///     Ok(output) if !output.status.success() => {
+///         eprintln!("Warning: prune failed: {}", String::from_utf8_lossy(&output.stderr));
+///     }
+///     Err(e) => eprintln!("Warning: {}", e),
+///     _ => {}
+/// }
+/// ```
+pub fn run_git_best_effort(args: &[&str]) -> Result<std::process::Output> {
+    let timeout = DEFAULT_GIT_TIMEOUT;
+
+    let mut child = Command::new("git")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| ClaudeVmError::Git(format!("Failed to spawn git {}: {}", args[0], e)))?;
+
+    match child.wait_timeout(timeout).map_err(|e| {
+        ClaudeVmError::Git(format!("Failed to wait for git command: {}", e))
+    })? {
+        Some(_) => {
+            let output = child.wait_with_output().map_err(|e| {
+                ClaudeVmError::Git(format!("Failed to read git output: {}", e))
+            })?;
+            Ok(output)
+        }
+        None => {
+            // Timeout occurred, kill the process
+            let _ = child.kill();
+            Err(ClaudeVmError::Git(format!(
+                "git {} timed out after {} seconds",
+                args[0],
+                timeout.as_secs()
+            )))
+        }
+    }
+}
+
 /// Convert a Path to &str with proper error handling
 ///
 /// This helper ensures consistent error messages when paths contain invalid UTF-8.
