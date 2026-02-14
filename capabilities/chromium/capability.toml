@@ -6,7 +6,8 @@ description = "Headless Chromium for web automation and testing"
 [packages]
 system = ["chromium", "fonts-liberation", "xvfb"]
 
-[vm_setup]
+[[phase.setup]]
+name = "chromium-symlinks"
 script = """
 #!/bin/bash
 set -e
@@ -19,7 +20,8 @@ echo "Chromium configured successfully."
 chromium --version || true
 """
 
-[vm_runtime]
+[[phase.runtime]]
+name = "chromium-environment"
 script = """
 #!/bin/bash
 # Write Chromium context for Claude

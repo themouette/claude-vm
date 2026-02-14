@@ -2,6 +2,7 @@
 //!
 //! These types define the schema for capability definitions.
 
+use crate::config::PhaseConfig;
 use serde::Deserialize;
 
 /// A capability definition loaded from a TOML file.
@@ -17,16 +18,14 @@ pub struct Capability {
     pub packages: Option<PackageSpec>,
 
     /// Optional host setup script (runs on host during setup)
+    /// Host setup is required for operations that need to run on the host machine
+    /// (e.g., copying host git config, exporting GPG keys)
     #[serde(default)]
     pub host_setup: Option<ScriptConfig>,
 
-    /// Optional VM setup script (runs in VM during template creation)
-    #[serde(default)]
-    pub vm_setup: Option<ScriptConfig>,
-
-    /// Optional VM runtime script (sourced before each session)
-    #[serde(default)]
-    pub vm_runtime: Option<ScriptConfig>,
+    /// Phase-based execution model for VM setup and runtime scripts
+    /// All VM-side operations now use phases for better control and debugging
+    pub phase: PhaseConfig,
 
     /// MCP servers to register
     #[serde(default)]

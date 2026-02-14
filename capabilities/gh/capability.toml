@@ -33,8 +33,10 @@ else
 fi
 """
 
-[vm_setup]
-script_file = "vm_setup.sh"
+[[phase.setup]]
+name = "gh-authentication"
+script_files = ["vm_setup.sh"]
 
-[vm_runtime]
-script_file = "vm_runtime.sh"
+[[phase.runtime]]
+name = "gh-status"
+script_files = ["vm_runtime.sh"]

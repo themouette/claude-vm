@@ -8,8 +8,14 @@ use crate::utils::env as env_utils;
 use crate::vm::session::VmSession;
 
 pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()> {
+    // Clone config to allow merging capability phases
+    let mut config = config.clone();
+
+    // Merge capability-defined phases with user-defined phases
+    crate::capabilities::merge_capability_phases(&mut config)?;
+
     // Ensure template exists (create if missing and user confirms)
-    helpers::ensure_template_exists(project, config)?;
+    helpers::ensure_template_exists(project, &config)?;
 
     // Resolve worktree if --worktree flag present
     if !cmd.runtime.worktree.is_empty() {
@@ -82,7 +88,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
     runner::execute_command_with_runtime_scripts(
         session.name(),
         project,
-        config,
+        &config,
         &session,
         workdir,
         "claude",

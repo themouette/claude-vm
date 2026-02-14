@@ -91,16 +91,19 @@ fn test_gpg_capability_loads() {
     let has_gpg = enabled.iter().any(|c| c.capability.id == "gpg");
     assert!(has_gpg, "GPG capability should be enabled");
 
-    // Check that GPG has all three hooks
+    // Check that GPG has host_setup and phases
     let gpg_cap = enabled.iter().find(|c| c.capability.id == "gpg").unwrap();
     assert!(
         gpg_cap.host_setup.is_some(),
         "GPG should have host_setup hook"
     );
-    assert!(gpg_cap.vm_setup.is_some(), "GPG should have vm_setup hook");
     assert!(
-        gpg_cap.vm_runtime.is_some(),
-        "GPG should have vm_runtime hook"
+        !gpg_cap.phase.setup.is_empty(),
+        "GPG should have setup phases"
+    );
+    assert!(
+        !gpg_cap.phase.runtime.is_empty(),
+        "GPG should have runtime phases"
     );
 }
 
