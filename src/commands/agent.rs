@@ -19,7 +19,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
 
     // Resolve worktree if --worktree flag present
     if !cmd.runtime.worktree.is_empty() {
-        let worktree_path = helpers::resolve_worktree(&cmd.runtime.worktree, config, project)?;
+        let worktree_path = helpers::resolve_worktree(&cmd.runtime.worktree, &config, project)?;
         std::env::set_current_dir(&worktree_path)?;
     }
 
