@@ -586,6 +586,335 @@ If you encounter issues not covered here:
    - claude-vm version (`claude-vm --version`)
    - Steps to reproduce
 
+## Recovery Procedures
+
+This section covers procedures for recovering from various failure states and inconsistencies.
+
+### Recovery Workflow Overview
+
+When you encounter worktree issues, follow this general workflow:
+
+```
+1. Assess the situation
+   ├─→ List worktrees: claude-vm worktree list
+   ├─→ Check git status: git status
+   └─→ Inspect git metadata: git worktree list --porcelain
+
+2. Identify the problem
+   ├─→ Orphaned metadata (git knows, directory missing)
+   ├─→ Orphaned directories (directory exists, git doesn't know)
+   ├─→ Locked worktrees (intentional or stale locks)
+   └─→ Corrupted metadata (broken links, invalid paths)
+
+3. Apply recovery
+   ├─→ Auto-prune for orphaned metadata
+   ├─→ Manual cleanup for orphaned directories
+   ├─→ Unlock or force-remove for locked worktrees
+   └─→ Repair for corrupted metadata
+
+4. Verify recovery
+   └─→ Confirm: claude-vm worktree list
+```
+
+### Recovering from Orphaned Worktree Metadata
+
+**Scenario**: Git tracks worktrees whose directories were manually deleted.
+
+**Symptoms**:
+```bash
+$ git worktree list
+/path/to/main      abc123 [main]
+/path/to/feature   def456 [feature]    # Directory doesn't exist!
+```
+
+**Recovery**:
+
+1. **Automatic (Recommended)**:
+   ```bash
+   # The system automatically detects and offers to prune
+   claude-vm worktree list
+   # Prompts: "Found orphaned worktree metadata:"
+   # Select: y
+   ```
+
+2. **Manual**:
+   ```bash
+   # Preview what will be pruned
+   git worktree prune --dry-run --verbose
+
+   # Prune orphaned metadata
+   git worktree prune
+
+   # Verify
+   claude-vm worktree list
+   ```
+
+**When to use manual**: When you want full control or the automatic prompt doesn't appear.
+
+### Recovering from Orphaned Worktree Directories
+
+**Scenario**: Worktree directories exist but git doesn't know about them.
+
+**Symptoms**:
+```bash
+$ ls /path/to/repo-worktrees/
+feature1/  feature2/  feature3/
+
+$ git worktree list
+/path/to/main  abc123 [main]
+# feature1, feature2, feature3 not listed
+```
+
+**Recovery**:
+
+1. **Try repair first**:
+   ```bash
+   git worktree repair
+   claude-vm worktree list  # Check if fixed
+   ```
+
+2. **If repair doesn't work, manual cleanup**:
+   ```bash
+   # Option A: Remove orphaned directories
+   rm -rf /path/to/repo-worktrees/feature1
+   rm -rf /path/to/repo-worktrees/feature2
+   rm -rf /path/to/repo-worktrees/feature3
+
+   # Option B: Re-create worktrees properly
+   claude-vm worktree create feature1
+   ```
+
+3. **Verify**:
+   ```bash
+   claude-vm worktree list
+   git status  # In each worktree
+   ```
+
+### Recovering from Locked Worktrees
+
+**Scenario**: Worktree is locked and operations fail.
+
+**Symptoms**:
+```bash
+$ claude-vm worktree remove feature --yes
+Error: Worktree is locked: being worked on
+```
+
+**Recovery**:
+
+1. **Check lock status**:
+   ```bash
+   claude-vm worktree list --locked
+   # Shows: feature -> /path [locked: being worked on]
+   ```
+
+2. **Understand the lock**:
+   ```bash
+   # Check lock reason
+   cat .git/worktrees/feature/locked
+   ```
+
+3. **Remove based on context**:
+
+   **If lock is intentional** (you're actively working):
+   ```bash
+   # Keep it locked, use --locked flag if needed
+   claude-vm worktree remove --merged --locked --yes
+   ```
+
+   **If lock is stale** (work is done):
+   ```bash
+   # Unlock first
+   git worktree unlock /path/to/feature
+
+   # Then remove normally
+   claude-vm worktree remove feature --yes
+   ```
+
+   **If worktree directory is missing**:
+   ```bash
+   # Force remove from git metadata
+   git worktree remove --force feature
+   ```
+
+### Recovering from Corrupted Worktree Metadata
+
+**Scenario**: Worktree metadata is corrupted or links are broken.
+
+**Symptoms**:
+- `git worktree list` shows errors
+- Operations fail with "administrative files appear to be broken"
+- Invalid paths or missing `.git` files in worktrees
+
+**Recovery**:
+
+1. **Try automated repair**:
+   ```bash
+   git worktree repair
+   git worktree repair --verbose  # See what's being fixed
+   ```
+
+2. **If repair fails, identify damaged worktrees**:
+   ```bash
+   git worktree list
+   # Note which worktrees show errors
+   ```
+
+3. **Remove and recreate damaged worktrees**:
+   ```bash
+   # For each damaged worktree:
+
+   # Step 1: Save any uncommitted work
+   cd /path/to/damaged-worktree
+   git stash push -m "backup before repair"
+   # or commit changes
+
+   # Step 2: Get branch name
+   git branch --show-current  # Note: might fail if very corrupted
+
+   # Step 3: Force remove the worktree
+   git worktree remove --force damaged-branch
+
+   # Step 4: Clean up directory if it still exists
+   rm -rf /path/to/damaged-worktree
+
+   # Step 5: Recreate properly
+   claude-vm worktree create damaged-branch
+
+   # Step 6: Restore work
+   cd /path/to/new-worktree
+   git stash pop  # if you stashed
+   ```
+
+### Recovering from Failed Operations
+
+**Scenario**: A worktree operation was interrupted (network issue, ctrl-c, crash).
+
+**Symptoms**:
+- Incomplete worktree directory
+- Partially updated git metadata
+- Lock files present
+
+**Recovery**:
+
+1. **Check current state**:
+   ```bash
+   git worktree list --porcelain
+   claude-vm worktree list
+   ```
+
+2. **Look for lock files**:
+   ```bash
+   # Check for stale locks
+   ls -la .git/*.lock
+   ls -la .git/worktrees/*/locked
+   ```
+
+3. **Clean up based on findings**:
+
+   **If worktree is incomplete**:
+   ```bash
+   # Remove and retry
+   claude-vm worktree remove failed-branch --yes
+   claude-vm worktree create failed-branch
+   ```
+
+   **If lock files are stale**:
+   ```bash
+   # Remove lock files (ONLY if you're sure no git operation is running)
+   rm .git/index.lock  # Main repo lock
+   rm .git/worktrees/branch/locked  # Worktree lock
+   ```
+
+4. **Verify and retry**:
+   ```bash
+   git status
+   claude-vm worktree list
+   # Retry original operation
+   ```
+
+### Complete Repository Reset (Last Resort)
+
+**Scenario**: Multiple issues or complete corruption, need to start fresh.
+
+**⚠️ Warning**: This is destructive. Only use when other recovery methods fail.
+
+**Steps**:
+
+1. **Backup everything important**:
+   ```bash
+   # Backup uncommitted changes from all worktrees
+   cd /path/to/main-repo
+   git stash push -m "main repo backup"
+
+   cd /path/to/worktree1
+   git stash push -m "worktree1 backup"
+
+   # ... repeat for all worktrees
+
+   # Backup your stash refs
+   git stash list > ~/git-stashes-backup.txt
+   ```
+
+2. **Clean all worktrees**:
+   ```bash
+   # Remove all worktree metadata
+   git worktree prune
+
+   # Force remove any remaining
+   for dir in /path/to/repo-worktrees/*; do
+       rm -rf "$dir"
+   done
+   ```
+
+3. **Verify main repository is healthy**:
+   ```bash
+   cd /path/to/main-repo
+   git fsck
+   git status
+   ```
+
+4. **Recreate needed worktrees**:
+   ```bash
+   claude-vm worktree create feature1
+   claude-vm worktree create feature2
+   ```
+
+5. **Restore work**:
+   ```bash
+   cd /path/to/worktree1
+   git stash list
+   git stash apply stash@{N}  # Use correct stash number
+   ```
+
+### Preventive Measures
+
+To avoid needing recovery:
+
+1. **Always use claude-vm commands** instead of manual git worktree commands
+2. **Don't manually delete worktree directories** - use `claude-vm worktree remove`
+3. **Commit or stash changes** before risky operations
+4. **Let auto-prune run** when prompted - it keeps metadata clean
+5. **Monitor disk space** - full disk can cause incomplete operations
+6. **Regular health checks**:
+   ```bash
+   # Weekly maintenance
+   claude-vm worktree list
+   git worktree prune --dry-run  # Preview cleanup
+   git fsck  # Check repository health
+   ```
+
+### Emergency Contacts
+
+If recovery procedures fail:
+
+1. **Preserve state**: Don't delete anything yet
+2. **Document the issue**: Screenshot errors, save command output
+3. **Get help**:
+   - File issue: https://github.com/anthropics/claude-vm/issues
+   - Include: git version, claude-vm version, full error output
+   - Attach: output of `git worktree list --porcelain`
+
 ## Related Documentation
 
 - [Agent Forwarding](agent-forwarding.md) - Configure git identity and commit signing
