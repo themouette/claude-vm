@@ -137,10 +137,6 @@ pub fn execute_host_setup(project: &Project, capability: &Arc<Capability>) -> Re
     Ok(())
 }
 
-// LEGACY FUNCTIONS REMOVED
-// VM setup and runtime are now handled through the phase system.
-// Capabilities define phases which are merged and executed dynamically.
-
 /// Execute a script on the host machine
 fn execute_host_script(
     project: &Project,
