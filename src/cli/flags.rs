@@ -46,8 +46,14 @@ pub struct RuntimeFlags {
     pub auto_setup: bool,
 
     /// Create or resume worktree for branch development.
-    /// Usage: --worktree <branch> [base-ref]
-    #[arg(long = "worktree", num_args = 1..=2, value_names = ["BRANCH", "BASE"])]
+    /// Usage: --worktree=<branch> or --worktree=<branch>,<base-ref>
+    #[arg(
+        long = "worktree",
+        value_name = "BRANCH[,BASE]",
+        value_delimiter = ',',
+        require_equals = true,
+        num_args = 1..=2
+    )]
     pub worktree: Vec<String>,
 }
 

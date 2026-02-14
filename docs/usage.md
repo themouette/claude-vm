@@ -352,13 +352,13 @@ The `--worktree` flag on agent and shell commands provides one-command worktree 
 
 ```bash
 # Create/resume worktree and run agent
-claude-vm agent --worktree feature-branch
+claude-vm agent --worktree=feature-branch
 
-# Specify base branch
-claude-vm agent --worktree feature-branch main
+# Specify base branch (comma-separated)
+claude-vm agent --worktree=feature-branch,main
 
 # Open shell in worktree
-claude-vm shell --worktree feature-branch
+claude-vm shell --worktree=feature-branch
 ```
 
 The system will:
