@@ -6,6 +6,12 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Build-specific template filtering**: `list` and `clean-all` commands now filter templates by build type to prevent interference between development and production environments
+  - Debug builds only show and operate on templates with `-dev` suffix
+  - Release builds only show and operate on templates without `-dev` suffix
+  - Prevents accidental deletion of release templates when using debug builds
+  - Ensures clean separation between development and production template namespaces
+
 - **Explicit agent command**: Users can invoke the agent explicitly via `claude-vm agent [flags] [args]`
   - Both `claude-vm [args]` and `claude-vm agent [args]` work identically
   - Existing usage continues to work without modification — no changes required to workflows or scripts
