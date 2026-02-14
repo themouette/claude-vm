@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -64,7 +64,7 @@ fn get_worktree_dir(repo_dir: &Path) -> PathBuf {
 
 #[test]
 fn test_worktree_command_help() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "--help"]);
 
     cmd.assert()
@@ -77,7 +77,7 @@ fn test_worktree_command_help() {
 
 #[test]
 fn test_worktree_short_alias() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["w", "--help"]);
 
     cmd.assert()
@@ -94,7 +94,7 @@ fn test_worktree_short_alias_functional() {
     let repo_path = repo.path();
 
     // Create worktree using short alias
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["w", "create", "feature-w"]);
     cmd.assert()
@@ -102,14 +102,14 @@ fn test_worktree_short_alias_functional() {
         .stdout(predicate::str::contains("Created worktree"));
 
     // List using short alias
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path).args(["w", "list"]);
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("feature-w"));
 
     // Remove using short alias
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["w", "remove", "feature-w", "--yes"]);
     cmd.assert().success();
@@ -117,7 +117,7 @@ fn test_worktree_short_alias_functional() {
 
 #[test]
 fn test_worktree_create_help() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "--help"]);
 
     cmd.assert()
@@ -129,7 +129,7 @@ fn test_worktree_create_help() {
 
 #[test]
 fn test_worktree_list_help() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list", "--help"]);
 
     cmd.assert()
@@ -142,7 +142,7 @@ fn test_worktree_list_help() {
 
 #[test]
 fn test_worktree_remove_help() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--help"]);
 
     cmd.assert()
@@ -157,7 +157,7 @@ fn test_worktree_remove_help() {
 
 #[test]
 fn test_worktree_rm_alias() {
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "rm", "--help"]);
 
     cmd.assert()
@@ -171,7 +171,7 @@ fn test_worktree_remove_conflict_merged_and_branches() {
     let repo_path = repo_dir.path();
 
     // Try to use both branches and --merged (should fail)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature", "--merged", "main"])
         .current_dir(repo_path);
 
@@ -186,7 +186,7 @@ fn test_worktree_remove_locked_without_merged() {
     let repo_path = repo_dir.path();
 
     // Try to use --locked without --merged (should fail)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature", "--locked"])
         .current_dir(repo_path);
 
@@ -201,7 +201,7 @@ fn test_worktree_remove_no_arguments() {
     let repo_path = repo_dir.path();
 
     // Try to remove without any branches or --merged (should fail)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--yes"])
         .current_dir(repo_path);
 
@@ -216,13 +216,13 @@ fn test_worktree_rm_alias_works() {
     let repo_path = repo_dir.path();
 
     // Create worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // Use rm alias to remove
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "rm", "feature", "--yes"])
         .current_dir(repo_path);
 
@@ -239,7 +239,7 @@ fn test_worktree_create_new_branch() {
     let repo_path = repo_dir.path();
 
     // Create worktree for new branch
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-branch"])
         .current_dir(repo_path);
 
@@ -289,7 +289,7 @@ fn test_worktree_create_with_base_branch() {
         .unwrap();
 
     // Create worktree from develop branch
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature", "develop"])
         .current_dir(repo_path);
 
@@ -309,13 +309,13 @@ fn test_worktree_create_resume_existing() {
     let repo_path = repo_dir.path();
 
     // Create worktree first time
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // Try to create again - should resume
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
 
@@ -331,7 +331,7 @@ fn test_worktree_create_invalid_branch_name() {
     let repo_path = repo_dir.path();
 
     // Try to create with invalid branch name (reserved name)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "HEAD"])
         .current_dir(repo_path);
 
@@ -346,7 +346,7 @@ fn test_worktree_create_path_traversal_in_branch() {
     let repo_path = repo_dir.path();
 
     // Try to create with path traversal in branch name
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "../escape"])
         .current_dir(repo_path);
 
@@ -362,7 +362,7 @@ fn test_worktree_list_empty() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list"]).current_dir(repo_path);
 
     cmd.assert()
@@ -376,18 +376,18 @@ fn test_worktree_list_shows_worktrees() {
     let repo_path = repo_dir.path();
 
     // Create multiple worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-1"])
         .current_dir(repo_path);
     cmd.assert().success();
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-2"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // List worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list"]).current_dir(repo_path);
 
     cmd.assert()
@@ -403,7 +403,7 @@ fn test_worktree_list_merged_filter() {
     let repo_path = repo_dir.path();
 
     // Create a worktree and add work to it
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-merged"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -434,7 +434,7 @@ fn test_worktree_list_merged_filter() {
         .unwrap();
 
     // Now create an unmerged worktree AFTER the merge
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-unmerged"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -453,7 +453,7 @@ fn test_worktree_list_merged_filter() {
         .unwrap();
 
     // List with --merged filter should show only merged worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list", "--merged", "master"])
         .current_dir(repo_path);
 
@@ -480,7 +480,7 @@ fn test_worktree_remove_single_with_yes_flag() {
     let repo_path = repo_dir.path();
 
     // Create worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -489,7 +489,7 @@ fn test_worktree_remove_single_with_yes_flag() {
     assert!(worktree_dir.exists(), "Worktree should exist before remove");
 
     // Remove with --yes flag
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature", "--yes"])
         .current_dir(repo_path);
 
@@ -517,18 +517,18 @@ fn test_worktree_remove_multiple_branches() {
     let repo_path = repo_dir.path();
 
     // Create multiple worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-1"])
         .current_dir(repo_path);
     cmd.assert().success();
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-2"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // Remove both
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature-1", "feature-2", "--yes"])
         .current_dir(repo_path);
 
@@ -543,7 +543,7 @@ fn test_worktree_remove_dry_run() {
     let repo_path = repo_dir.path();
 
     // Create worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -551,7 +551,7 @@ fn test_worktree_remove_dry_run() {
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
 
     // Dry run remove
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature", "--dry-run"])
         .current_dir(repo_path);
 
@@ -571,7 +571,7 @@ fn test_worktree_remove_nonexistent_branch() {
     let repo_dir = create_test_repo();
     let repo_path = repo_dir.path();
 
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "nonexistent", "--yes"])
         .current_dir(repo_path);
 
@@ -586,13 +586,13 @@ fn test_worktree_remove_partial_success() {
     let repo_path = repo_dir.path();
 
     // Create one worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-1"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // Try to remove one existing and one non-existing
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "feature-1", "nonexistent", "--yes"])
         .current_dir(repo_path);
 
@@ -639,7 +639,7 @@ fn test_worktree_remove_merged_with_yes() {
         .unwrap();
 
     // Create worktree for merged branch
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -648,7 +648,7 @@ fn test_worktree_remove_merged_with_yes() {
     assert!(worktree_dir.exists());
 
     // Remove merged worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
 
@@ -666,7 +666,7 @@ fn test_worktree_remove_no_merged_worktrees() {
     let repo_path = repo_dir.path();
 
     // Create unmerged worktree with unique commits
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -686,7 +686,7 @@ fn test_worktree_remove_no_merged_worktrees() {
         .unwrap();
 
     // Try to remove merged (should find none)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
 
@@ -729,7 +729,7 @@ fn test_worktree_remove_merged_dry_run() {
         .unwrap();
 
     // Create worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
@@ -737,7 +737,7 @@ fn test_worktree_remove_merged_dry_run() {
     let worktree_dir = get_worktree_dir(repo_path).join("feature");
 
     // Dry run remove
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--merged", "master", "--dry-run"])
         .current_dir(repo_path);
 
@@ -784,13 +784,13 @@ fn test_worktree_remove_merged_uses_current_branch() {
         .unwrap();
 
     // Create worktree for the merged branch
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature"])
         .current_dir(repo_path);
     cmd.assert().success();
 
     // Remove without specifying base (should use current branch which is master)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--merged", "--yes"])
         .current_dir(repo_path);
 
@@ -808,7 +808,7 @@ fn test_complete_worktree_workflow() {
     let repo_path = repo_dir.path();
 
     // Step 1: Create a worktree
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "create", "feature-complete"])
         .current_dir(repo_path);
     cmd.assert()
@@ -816,7 +816,7 @@ fn test_complete_worktree_workflow() {
         .stdout(predicate::str::contains("Created worktree"));
 
     // Step 2: List worktrees (should show our new worktree)
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list"]).current_dir(repo_path);
     cmd.assert()
         .success()
@@ -849,7 +849,7 @@ fn test_complete_worktree_workflow() {
         .unwrap();
 
     // Step 5: Remove merged worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove", "--merged", "master", "--yes"])
         .current_dir(repo_path);
     cmd.assert()
@@ -875,14 +875,14 @@ fn test_multiple_worktrees_parallel_work() {
     // Create multiple worktrees for parallel development
     let branches = ["feat-1", "feat-2", "feat-3"];
     for branch in &branches {
-        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+        let mut cmd = cargo_bin_cmd!("claude-vm");
         cmd.args(["worktree", "create", branch])
             .current_dir(repo_path);
         cmd.assert().success();
     }
 
     // List should show all worktrees
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "list"]).current_dir(repo_path);
 
     let output = cmd.assert().success();
@@ -892,7 +892,7 @@ fn test_multiple_worktrees_parallel_work() {
     }
 
     // Batch remove all
-    let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("claude-vm"));
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.args(["worktree", "remove"])
         .args(branches)
         .arg("--yes")
@@ -910,7 +910,7 @@ fn test_worktree_create_with_invalid_base_branch() {
     let repo = create_test_repo();
     let repo_path = repo.path();
 
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["worktree", "create", "feature", "nonexistent-base"]);
 
@@ -925,7 +925,7 @@ fn test_worktree_remove_during_git_lock() {
     let repo_path = repo.path();
 
     // Create a worktree
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["worktree", "create", "feature1"]);
     cmd.assert().success();
@@ -936,7 +936,7 @@ fn test_worktree_remove_during_git_lock() {
         fs::write(git_dir.join("locked"), "Testing locked worktree").unwrap();
 
         // Try to remove the locked worktree without --locked flag
-        let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+        let mut cmd = cargo_bin_cmd!("claude-vm");
         cmd.current_dir(repo_path)
             .args(["worktree", "remove", "--merged", "--yes"]);
 
@@ -952,7 +952,7 @@ fn test_worktree_remove_with_invalid_base_branch() {
     let repo = create_test_repo();
     let repo_path = repo.path();
 
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path).args([
         "worktree",
         "remove",
@@ -970,7 +970,7 @@ fn test_worktree_remove_with_invalid_base_branch() {
 fn test_worktree_create_in_non_git_repo() {
     let temp_dir = TempDir::new().unwrap();
 
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(temp_dir.path())
         .args(["worktree", "create", "feature"]);
 
@@ -983,7 +983,7 @@ fn test_worktree_create_in_non_git_repo() {
 fn test_worktree_list_in_non_git_repo() {
     let temp_dir = TempDir::new().unwrap();
 
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(temp_dir.path()).args(["worktree", "list"]);
 
     cmd.assert()
@@ -998,7 +998,7 @@ fn test_worktree_create_resume_race_condition() {
     let repo_path = repo.path();
 
     // First creation
-    let mut cmd1 = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd1 = cargo_bin_cmd!("claude-vm");
     cmd1.current_dir(repo_path)
         .args(["worktree", "create", "race-test"]);
     cmd1.assert()
@@ -1006,7 +1006,7 @@ fn test_worktree_create_resume_race_condition() {
         .stdout(predicate::str::contains("Created worktree"));
 
     // Second creation (should resume)
-    let mut cmd2 = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd2 = cargo_bin_cmd!("claude-vm");
     cmd2.current_dir(repo_path)
         .args(["worktree", "create", "race-test"]);
     cmd2.assert()
@@ -1021,7 +1021,7 @@ fn test_worktree_remove_with_missing_directory() {
     let repo_path = repo.path();
 
     // Create a worktree
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["worktree", "create", "orphaned"]);
     cmd.assert().success();
@@ -1037,7 +1037,7 @@ fn test_worktree_remove_with_missing_directory() {
         fs::remove_dir_all(&orphaned_dir).unwrap();
 
         // Try to remove via command - git should handle this with prune or force
-        let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+        let mut cmd = cargo_bin_cmd!("claude-vm");
         cmd.current_dir(repo_path)
             .args(["worktree", "remove", "orphaned", "--yes"]);
 
@@ -1052,7 +1052,7 @@ fn test_worktree_create_branch_name_edge_cases() {
     let repo_path = repo.path();
 
     // Test branch name with multiple slashes (valid)
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path)
         .args(["worktree", "create", "feature/deep/nested/branch"]);
     cmd.assert()
@@ -1060,7 +1060,7 @@ fn test_worktree_create_branch_name_edge_cases() {
         .stdout(predicate::str::contains("Created worktree"));
 
     // Verify worktree appears in list
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path).args(["worktree", "list"]);
     cmd.assert()
         .success()
@@ -1075,7 +1075,7 @@ fn test_worktree_remove_all_branches_separately() {
 
     // Create multiple worktrees
     for i in 1..=3 {
-        let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+        let mut cmd = cargo_bin_cmd!("claude-vm");
         cmd.current_dir(repo_path)
             .args(["worktree", "create", &format!("feature{}", i)]);
         cmd.assert().success();
@@ -1083,14 +1083,14 @@ fn test_worktree_remove_all_branches_separately() {
 
     // Remove them one by one
     for i in 1..=3 {
-        let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+        let mut cmd = cargo_bin_cmd!("claude-vm");
         cmd.current_dir(repo_path)
             .args(["worktree", "remove", &format!("feature{}", i), "--yes"]);
         cmd.assert().success();
     }
 
     // Verify all are removed - list should show no additional worktrees
-    let mut cmd = Command::cargo_bin("claude-vm").unwrap();
+    let mut cmd = cargo_bin_cmd!("claude-vm");
     cmd.current_dir(repo_path).args(["worktree", "list"]);
 
     cmd.assert().success().stdout(
