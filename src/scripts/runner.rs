@@ -327,6 +327,23 @@ pub fn execute_command_with_runtime_scripts(
             }
         };
 
+        // Validate environment variable keys before adding to script_contents
+        for key in phase.env.keys() {
+            if let Err(e) = crate::utils::env::validate_env_key(key) {
+                eprintln!(
+                    "\n❌ Runtime phase '{}' has invalid environment variable key",
+                    phase.name
+                );
+                eprintln!("   Error: {}", e);
+                if phase.continue_on_error {
+                    eprintln!("   ℹ Continuing due to continue_on_error=true");
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+
         for (name, content) in scripts {
             script_contents.push((
                 name,

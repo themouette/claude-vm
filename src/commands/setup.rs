@@ -324,13 +324,29 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
         for (script_name, content) in scripts {
             println!("  Running: {}", script_name);
 
-            // Create environment with phase-specific vars
-            let env_setup = phase
+            // Create environment with phase-specific vars (with validation)
+            let env_setup: Result<Vec<String>> = phase
                 .env
                 .iter()
-                .map(|(k, v)| format!("export {}='{}'", k, v.replace('\'', "'\\''")))
-                .collect::<Vec<_>>()
-                .join("\n");
+                .map(|(k, v)| crate::utils::env::build_env_export(k, v))
+                .collect();
+
+            let env_setup = match env_setup {
+                Ok(exports) => exports.join("\n"),
+                Err(e) => {
+                    eprintln!(
+                        "\n❌ Setup phase '{}' has invalid environment variables",
+                        phase.name
+                    );
+                    eprintln!("   Error: {}", e);
+                    if phase.continue_on_error {
+                        eprintln!("   ℹ Continuing due to continue_on_error=true");
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
 
             let full_script = if env_setup.is_empty() {
                 content.clone()
