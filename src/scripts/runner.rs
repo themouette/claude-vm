@@ -297,50 +297,24 @@ pub fn execute_command_with_runtime_scripts(
     }
 
     // New phase-based runtime scripts
+    use crate::phase_executor::{load_phase_scripts, PhaseContext};
+
     for phase in &config.phase.runtime {
         // Validate phase and emit warnings for potential issues
         phase.validate_and_warn();
 
-        // Get scripts for this phase
-        let scripts = match phase.get_scripts(project.root()) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!(
-                    "\n❌ Failed to load scripts for runtime phase '{}'",
-                    phase.name
-                );
-                eprintln!("   Error: {}", e);
-                if !phase.script_files.is_empty() {
-                    eprintln!("   Script files:");
-                    for file in &phase.script_files {
-                        eprintln!("   - {}", file);
-                    }
-                    eprintln!("\n   Hint: Check that script files exist and are readable");
-                }
-
-                if phase.continue_on_error {
-                    eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
+        // Load scripts with common error handling
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Runtime)?
+        else {
+            continue; // continue_on_error was true
         };
 
         // Validate environment variable keys before adding to script_contents
         for key in phase.env.keys() {
             if let Err(e) = crate::utils::env::validate_env_key(key) {
-                eprintln!(
-                    "\n❌ Runtime phase '{}' has invalid environment variable key",
-                    phase.name
-                );
-                eprintln!("   Error: {}", e);
-                if phase.continue_on_error {
-                    eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    continue;
-                } else {
-                    return Err(e);
-                }
+                use crate::phase_executor::handle_phase_error;
+                handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
+                continue;
             }
         }
 

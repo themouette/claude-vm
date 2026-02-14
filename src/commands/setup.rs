@@ -285,6 +285,10 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
     }
 
     // 3. New phase-based scripts
+    use crate::phase_executor::{
+        build_phase_env_setup, handle_phase_error, load_phase_scripts, PhaseContext,
+    };
+
     for phase in &config.phase.setup {
         println!("\n━━━ Setup Phase: {} ━━━", phase.name);
 
@@ -297,54 +301,21 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             continue;
         }
 
-        // Get all scripts for this phase
-        let scripts = match phase.get_scripts(project.root()) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("\n❌ Failed to load scripts for phase '{}'", phase.name);
-                eprintln!("   Error: {}", e);
-                if !phase.script_files.is_empty() {
-                    eprintln!("   Script files:");
-                    for file in &phase.script_files {
-                        eprintln!("   - {}", file);
-                    }
-                    eprintln!("\n   Hint: Check that script files exist and are readable");
-                }
-
-                if phase.continue_on_error {
-                    eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
+        // Load scripts with common error handling
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Setup)? else {
+            continue; // continue_on_error was true
         };
 
         // Execute scripts in this phase
         for (script_name, content) in scripts {
             println!("  Running: {}", script_name);
 
-            // Create environment with phase-specific vars (with validation)
-            let env_setup: Result<Vec<String>> = phase
-                .env
-                .iter()
-                .map(|(k, v)| crate::utils::env::build_env_export(k, v))
-                .collect();
-
-            let env_setup = match env_setup {
-                Ok(exports) => exports.join("\n"),
+            // Build environment setup with validation
+            let env_setup = match build_phase_env_setup(phase) {
+                Ok(setup) => setup,
                 Err(e) => {
-                    eprintln!(
-                        "\n❌ Setup phase '{}' has invalid environment variables",
-                        phase.name
-                    );
-                    eprintln!("   Error: {}", e);
-                    if phase.continue_on_error {
-                        eprintln!("   ℹ Continuing due to continue_on_error=true");
-                        continue;
-                    } else {
-                        return Err(e);
-                    }
+                    handle_phase_error(phase, PhaseContext::Setup, e, Some(&script_name))?;
+                    continue;
                 }
             };
 
@@ -357,17 +328,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             match runner::execute_script(vm_name, &full_script, &script_name) {
                 Ok(_) => println!("  ✓ Completed: {}", script_name),
                 Err(e) => {
-                    // Enhanced error message with context
-                    eprintln!("\n❌ Setup phase '{}' failed", phase.name);
-                    eprintln!("   Script: {}", script_name);
-                    eprintln!("   Error: {}", e);
-
-                    // Show condition if present
-                    if let Some(ref condition) = phase.when {
-                        eprintln!("   Condition: {}", condition);
-                    }
-
-                    // Show script preview for inline scripts
+                    // Show script preview for inline scripts before handling error
                     if script_name.contains("-inline") {
                         let preview = content.lines().take(3).collect::<Vec<_>>().join("\n");
                         let lines = content.lines().count();
@@ -378,19 +339,19 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
                         }
                     }
 
-                    // Provide helpful hints
-                    if phase.continue_on_error {
-                        eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    } else {
+                    // Provide helpful hints before error handling
+                    if !phase.continue_on_error {
                         eprintln!("\n   Hints:");
                         eprintln!("   - Check if all required tools are available in the VM");
                         eprintln!("   - Verify script syntax with: bash -n <script>");
                         eprintln!(
                             "   - Add 'continue_on_error = true' to make this phase optional"
                         );
-                        eprintln!("   - Run 'claude-vm shell' to debug interactively");
-                        return Err(e);
+                        eprintln!("   - Run 'claude-vm shell' to debug interactively\n");
                     }
+
+                    // Handle error (prints error message and respects continue_on_error)
+                    handle_phase_error(phase, PhaseContext::Setup, e, Some(&script_name))?;
                 }
             }
         }
