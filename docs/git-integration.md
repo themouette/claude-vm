@@ -389,6 +389,203 @@ Worktree detection is automatic and cannot be disabled. If you need to prevent m
 - **Commit signing**: Use agent forwarding for signed commits (see agent-forwarding.md)
 - **Isolated changes**: VM modifications are contained to the project directory
 
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### "Branch name cannot start with a dash"
+
+**Problem**: Attempting to create a worktree with a branch name starting with `-`.
+
+**Cause**: Branch names starting with `-` are rejected to prevent command injection and flag confusion.
+
+**Solution**: Use a valid branch name without leading dash:
+```bash
+# ✗ Won't work
+claude-vm worktree create -feature
+
+# ✓ Use instead
+claude-vm worktree create feature
+```
+
+#### "Path contains invalid UTF-8"
+
+**Problem**: Error message about invalid UTF-8 in path.
+
+**Cause**: The worktree path contains characters that cannot be represented in UTF-8.
+
+**Solution**: This is rare but can occur with unusual filesystem configurations. Check your worktree configuration template and ensure it uses standard characters.
+
+#### "git worktree timed out after 30 seconds"
+
+**Problem**: Git command hangs and times out.
+
+**Cause**: Network issues (remote branches), repository problems, or very large repositories.
+
+**Solutions**:
+1. Check network connectivity if using remote branches
+2. Try with a local branch: `claude-vm worktree create feature main`
+3. Verify repository health: `git fsck`
+4. For large repos, consider using shallow clones
+
+#### "No worktree found for branch 'feature'"
+
+**Problem**: Trying to remove a worktree that doesn't exist.
+
+**Cause**: The branch exists but isn't checked out in any worktree, or the worktree was already removed.
+
+**Solutions**:
+1. List current worktrees: `claude-vm worktree list`
+2. Check if branch exists: `git branch -a`
+3. Create the worktree first: `claude-vm worktree create feature`
+
+#### Orphaned Worktree Metadata
+
+**Problem**: Git tracks worktrees that no longer exist on disk.
+
+**Symptoms**:
+- `git worktree list` shows paths that don't exist
+- Errors about missing worktree directories
+
+**Solution**: The system automatically prompts to prune orphaned metadata:
+```bash
+# Automatic on most operations
+claude-vm worktree list
+# Prompts: "Found orphaned worktree metadata. Prune? [y/N]"
+
+# Manual prune
+git worktree prune
+```
+
+#### Locked Worktrees
+
+**Problem**: Worktree is locked and cannot be removed.
+
+**Symptoms**:
+- `--merged` flag skips certain worktrees
+- Cannot remove specific worktree
+
+**Check if locked**:
+```bash
+claude-vm worktree list --locked
+```
+
+**Solutions**:
+1. Include locked worktrees in removal:
+   ```bash
+   claude-vm worktree remove --merged --locked --yes
+   ```
+
+2. Manually unlock:
+   ```bash
+   git worktree unlock /path/to/worktree
+   ```
+
+3. Understand why it's locked:
+   ```bash
+   # Check lock reason
+   cat .git/worktrees/<branch>/locked
+   ```
+
+#### "This repository contains submodules"
+
+**Problem**: Warning message when using worktrees with submodules.
+
+**Cause**: Git's worktree support for submodules is experimental.
+
+**Solutions**:
+- The warning is informational only
+- Worktrees will work but submodules may behave unexpectedly
+- Test carefully if using submodules with worktrees
+- See: https://git-scm.com/docs/git-worktree#_bugs
+
+#### Worktree Directory Exists but Git Doesn't Know About It
+
+**Problem**: The worktree directory exists but `claude-vm worktree list` doesn't show it.
+
+**Cause**: Directory was created manually or git metadata is out of sync.
+
+**Solutions**:
+1. Remove the directory manually:
+   ```bash
+   rm -rf /path/to/worktree
+   ```
+
+2. Try repair:
+   ```bash
+   git worktree repair
+   ```
+
+3. Create fresh worktree with correct setup:
+   ```bash
+   claude-vm worktree create branch-name
+   ```
+
+#### "Git version X.Y.Z is too old"
+
+**Problem**: Git version doesn't support worktrees.
+
+**Cause**: Worktrees require Git 2.5+.
+
+**Solution**: Update git:
+```bash
+# macOS
+brew upgrade git
+
+# Ubuntu/Debian
+sudo apt update && sudo apt upgrade git
+
+# Check version
+git --version
+```
+
+#### Branch Creation Fails with "Invalid reference"
+
+**Problem**: Creating worktree with base branch fails.
+
+**Cause**: Base branch doesn't exist or isn't accessible.
+
+**Solutions**:
+1. Check branch exists:
+   ```bash
+   git branch -a | grep base-branch
+   ```
+
+2. Fetch remote branches:
+   ```bash
+   git fetch origin
+   ```
+
+3. Use correct branch reference:
+   ```bash
+   # For local branch
+   claude-vm worktree create feature main
+
+   # For remote branch
+   claude-vm worktree create feature origin/main
+   ```
+
+#### Worktree Path Contains Spaces
+
+**Problem**: Spaces in worktree paths cause issues.
+
+**Cause**: Branch names with spaces get sanitized to underscores in paths.
+
+**Expected Behavior**: This is intentional. Branch names with spaces like "my feature" become "my_feature" in the filesystem path. The branch name itself remains unchanged.
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check git status**: Run `git worktree list` and `git status` to understand current state
+2. **Review logs**: Look for error messages in command output
+3. **Try repair**: Run `git worktree repair` for metadata issues
+4. **File an issue**: Report bugs at https://github.com/anthropics/claude-vm/issues with:
+   - Full error message
+   - Git version (`git --version`)
+   - claude-vm version (`claude-vm --version`)
+   - Steps to reproduce
+
 ## Related Documentation
 
 - [Agent Forwarding](agent-forwarding.md) - Configure git identity and commit signing
