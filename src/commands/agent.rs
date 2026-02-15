@@ -3,7 +3,7 @@ use crate::commands::helpers;
 use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
-use crate::scripts::runner;
+use crate::scripts::{host_executor, runner};
 use crate::utils::env as env_utils;
 use crate::vm::session::VmSession;
 
@@ -34,7 +34,17 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         config.mount_conversations,
         &config.mounts,
     )?;
-    let _cleanup = session.ensure_cleanup();
+    let _cleanup = session.ensure_cleanup_with_config(&config);
+
+    // Execute before_runtime host phases
+    if !config.phase.before_runtime.is_empty() {
+        host_executor::execute_host_phases(
+            &config.phase.before_runtime,
+            project,
+            session.name(),
+            &host_executor::build_host_env(project, "runtime"),
+        )?;
+    }
 
     // Build Claude command with arguments
     let mut args: Vec<&str> = Vec::new();
@@ -95,6 +105,18 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         &args,
         &env_vars,
     )?;
+
+    // Execute after_runtime host phases
+    // Note: Currently runs after command completes. To run between runtime scripts and command
+    // execution would require refactoring execute_command_with_runtime_scripts
+    if !config.phase.after_runtime.is_empty() {
+        host_executor::execute_host_phases(
+            &config.phase.after_runtime,
+            project,
+            session.name(),
+            &host_executor::build_host_env(project, "runtime"),
+        )?;
+    }
 
     Ok(())
 }

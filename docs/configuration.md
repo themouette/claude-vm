@@ -389,6 +389,62 @@ continue_on_error = true
 script_files = ["./scripts/start-optional.sh"]
 ```
 
+#### Host Phases
+
+Host phases run on the **HOST machine** (not inside the VM) at specific lifecycle points. They enable operations that need to execute outside the VM, such as exporting host configuration, refreshing credentials, or collecting logs.
+
+**Available Host Phase Types:**
+
+| Phase | When | Use Cases |
+|-------|------|-----------|
+| `[[phase.host.before_setup]]` | Before VM setup scripts | Export host config, prepare data files |
+| `[[phase.host.after_setup]]` | After VM setup, before template save | Validate setup, backup template |
+| `[[phase.host.before_runtime]]` | Before each session starts | Refresh tokens, verify prerequisites |
+| `[[phase.host.after_runtime]]` | After runtime scripts complete | Collect metrics, validate session |
+| `[[phase.host.teardown]]` | When session ends | Cleanup, save logs, notify systems |
+
+**Example: AWS Token Refresh**
+
+```toml
+[[phase.host.before_runtime]]
+name = "aws-sso-login"
+script = "aws sso login --profile dev"
+when = "! aws sts get-caller-identity --profile dev"
+continue_on_error = true
+```
+
+**Example: Template Backup**
+
+```toml
+[[phase.host.after_setup]]
+name = "backup-template"
+script = """
+#!/bin/bash
+limactl shell $TEMPLATE_NAME -- tar czf /tmp/backup.tar.gz /home
+limactl copy $TEMPLATE_NAME:/tmp/backup.tar.gz ./template-backup.tar.gz
+"""
+```
+
+**Example: Session Logging**
+
+```toml
+[[phase.host.teardown]]
+name = "save-session-logs"
+script = "limactl shell $LIMA_INSTANCE -- journalctl > session-$(date +%s).log"
+continue_on_error = true
+```
+
+**Environment Variables:**
+
+Host phases receive these standard environment variables:
+
+- `PROJECT_ROOT` - Project directory path
+- `TEMPLATE_NAME` - VM template name
+- `LIMA_INSTANCE` - VM instance name (runtime and teardown phases only)
+- `PHASE_TYPE` - Phase type (setup, runtime, or teardown)
+
+Host phases support all the same features as VM phases: `name`, `script`, `script_files`, `env`, `when`, `continue_on_error`.
+
 #### Sourcing Scripts for Persistent Exports
 
 When you need exports (like PATH modifications) to persist across phases, use `source = true`:

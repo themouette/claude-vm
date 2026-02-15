@@ -2,7 +2,7 @@ use crate::capabilities;
 use crate::config::Config;
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
-use crate::scripts::runner;
+use crate::scripts::{host_executor, runner};
 use crate::vm::{limactl::LimaCtl, mount, template};
 use std::path::Path;
 
@@ -66,8 +66,15 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
     println!("Starting template VM...");
     LimaCtl::start(project.template_name(), true)?; // Always verbose for setup
 
-    // Run host setup hooks for capabilities
-    capabilities::execute_host_setup(project, config)?;
+    // Execute before_setup host phases
+    if !config.phase.before_setup.is_empty() {
+        host_executor::execute_host_phases(
+            &config.phase.before_setup,
+            project,
+            project.template_name(),
+            &host_executor::build_host_env(project, "setup"),
+        )?;
+    }
 
     // Store project metadata
     store_project_metadata(project)?;
@@ -106,6 +113,16 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
 
     // Run user-defined setup scripts
     run_setup_scripts(project, config)?;
+
+    // Execute after_setup host phases
+    if !config.phase.after_setup.is_empty() {
+        host_executor::execute_host_phases(
+            &config.phase.after_setup,
+            project,
+            project.template_name(),
+            &host_executor::build_host_env(project, "setup"),
+        )?;
+    }
 
     // Stop template
     println!("Stopping template VM...");

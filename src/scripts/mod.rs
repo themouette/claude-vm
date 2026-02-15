@@ -1,3 +1,4 @@
+pub mod host_executor;
 pub mod runner;
 
 // Installation scripts are now embedded in capability-specific modules

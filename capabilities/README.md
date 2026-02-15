@@ -53,16 +53,28 @@ setup_script = """
 # Must be idempotent (safe to run multiple times)
 """
 
-# Optional: Run on host before VM creation
-[host_setup]
+# Phase-based execution for both host and VM operations
+
+# Host phases run on the HOST machine (not inside VM)
+[[phase.host.before_setup]]
+name = "export-host-config"
 script = """
 #!/bin/bash
-# Runs on macOS/Linux host
-# Can validate prerequisites, copy files to VM
+# Runs on macOS/Linux host before VM setup
+# Can validate prerequisites, export configuration
 """
 
-# Phase-based execution (replaces vm_setup/vm_runtime)
-# Setup phases run during template creation
+[[phase.host.before_runtime]]
+name = "refresh-credentials"
+script = "aws sso login --profile dev"
+when = "! aws sts get-caller-identity --profile dev"
+continue_on_error = true
+
+[[phase.host.teardown]]
+name = "cleanup"
+script = "echo 'Session ended at $(date)' >> ~/vm-sessions.log"
+
+# VM setup phases run during template creation (inside VM)
 [[phase.setup]]
 name = "capability-setup"
 script_files = ["vm_setup.sh"]  # Reference embedded script
@@ -73,7 +85,7 @@ script_files = ["vm_setup.sh"]  # Reference embedded script
 # # Note: Use [packages] for installing system packages instead
 # """
 
-# Runtime phases run before each session
+# VM runtime phases run before each session (inside VM)
 [[phase.runtime]]
 name = "capability-init"
 script = """
@@ -171,7 +183,7 @@ fi
 2. All capability `setup_script`s run to add custom repositories
 3. Single `apt-get update` executes
 4. All packages from all capabilities install in one batch operation
-5. Individual capability `vm_setup` scripts run for post-install configuration
+5. Individual capability setup phases run for post-install configuration
 
 ### Migration from Shell Scripts
 
@@ -275,7 +287,7 @@ That's it! The capability system handles everything else automatically.
 
 ## Phase-Based Execution
 
-Capabilities use a phase-based execution model that provides more flexibility than the legacy `vm_setup`/`vm_runtime` hooks:
+Capabilities use a unified phase-based execution model for both host and VM operations:
 
 ### Setup Phases (`[[phase.setup]]`)
 Run during template creation. Each capability can define multiple setup phases that run sequentially.
@@ -335,34 +347,54 @@ source = true  # Source to persist exports
 
 All capability scripts automatically receive environment variables providing context about the VM, project, and execution phase. Here's a quick reference:
 
-| Variable | host_setup | phase.setup | phase.runtime | Description |
-|----------|------------|-------------|---------------|-------------|
+| Variable | Host Phases | VM Setup | VM Runtime | Description |
+|----------|-------------|----------|------------|-------------|
 | `CAPABILITY_ID` | ✓ | ✓ | ✓ | Capability identifier (e.g., "gh", "docker") |
 | `TEMPLATE_NAME` | ✓ | ✓ | ✓ | VM template name |
-| `LIMA_INSTANCE` | ✓ | ✓ | ✓ | VM instance name (same as template for setup, ephemeral for runtime) |
-| `CLAUDE_VM_PHASE` | - | ✓ | ✓ | Execution phase: "setup" or "runtime" |
+| `LIMA_INSTANCE` | runtime+ | ✓ | ✓ | VM instance name (ephemeral for runtime) |
+| `PHASE_TYPE` | ✓ | - | - | Phase type: "setup", "runtime", or "teardown" |
+| `CLAUDE_VM_PHASE` | ✓ | ✓ | ✓ | Execution phase identifier |
 | `CLAUDE_VM_VERSION` | - | ✓ | ✓ | Version of claude-vm tool |
-| `PROJECT_ROOT` | ✓ | ✓ | ✓ | Project directory path (host path in setup, mounted path in runtime) |
+| `PROJECT_ROOT` | ✓ | ✓ | ✓ | Project directory path |
 | `PROJECT_NAME` | - | ✓ | ✓ | Full project name extracted from directory |
 | `PROJECT_WORKTREE_ROOT` | - | ✓ | ✓ | Main project root if using git worktrees (empty otherwise) |
 | `PROJECT_WORKTREE` | - | ✓ | ✓ | Current worktree path if using git worktrees (empty otherwise) |
 
-**Note**: All variables are automatically exported as environment variables. No manual parsing needed!
+**Note**: `runtime+` means available in `before_runtime`, `after_runtime`, and `teardown` host phases. All variables are automatically exported as environment variables.
 
-## Lifecycle Hooks
+## Lifecycle Phases
 
-### host_setup (Optional)
-- **When**: On host before VM is created
-- **Where**: macOS/Linux host machine
-- **Purpose**: Validate prerequisites, detect resources, copy files to VM
-- **Format**: Single script block in `[host_setup]` section
-- **Environment Variables**:
-  - `PROJECT_ROOT` - Project directory path on host
-  - `TEMPLATE_NAME` - VM template name
-  - `LIMA_INSTANCE` - VM instance name (same as template)
-  - `CAPABILITY_ID` - Capability identifier (e.g., "gh", "git")
+### Host Phases (run on host machine)
 
-### phase.setup (Setup Phases)
+Host phases execute on the **HOST** machine (macOS/Linux) at specific lifecycle points:
+
+#### `[[phase.host.before_setup]]`
+- **When**: Before VM setup begins
+- **Purpose**: Export host configuration, validate prerequisites, prepare data
+- **Example Use Cases**: Copy host git config, export GPG keys, validate AWS credentials
+
+#### `[[phase.host.after_setup]]`
+- **When**: After VM setup completes, before template is saved
+- **Purpose**: Validate setup, backup template, collect metrics
+- **Example Use Cases**: Verify VM state, create template backups, run health checks
+
+#### `[[phase.host.before_runtime]]`
+- **When**: Before each session starts (after VM boots)
+- **Purpose**: Refresh credentials, verify prerequisites
+- **Example Use Cases**: AWS SSO login, verify GPG agent, check network connectivity
+
+#### `[[phase.host.after_runtime]]`
+- **When**: After VM runtime phases complete
+- **Purpose**: Validate session readiness, collect metrics
+- **Example Use Cases**: Verify services started, log session info
+
+#### `[[phase.host.teardown]]`
+- **When**: When session ends (in VmSession::Drop)
+- **Purpose**: Cleanup, save logs, notify external systems
+- **Example Use Cases**: Archive logs, update metrics, send notifications
+- **Special**: Always runs even if session errors; errors logged as warnings
+
+### VM Setup Phases (`[[phase.setup]]`)
 - **When**: In guest VM during `claude-vm setup`
 - **Where**: Inside Lima VM (guest)
 - **Purpose**: Install software, configure system
@@ -484,7 +516,7 @@ echo "Project location (host): $PROJECT_ROOT"
 3. **Use script_file for complex installs**: Keep TOML clean
 4. **Use inline script for simple config**: Avoid extra files for 3-line scripts
 5. **Make runtime hooks fast**: They run before every session
-6. **Handle errors gracefully**: Check prerequisites in host_setup
+6. **Handle errors gracefully**: Check prerequisites in host phases with proper error handling
 7. **Document requirements**: Add comments explaining what the capability needs
 
 ## Examples
@@ -500,7 +532,8 @@ description = "Git Large File Storage support"
 [packages]
 system = ["git-lfs"]
 
-[vm_setup]
+[[phase.setup]]
+name = "configure-git-lfs"
 script = """
 #!/bin/bash
 set -e
@@ -518,7 +551,8 @@ name = "PostgreSQL (Docker)"
 description = "PostgreSQL database server running in Docker"
 requires = ["docker"]  # Requires Docker to be enabled
 
-[vm_setup]
+[[phase.setup]]
+name = "pull-postgres-image"
 script = """
 #!/bin/bash
 set -e
@@ -526,7 +560,8 @@ set -e
 docker pull postgres:16
 """
 
-[vm_runtime]
+[[phase.runtime]]
+name = "start-postgres"
 script = """
 #!/bin/bash
 # Start PostgreSQL container if not running
@@ -574,7 +609,8 @@ if [ ! -f /etc/apt/keyrings/postgresql.asc ]; then
 fi
 """
 
-[vm_setup]
+[[phase.setup]]
+name = "configure-postgresql"
 script = """
 #!/bin/bash
 set -e
@@ -583,7 +619,8 @@ sudo systemctl enable postgresql
 sudo systemctl start postgresql
 """
 
-[vm_runtime]
+[[phase.runtime]]
+name = "postgres-context"
 script = """
 #!/bin/bash
 # Write PostgreSQL context
@@ -601,7 +638,7 @@ args = ["-y", "postgres-mcp@latest"]
 enabled_when = "node"
 ```
 
-### Host Setup Example
+### Host Phase Example
 
 ```toml
 [capability]
@@ -609,7 +646,8 @@ id = "aws-credentials"
 name = "AWS Credentials"
 description = "Forward AWS credentials to VM"
 
-[host_setup]
+[[phase.host.before_setup]]
+name = "copy-aws-credentials"
 script = """
 #!/bin/bash
 # Check if AWS credentials exist
@@ -622,7 +660,8 @@ fi
 limactl copy "$LIMA_INSTANCE" ~/.aws/credentials /tmp/aws-credentials
 """
 
-[vm_setup]
+[[phase.setup]]
+name = "setup-aws-credentials"
 script = """
 #!/bin/bash
 mkdir -p ~/.aws

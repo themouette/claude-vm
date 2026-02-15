@@ -6,8 +6,9 @@ description = "Forward GPG agent from host to VM for signing operations"
 [packages]
 system = ["gnupg"]
 
-[host_setup]
-script_file = "host_setup.sh"
+[[phase.host.before_setup]]
+name = "export-gpg-keys"
+script_files = ["host_setup.sh"]
 
 [[phase.setup]]
 name = "gpg-import-keys"
