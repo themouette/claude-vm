@@ -12,6 +12,12 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
         return Err(ClaudeVmError::LimaNotInstalled);
     }
 
+    // Clone config to allow merging capability phases
+    let mut config = config.clone();
+
+    // Merge capability-defined phases with user-defined phases
+    capabilities::merge_capability_phases(&mut config)?;
+
     println!(
         "Setting up template for project: {}",
         project.root().display()
@@ -25,27 +31,27 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
     }
 
     // Create base template
-    create_base_template(project, config)?;
+    create_base_template(project, &config)?;
 
     // Run the setup process and clean up on failure
-    match run_setup_process(project, config, no_agent_install) {
+    match run_setup_process(project, &config, no_agent_install) {
         Ok(()) => {
             println!("\nTemplate ready for project: {}", project.root().display());
             println!("Run 'claude-vm' in this project directory to use it.");
             Ok(())
         }
         Err(e) => {
-            eprintln!("\nSetup failed: {}", e);
+            eprintln!("\n❌ Setup failed: {}", e);
             eprintln!("Cleaning up template...");
 
             // Try to stop the VM if it's running
             if let Err(stop_err) = LimaCtl::stop(project.template_name(), false) {
-                eprintln!("Warning: Failed to stop template VM: {}", stop_err);
+                eprintln!("⚠ Warning: Failed to stop template VM: {}", stop_err);
             }
 
             // Delete the template
             if let Err(del_err) = template::delete(project.template_name()) {
-                eprintln!("Warning: Failed to delete template: {}", del_err);
+                eprintln!("⚠ Warning: Failed to delete template: {}", del_err);
             } else {
                 eprintln!("Template cleaned up successfully.");
             }
@@ -82,11 +88,8 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
 
     // === END PACKAGE MANAGEMENT ===
 
-    // Execute vm_setup hooks (now primarily for post-install configuration)
-    capabilities::execute_vm_setup(project, config)?;
-
-    // Install vm_runtime scripts into template
-    capabilities::install_vm_runtime_scripts(project, config)?;
+    // NOTE: VM setup is now handled through capability phases merged into config
+    // No need for separate execute_vm_setup or install_vm_runtime_scripts calls
 
     // Install Claude Code (skip if --no-agent-install flag is set)
     if !no_agent_install {
@@ -282,6 +285,10 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
     }
 
     // 3. New phase-based scripts
+    use crate::phase_executor::{
+        build_phase_env_setup, handle_phase_error, load_phase_scripts, PhaseContext,
+    };
+
     for phase in &config.phase.setup {
         println!("\n━━━ Setup Phase: {} ━━━", phase.name);
 
@@ -294,40 +301,23 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             continue;
         }
 
-        // Get all scripts for this phase
-        let scripts = match phase.get_scripts(project.root()) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("\n❌ Failed to load scripts for phase '{}'", phase.name);
-                eprintln!("   Error: {}", e);
-                if !phase.script_files.is_empty() {
-                    eprintln!("   Script files:");
-                    for file in &phase.script_files {
-                        eprintln!("   - {}", file);
-                    }
-                    eprintln!("\n   Hint: Check that script files exist and are readable");
-                }
-
-                if phase.continue_on_error {
-                    eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
+        // Load scripts with common error handling
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Setup)? else {
+            continue; // continue_on_error was true
         };
 
         // Execute scripts in this phase
         for (script_name, content) in scripts {
             println!("  Running: {}", script_name);
 
-            // Create environment with phase-specific vars
-            let env_setup = phase
-                .env
-                .iter()
-                .map(|(k, v)| format!("export {}='{}'", k, v.replace('\'', "'\\''")))
-                .collect::<Vec<_>>()
-                .join("\n");
+            // Build environment setup with validation and capability env var injection
+            let env_setup = match build_phase_env_setup(phase, project, vm_name) {
+                Ok(setup) => setup,
+                Err(e) => {
+                    handle_phase_error(phase, PhaseContext::Setup, e, Some(&script_name))?;
+                    continue;
+                }
+            };
 
             let full_script = if env_setup.is_empty() {
                 content.clone()
@@ -338,17 +328,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             match runner::execute_script(vm_name, &full_script, &script_name) {
                 Ok(_) => println!("  ✓ Completed: {}", script_name),
                 Err(e) => {
-                    // Enhanced error message with context
-                    eprintln!("\n❌ Setup phase '{}' failed", phase.name);
-                    eprintln!("   Script: {}", script_name);
-                    eprintln!("   Error: {}", e);
-
-                    // Show condition if present
-                    if let Some(ref condition) = phase.when {
-                        eprintln!("   Condition: {}", condition);
-                    }
-
-                    // Show script preview for inline scripts
+                    // Show script preview for inline scripts before handling error
                     if script_name.contains("-inline") {
                         let preview = content.lines().take(3).collect::<Vec<_>>().join("\n");
                         let lines = content.lines().count();
@@ -359,19 +339,19 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
                         }
                     }
 
-                    // Provide helpful hints
-                    if phase.continue_on_error {
-                        eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    } else {
+                    // Provide helpful hints before error handling
+                    if !phase.continue_on_error {
                         eprintln!("\n   Hints:");
                         eprintln!("   - Check if all required tools are available in the VM");
                         eprintln!("   - Verify script syntax with: bash -n <script>");
                         eprintln!(
                             "   - Add 'continue_on_error = true' to make this phase optional"
                         );
-                        eprintln!("   - Run 'claude-vm shell' to debug interactively");
-                        return Err(e);
+                        eprintln!("   - Run 'claude-vm shell' to debug interactively\n");
                     }
+
+                    // Handle error (prints error message and respects continue_on_error)
+                    handle_phase_error(phase, PhaseContext::Setup, e, Some(&script_name))?;
                 }
             }
         }

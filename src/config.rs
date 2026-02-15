@@ -863,10 +863,10 @@ impl Config {
                         // Print highly visible warning
                         eprintln!();
                         eprintln!("╔═══════════════════════════════════════════════════════╗");
-                        eprintln!("║ ⚠️  WARNING: Failed to load context file            ║");
+                        eprintln!("║ ⚠ WARNING: Failed to load context file               ║");
                         eprintln!("╚═══════════════════════════════════════════════════════╝");
-                        eprintln!("  File: {}", file_path.display());
-                        eprintln!("  Error: {}", e);
+                        eprintln!("   File: {}", file_path.display());
+                        eprintln!("   Error: {}", e);
                         eprintln!();
                         eprintln!("  Claude will start WITHOUT your custom instructions.");
                         eprintln!();

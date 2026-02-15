@@ -6,7 +6,8 @@ description = "Python 3 with pip and development tools"
 [packages]
 system = ["python3", "python3-pip", "python3-venv"]
 
-[vm_runtime]
+[[phase.runtime]]
+name = "python-environment"
 script = """
 #!/bin/bash
 # Write Python context for Claude

@@ -10,9 +10,11 @@ system = [
 ]
 
 # VM setup installs mitmproxy and CA certificate
-[vm_setup]
-script_file = "vm_setup.sh"
+[[phase.setup]]
+name = "network-isolation-setup"
+script_files = ["vm_setup.sh"]
 
 # Runtime enforces iptables rules and proxy configuration
-[vm_runtime]
-script_file = "vm_runtime.sh"
+[[phase.runtime]]
+name = "network-isolation-enforcement"
+script_files = ["vm_runtime.sh"]

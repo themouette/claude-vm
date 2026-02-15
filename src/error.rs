@@ -33,6 +33,9 @@ pub enum ClaudeVmError {
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 
+    #[error("Invalid environment variable key: {0}")]
+    InvalidEnvKey(String),
+
     #[error("Command failed: {0}")]
     CommandFailed(String),
 

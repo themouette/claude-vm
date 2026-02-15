@@ -39,12 +39,29 @@ All notable changes to claude-vm will be documented in this file.
   - `claude-vm --help` shows available commands without per-command flag details
   - See updated [Usage Guide](docs/usage.md) for examples
 
+- **Environment variable validation**: All environment variable keys are now validated before execution to prevent command injection through malicious variable names. Variables must follow POSIX naming conventions (start with letter/underscore, contain only alphanumeric/underscore). Invalid keys are rejected with clear error messages.
+
+- **Common phase execution module**: Introduced `phase_executor` module providing shared utilities for phase execution across setup and runtime contexts. Includes validation, error handling, and environment setup functions for consistent behavior.
+
 ### Changed
 
+- **BREAKING: Capability definitions migrated to phase-based execution**: All built-in capabilities now use the `[[phase.setup]]` and `[[phase.runtime]]` format instead of `vm_setup` and `vm_runtime` top-level keys.
+  - **Impact**: Custom capabilities using the old format must be migrated to the new phase-based format
+  - **Migration**: Replace `vm_setup = { script = "..." }` with `[[phase.setup]]` blocks and `vm_runtime = { script = "..." }` with `[[phase.runtime]]` blocks
+  - **Benefit**: More flexible execution control with conditional execution, error handling, and environment variables
+  - See [Capability Development Guide](docs/capabilities.md) for migration examples
 - **Worktree `--merged` flag now defaults to current branch**: When using `--merged` without specifying a branch (e.g., `claude-vm worktree remove --merged`), the command now uses the current branch instead of trying to detect the repository's default branch. This provides more intuitive behavior for workflows where you want to see what's merged into your current feature branch.
 - **Worktree commands now support remote branches**: The `--merged` flag now accepts remote branch references (e.g., `origin/main`, `upstream/develop`). Previously, only local branches were supported.
+
 - **Runtime flags scoped to commands**: Flags like `--disk`, `--memory`, `--mount`, and `--env` are now shown only on commands that use them (`agent`, `shell`, `setup`). Commands like `list`, `clean`, and `info` show only their own flags. This makes `--help` output cleaner and more relevant per command.
+
 - **Improved help text**: Main help now includes invocation pattern examples. Command-specific help (`claude-vm agent --help`, `claude-vm shell --help`) shows expanded descriptions.
+
+- **Standardized error message formatting**: All error, warning, and informational messages now use consistent formatting with standardized emojis (❌ for errors, ⚠ for warnings, ℹ for info) and 3-space indentation for details and hints.
+
+### Removed
+
+- **Legacy capability script installation**: Runtime scripts are no longer pre-installed to `/usr/local/share/claude-vm/runtime/` during template creation. The phase-based system executes scripts dynamically on each session. Existing templates with pre-installed scripts continue to work for backward compatibility. Since capabilities are internal only and have been migrated, this is has no impact for users.
 
 ## [0.7.0] - 2026-02-12
 

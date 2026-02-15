@@ -36,7 +36,7 @@ impl VmSession {
         // Start the VM
         // If this fails, we must clean up the cloned VM to prevent leaks
         if let Err(e) = LimaCtl::start(&name, verbose) {
-            eprintln!("Failed to start VM, cleaning up...");
+            eprintln!("❌ Failed to start VM, cleaning up...");
             // Best effort cleanup - ignore errors during cleanup
             let _ = LimaCtl::stop(&name, verbose);
             let _ = LimaCtl::delete(&name, true, verbose);

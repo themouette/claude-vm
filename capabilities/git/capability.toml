@@ -6,7 +6,8 @@ description = "Configure git identity and signing from host configuration"
 [host_setup]
 script_file = "host_setup.sh"
 
-[vm_runtime]
+[[phase.runtime]]
+name = "git-environment"
 script = """#!/bin/bash
 # Write git context for Claude
 mkdir -p ~/.claude-vm/context

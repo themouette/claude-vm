@@ -45,7 +45,8 @@ rustup component add rustfmt clippy
 echo "✓ Rust toolchain ready"
 """
 
-[vm_runtime]
+[[phase.runtime]]
+name = "rust-environment"
 script = """
 #!/bin/bash
 # Set up Rust environment
