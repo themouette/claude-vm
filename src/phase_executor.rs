@@ -69,8 +69,8 @@ pub fn build_phase_env_setup(
     let mut env = phase.env.clone();
 
     // If this is a capability phase, inject capability-specific environment variables
-    if let Some(capability_id) = phase.env.get("CAPABILITY_ID") {
-        inject_capability_env_vars(&mut env, project, vm_name, capability_id)?;
+    if phase.env.contains_key("CAPABILITY_ID") {
+        inject_capability_env_vars(&mut env, project, vm_name)?;
     }
 
     if env.is_empty() {
@@ -96,7 +96,6 @@ fn inject_capability_env_vars(
     env: &mut std::collections::HashMap<String, String>,
     project: &crate::project::Project,
     vm_name: &str,
-    _capability_id: &str,
 ) -> Result<()> {
     // VM identification
     env.insert(
@@ -120,40 +119,21 @@ fn inject_capability_env_vars(
         project_root.to_string_lossy().to_string(),
     );
 
-    // Extract project name from directory name
-    if let Some(name) = project_root.file_name() {
-        env.insert(
-            "PROJECT_NAME".to_string(),
-            name.to_string_lossy().to_string(),
-        );
+    // Extract project name using utility function
+    if let Some(name) = crate::utils::git::extract_project_name(project_root) {
+        env.insert("PROJECT_NAME".to_string(), name);
     }
 
-    // Detect git worktree (same logic as executor.rs build_capability_env_vars)
-    let git_dir = project_root.join(".git");
-    if git_dir.exists() && git_dir.is_file() {
-        if let Ok(git_file_content) = std::fs::read_to_string(&git_dir) {
-            if let Some(gitdir_line) = git_file_content.lines().next() {
-                if let Some(gitdir_path) = gitdir_line.strip_prefix("gitdir: ") {
-                    let gitdir_pathbuf = std::path::PathBuf::from(gitdir_path);
-                    if let Some(worktrees_parent) = gitdir_pathbuf.parent() {
-                        if worktrees_parent.ends_with("worktrees") {
-                            if let Some(git_parent) = worktrees_parent.parent() {
-                                if let Some(main_root) = git_parent.parent() {
-                                    env.insert(
-                                        "PROJECT_WORKTREE_ROOT".to_string(),
-                                        main_root.to_string_lossy().to_string(),
-                                    );
-                                    env.insert(
-                                        "PROJECT_WORKTREE".to_string(),
-                                        project_root.to_string_lossy().to_string(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    // Detect git worktree using utility function
+    if let Some(worktree_info) = crate::utils::git::detect_worktree(project_root) {
+        env.insert(
+            "PROJECT_WORKTREE_ROOT".to_string(),
+            worktree_info.main_root.to_string_lossy().to_string(),
+        );
+        env.insert(
+            "PROJECT_WORKTREE".to_string(),
+            worktree_info.worktree_path.to_string_lossy().to_string(),
+        );
     }
 
     // Ensure empty strings for worktree vars if not detected

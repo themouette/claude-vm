@@ -68,53 +68,21 @@ fn build_capability_env_vars(
         project_root.to_string_lossy().to_string(),
     );
 
-    // Extract project name from the directory name
-    // We use the last component of the path (file_name()) which works well for
-    // most cases: /home/user/my-project -> "my-project"
-    // This is simple and reliable. For projects with complex naming needs,
-    // users can access PROJECT_ROOT in their scripts and implement custom logic.
-    if let Some(name) = project_root.file_name() {
-        env_vars.insert(
-            "PROJECT_NAME".to_string(),
-            name.to_string_lossy().to_string(),
-        );
+    // Extract project name using utility function
+    if let Some(name) = crate::utils::git::extract_project_name(project_root) {
+        env_vars.insert("PROJECT_NAME".to_string(), name);
     }
 
-    // Detect git worktree
-    // Git worktrees have a .git file (not directory) containing:
-    // "gitdir: /path/to/main-repo/.git/worktrees/branch-name"
-    // We extract the main repository root from this path structure.
-    let git_dir = project_root.join(".git");
-    if git_dir.exists() && git_dir.is_file() {
-        // .git is a file, likely a worktree - read it to find the main repo
-        if let Ok(git_file_content) = std::fs::read_to_string(&git_dir) {
-            // Parse the gitdir line
-            if let Some(gitdir_line) = git_file_content.lines().next() {
-                if let Some(gitdir_path) = gitdir_line.strip_prefix("gitdir: ") {
-                    let gitdir_pathbuf = std::path::PathBuf::from(gitdir_path);
-
-                    // Validate this looks like a worktree path
-                    // Expected structure: /main-repo/.git/worktrees/branch-name
-                    if let Some(worktrees_parent) = gitdir_pathbuf.parent() {
-                        if worktrees_parent.ends_with("worktrees") {
-                            // Navigate up: worktrees -> .git -> main-repo
-                            if let Some(git_parent) = worktrees_parent.parent() {
-                                if let Some(main_root) = git_parent.parent() {
-                                    env_vars.insert(
-                                        "PROJECT_WORKTREE_ROOT".to_string(),
-                                        main_root.to_string_lossy().to_string(),
-                                    );
-                                    env_vars.insert(
-                                        "PROJECT_WORKTREE".to_string(),
-                                        project_root.to_string_lossy().to_string(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    // Detect git worktree using utility function
+    if let Some(worktree_info) = crate::utils::git::detect_worktree(project_root) {
+        env_vars.insert(
+            "PROJECT_WORKTREE_ROOT".to_string(),
+            worktree_info.main_root.to_string_lossy().to_string(),
+        );
+        env_vars.insert(
+            "PROJECT_WORKTREE".to_string(),
+            worktree_info.worktree_path.to_string_lossy().to_string(),
+        );
     }
 
     // Ensure worktree variables exist (set to empty if not a worktree)
