@@ -1,6 +1,12 @@
 use crate::error::{ClaudeVmError, Result};
 use std::process::Command;
 
+/// Default CPU allocation assumed when unable to read VM config
+const DEFAULT_VM_CPUS: u32 = 4;
+
+/// Default memory allocation (GB) assumed when unable to read VM config
+const DEFAULT_VM_MEMORY_GB: u32 = 8;
+
 #[derive(Debug, Clone)]
 pub struct HostResources {
     pub total_cpus: u32,
@@ -114,6 +120,41 @@ impl HostResources {
     }
 }
 
+/// Validate VM name to prevent path traversal attacks
+fn validate_vm_name(vm_name: &str) -> Result<()> {
+    if vm_name.is_empty() {
+        return Err(ClaudeVmError::CommandFailed(
+            "VM name cannot be empty".to_string(),
+        ));
+    }
+
+    // Reject path separators
+    if vm_name.contains('/') || vm_name.contains('\\') {
+        return Err(ClaudeVmError::CommandFailed(format!(
+            "Invalid VM name '{}': contains path separators",
+            vm_name
+        )));
+    }
+
+    // Reject path traversal
+    if vm_name.contains("..") {
+        return Err(ClaudeVmError::CommandFailed(format!(
+            "Invalid VM name '{}': contains path traversal sequence",
+            vm_name
+        )));
+    }
+
+    // Reject null bytes
+    if vm_name.contains('\0') {
+        return Err(ClaudeVmError::CommandFailed(format!(
+            "Invalid VM name '{}': contains null bytes",
+            vm_name
+        )));
+    }
+
+    Ok(())
+}
+
 impl AllocatedResources {
     /// Query all running claude-vm VMs and sum their allocated resources
     pub fn from_running_vms() -> Result<Self> {
@@ -147,8 +188,17 @@ impl AllocatedResources {
         // Query resources for each VM
         let mut vm_resources = Vec::new();
         for vm in running_vms {
-            if let Ok(resources) = Self::read_vm_resources(&vm.name) {
-                vm_resources.push(resources);
+            match Self::read_vm_resources(&vm.name) {
+                Ok(resources) => vm_resources.push(resources),
+                Err(_) => {
+                    // If reading VM config fails, use conservative default assumptions
+                    // to avoid underestimating resource usage (security-critical)
+                    vm_resources.push(VmResources {
+                        name: vm.name.clone(),
+                        cpus: DEFAULT_VM_CPUS,
+                        memory_gb: DEFAULT_VM_MEMORY_GB,
+                    });
+                }
             }
         }
 
@@ -157,10 +207,20 @@ impl AllocatedResources {
 
     /// Read resource allocation from a VM's Lima config file
     fn read_vm_resources(vm_name: &str) -> Result<VmResources> {
+        // Validate VM name to prevent path traversal
+        validate_vm_name(vm_name)?;
+
         // Lima config is at ~/.lima/<vm-name>/lima.yaml
         let home = std::env::var("HOME").map_err(|_| {
             ClaudeVmError::CommandFailed("Failed to get HOME directory".to_string())
         })?;
+
+        // Validate HOME is not empty and is absolute
+        if home.is_empty() {
+            return Err(ClaudeVmError::CommandFailed(
+                "HOME directory is empty".to_string(),
+            ));
+        }
 
         let config_path = format!("{}/.lima/{}/lima.yaml", home, vm_name);
         let config_content = std::fs::read_to_string(&config_path).map_err(|e| {
@@ -172,14 +232,14 @@ impl AllocatedResources {
 
         // Parse YAML for cpus and memory
         // Look for lines like "cpus: 4" and "memory: 8GiB"
-        let mut cpus = 4; // Default
-        let mut memory_gb = 8; // Default
+        let mut cpus = DEFAULT_VM_CPUS;
+        let mut memory_gb = DEFAULT_VM_MEMORY_GB;
 
         for line in config_content.lines() {
             let line = line.trim();
             if line.starts_with("cpus:") {
                 if let Some(cpu_str) = line.split(':').nth(1) {
-                    cpus = cpu_str.trim().parse::<u32>().unwrap_or(4);
+                    cpus = cpu_str.trim().parse::<u32>().unwrap_or(DEFAULT_VM_CPUS);
                 }
             } else if line.starts_with("memory:") {
                 if let Some(mem_str) = line.split(':').nth(1) {
@@ -206,7 +266,9 @@ impl AllocatedResources {
             .map(|pos| size_str.split_at(pos))
             .unwrap_or((size_str, ""));
 
-        let num = num_str.parse::<f64>().unwrap_or(8.0);
+        let num = num_str
+            .parse::<f64>()
+            .unwrap_or(DEFAULT_VM_MEMORY_GB as f64);
 
         match unit.to_lowercase().as_str() {
             "gib" | "g" => num as u32,
