@@ -515,4 +515,82 @@ mod tests {
 
         assert_eq!(detect_worktree(&worktree), None);
     }
+
+    #[test]
+    fn test_detect_worktree_empty_git_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let worktree = temp_dir.path().join("worktree");
+        fs::create_dir_all(&worktree).unwrap();
+
+        // Create empty .git file
+        fs::write(worktree.join(".git"), "").unwrap();
+
+        assert_eq!(detect_worktree(&worktree), None);
+    }
+
+    #[test]
+    fn test_detect_worktree_malformed_multiline() {
+        let temp_dir = TempDir::new().unwrap();
+        let worktree = temp_dir.path().join("worktree");
+        fs::create_dir_all(&worktree).unwrap();
+
+        // Create .git file with multiple lines (only first should be parsed)
+        fs::write(worktree.join(".git"), "gitdir: /invalid/path\nextra line\n").unwrap();
+
+        // Should return None because path is invalid
+        assert_eq!(detect_worktree(&worktree), None);
+    }
+
+    #[test]
+    fn test_detect_worktree_shallow_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let worktree = temp_dir.path().join("worktree");
+        fs::create_dir_all(&worktree).unwrap();
+
+        // Create .git file with a worktrees path that's too shallow
+        // (not enough parent directories to navigate up to main repo)
+        fs::write(worktree.join(".git"), "gitdir: /worktrees/test").unwrap();
+
+        // Should return None because parent() chain fails (can't go above root)
+        assert_eq!(detect_worktree(&worktree), None);
+    }
+
+    #[test]
+    fn test_extract_project_name_edge_cases() {
+        // Test with trailing slash (normalized by PathBuf)
+        assert_eq!(
+            extract_project_name(std::path::Path::new("/home/user/project/")),
+            Some("project".to_string())
+        );
+
+        // Test with single component
+        assert_eq!(
+            extract_project_name(std::path::Path::new("project")),
+            Some("project".to_string())
+        );
+
+        // Test with dots in name
+        assert_eq!(
+            extract_project_name(std::path::Path::new("/home/user/my.project.v2")),
+            Some("my.project.v2".to_string())
+        );
+    }
+
+    #[test]
+    fn test_path_to_str_with_invalid_utf8() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        // Create path with invalid UTF-8 bytes
+        let invalid_bytes = b"/tmp/invalid\xFF\xFE";
+        let os_str = OsStr::from_bytes(invalid_bytes);
+        let path = std::path::Path::new(os_str);
+
+        let result = path_to_str(path, "test path");
+        assert!(result.is_err());
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("test path"));
+        assert!(err_msg.contains("invalid UTF-8"));
+    }
 }
