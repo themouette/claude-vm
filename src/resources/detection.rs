@@ -65,8 +65,8 @@ impl HostResources {
             ClaudeVmError::CommandFailed(format!("Failed to parse memory size: {}", e))
         })?;
 
-        // Convert bytes to GB
-        let total_memory_gb = (mem_bytes / (1024 * 1024 * 1024)) as u32;
+        // Convert bytes to GB (round up to avoid underestimating)
+        let total_memory_gb = (mem_bytes as f64 / (1024.0 * 1024.0 * 1024.0)).ceil() as u32;
 
         Ok(Self {
             total_cpus,
@@ -110,8 +110,8 @@ impl HostResources {
                 )
             })?;
 
-        // Convert kB to GB
-        let total_memory_gb = (mem_kb / (1024 * 1024)) as u32;
+        // Convert kB to GB (round up to avoid underestimating)
+        let total_memory_gb = (mem_kb as f64 / (1024.0 * 1024.0)).ceil() as u32;
 
         Ok(Self {
             total_cpus,
