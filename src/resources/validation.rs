@@ -52,42 +52,53 @@ pub fn check_resources(
     }
 
     // Build detailed warning message
-    let mut message = String::new();
-    message.push_str("⚠️  Resource Overprovisioning Warning\n\n");
-    message.push_str("Host System:\n");
-    message.push_str(&format!("  CPUs:   {} cores\n", host.total_cpus));
-    message.push_str(&format!("  Memory: {} GB\n\n", host.total_memory_gb));
-
-    message.push_str(&format!(
-        "Currently Allocated ({} running VMs):\n",
-        allocated.vm_count
-    ));
-    message.push_str(&format!("  CPUs:   {} cores\n", allocated.total_cpus));
-    message.push_str(&format!("  Memory: {} GB\n\n", allocated.total_memory_gb));
-
-    message.push_str("After Creating This VM:\n");
-    message.push_str(&format!("  CPUs:   {} cores", new_total_cpus));
-    if cpu_exceeded {
-        message.push_str(&format!(
+    let cpu_warning = if cpu_exceeded {
+        format!(
             " (exceeds {}% threshold of {})",
             config.cpu_threshold_percent, cpu_threshold
-        ));
-    }
-    message.push('\n');
+        )
+    } else {
+        String::new()
+    };
 
-    message.push_str(&format!("  Memory: {} GB", new_total_memory));
-    if memory_exceeded {
-        message.push_str(&format!(
+    let memory_warning = if memory_exceeded {
+        format!(
             " (exceeds {}% threshold of {})",
             config.memory_threshold_percent, memory_threshold
-        ));
-    }
-    message.push_str("\n\n");
+        )
+    } else {
+        String::new()
+    };
 
-    if cpu_exceeded && new_total_cpus >= host.total_cpus {
-        message.push_str("⚠️  WARNING: All CPU cores will be allocated!\n");
-        message.push_str("   This can cause system instability and forced reboots.\n\n");
-    }
+    let stability_warning = if cpu_exceeded && new_total_cpus >= host.total_cpus {
+        "⚠️  WARNING: All CPU cores will be allocated!\n   This can cause system instability and forced reboots.\n\n"
+    } else {
+        ""
+    };
+
+    let message = format!(
+        "⚠️  Resource Overprovisioning Warning\n\n\
+         Host System:\n\
+           CPUs:   {} cores\n\
+           Memory: {} GB\n\n\
+         Currently Allocated ({} running VMs):\n\
+           CPUs:   {} cores\n\
+           Memory: {} GB\n\n\
+         After Creating This VM:\n\
+           CPUs:   {} cores{}\n\
+           Memory: {} GB{}\n\n\
+         {}",
+        host.total_cpus,
+        host.total_memory_gb,
+        allocated.vm_count,
+        allocated.total_cpus,
+        allocated.total_memory_gb,
+        new_total_cpus,
+        cpu_warning,
+        new_total_memory,
+        memory_warning,
+        stability_warning
+    );
 
     Ok(ResourceCheck {
         exceeds_threshold: true,

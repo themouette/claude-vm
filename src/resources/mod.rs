@@ -74,19 +74,19 @@ mod tests {
 
     #[test]
     fn test_check_before_vm_creation_with_force() {
-        // With force flag, should always succeed
+        // With force flag, should always succeed regardless of thresholds
         let config = VmConfig {
             disk: 20,
             memory: 8,
             cpus: 4,
-            cpu_threshold_percent: 1, // Very low threshold to ensure it would fail
+            cpu_threshold_percent: 1, // Very low threshold to ensure it would fail without force
             memory_threshold_percent: 1,
             resource_check_mode: ResourceCheckMode::Prevent,
         };
 
         let result = check_before_vm_creation(&config, true, false);
-        // Should succeed even with prevent mode and low thresholds because force=true
-        // Note: This might still succeed if detection/query fails, which is expected behavior
-        assert!(result.is_ok() || result.is_err());
+        // force=true should bypass all checks
+        // May still fail if config validation fails, but not due to resource limits
+        assert!(result.is_ok());
     }
 }
