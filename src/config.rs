@@ -857,7 +857,11 @@ impl Config {
     /// Load configuration from a TOML file
     pub fn from_file(path: &Path) -> Result<Self> {
         let contents = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&contents)?;
+        let mut config: Config = toml::from_str(&contents)?;
+
+        // Flatten host phases: merge [[phase.host.before_setup]] into [[phase.before_setup]]
+        config.phase.flatten_host_phases();
+
         Ok(config)
     }
 
