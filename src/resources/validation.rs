@@ -1,0 +1,198 @@
+use crate::config::VmConfig;
+use crate::error::Result;
+use crate::resources::detection::{AllocatedResources, HostResources};
+
+#[derive(Debug)]
+pub struct ResourceCheck {
+    pub exceeds_threshold: bool,
+    pub warning_message: String,
+}
+
+/// Check if creating a new VM would exceed resource thresholds
+pub fn check_resources(
+    config: &VmConfig,
+    host: &HostResources,
+    allocated: &AllocatedResources,
+) -> Result<ResourceCheck> {
+    // Calculate what the new total would be after adding this VM
+    let new_total_cpus = allocated.total_cpus + config.cpus;
+    let new_total_memory = allocated.total_memory_gb + config.memory;
+
+    // Calculate thresholds
+    let cpu_threshold =
+        (host.total_cpus as f64 * config.cpu_threshold_percent as f64 / 100.0).ceil() as u32;
+    let memory_threshold = (host.total_memory_gb as f64 * config.memory_threshold_percent as f64
+        / 100.0)
+        .ceil() as u32;
+
+    // Check if exceeded
+    let cpu_exceeded = new_total_cpus > cpu_threshold;
+    let memory_exceeded = new_total_memory > memory_threshold;
+
+    if !cpu_exceeded && !memory_exceeded {
+        return Ok(ResourceCheck {
+            exceeds_threshold: false,
+            warning_message: String::new(),
+        });
+    }
+
+    // Build detailed warning message
+    let mut message = String::new();
+    message.push_str("⚠️  Resource Overprovisioning Warning\n\n");
+    message.push_str("Host System:\n");
+    message.push_str(&format!("  CPUs:   {} cores\n", host.total_cpus));
+    message.push_str(&format!("  Memory: {} GB\n\n", host.total_memory_gb));
+
+    message.push_str(&format!(
+        "Currently Allocated ({} running VMs):\n",
+        allocated.vm_count
+    ));
+    message.push_str(&format!("  CPUs:   {} cores\n", allocated.total_cpus));
+    message.push_str(&format!("  Memory: {} GB\n\n", allocated.total_memory_gb));
+
+    message.push_str("After Creating This VM:\n");
+    message.push_str(&format!("  CPUs:   {} cores", new_total_cpus));
+    if cpu_exceeded {
+        message.push_str(&format!(
+            " (exceeds {}% threshold of {})",
+            config.cpu_threshold_percent, cpu_threshold
+        ));
+    }
+    message.push('\n');
+
+    message.push_str(&format!("  Memory: {} GB", new_total_memory));
+    if memory_exceeded {
+        message.push_str(&format!(
+            " (exceeds {}% threshold of {})",
+            config.memory_threshold_percent, memory_threshold
+        ));
+    }
+    message.push_str("\n\n");
+
+    if cpu_exceeded && new_total_cpus >= host.total_cpus {
+        message.push_str("⚠️  WARNING: All CPU cores will be allocated!\n");
+        message.push_str("   This can cause system instability and forced reboots.\n\n");
+    }
+
+    Ok(ResourceCheck {
+        exceeds_threshold: true,
+        warning_message: message,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ResourceCheckMode;
+
+    fn make_test_config() -> VmConfig {
+        VmConfig {
+            disk: 20,
+            memory: 8,
+            cpus: 4,
+            cpu_threshold_percent: 75,
+            memory_threshold_percent: 70,
+            resource_check_mode: ResourceCheckMode::Ask,
+        }
+    }
+
+    #[test]
+    fn test_within_limits() {
+        let config = make_test_config();
+        let host = HostResources {
+            total_cpus: 16,
+            total_memory_gb: 64,
+        };
+        let allocated = AllocatedResources {
+            total_cpus: 0,
+            total_memory_gb: 0,
+            vm_count: 0,
+        };
+
+        let result = check_resources(&config, &host, &allocated).unwrap();
+        assert!(!result.exceeds_threshold);
+        assert!(result.warning_message.is_empty());
+    }
+
+    #[test]
+    fn test_exceeds_cpu_threshold() {
+        let config = make_test_config();
+        let host = HostResources {
+            total_cpus: 16,
+            total_memory_gb: 64,
+        };
+        // 75% of 16 = 12, so 9 + 4 = 13 > 12
+        let allocated = AllocatedResources {
+            total_cpus: 9,
+            total_memory_gb: 16,
+            vm_count: 2,
+        };
+
+        let result = check_resources(&config, &host, &allocated).unwrap();
+        assert!(result.exceeds_threshold);
+        assert!(result.warning_message.contains("Resource Overprovisioning"));
+        assert!(result.warning_message.contains("exceeds 75% threshold"));
+    }
+
+    #[test]
+    fn test_exceeds_memory_threshold() {
+        let config = make_test_config();
+        let host = HostResources {
+            total_cpus: 16,
+            total_memory_gb: 64,
+        };
+        // 70% of 64 = 44.8 -> 45, so 38 + 8 = 46 > 45
+        let allocated = AllocatedResources {
+            total_cpus: 4,
+            total_memory_gb: 38,
+            vm_count: 4,
+        };
+
+        let result = check_resources(&config, &host, &allocated).unwrap();
+        assert!(result.exceeds_threshold);
+        assert!(result.warning_message.contains("Resource Overprovisioning"));
+        assert!(result.warning_message.contains("exceeds 70% threshold"));
+    }
+
+    #[test]
+    fn test_all_cpus_allocated() {
+        let config = make_test_config();
+        let host = HostResources {
+            total_cpus: 16,
+            total_memory_gb: 64,
+        };
+        // 12 + 4 = 16 (all CPUs)
+        let allocated = AllocatedResources {
+            total_cpus: 12,
+            total_memory_gb: 16,
+            vm_count: 3,
+        };
+
+        let result = check_resources(&config, &host, &allocated).unwrap();
+        assert!(result.exceeds_threshold);
+        assert!(result
+            .warning_message
+            .contains("All CPU cores will be allocated"));
+        assert!(result
+            .warning_message
+            .contains("system instability and forced reboots"));
+    }
+
+    #[test]
+    fn test_exactly_at_threshold() {
+        let config = make_test_config();
+        let host = HostResources {
+            total_cpus: 16,
+            total_memory_gb: 64,
+        };
+        // 75% of 16 = 12, so 8 + 4 = 12 (exactly at threshold, not over)
+        let allocated = AllocatedResources {
+            total_cpus: 8,
+            total_memory_gb: 16,
+            vm_count: 2,
+        };
+
+        let result = check_resources(&config, &host, &allocated).unwrap();
+        assert!(!result.exceeds_threshold);
+    }
+}
