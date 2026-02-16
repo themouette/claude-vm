@@ -131,8 +131,88 @@ pub fn install_system_packages(project: &Project, config: &Config) -> Result<()>
     Ok(())
 }
 
+/// Convert capability phases by loading embedded scripts and marking them as capability phases.
+///
+/// This function:
+/// 1. Loads embedded script_files and converts them to inline scripts
+/// 2. Marks phases with CAPABILITY_ID and CLAUDE_VM_PHASE environment variables
+/// 3. Returns converted phases ready for execution
+///
+/// # Arguments
+/// * `phases` - The capability phases to convert
+/// * `capability_id` - The capability ID (e.g., "git", "docker")
+/// * `phase_type` - The phase type (e.g., "setup", "runtime", "before_setup")
+fn convert_capability_phases(
+    phases: &[crate::config::ScriptPhase],
+    capability_id: &str,
+    phase_type: &str,
+) -> Result<Vec<crate::config::ScriptPhase>> {
+    let mut converted = Vec::new();
+
+    for phase in phases {
+        let mut phase_copy = phase.clone();
+
+        // Convert script_files to inline script
+        // Capabilities use embedded scripts (include_str!) so we load them here
+        if !phase_copy.script_files.is_empty() {
+            let mut combined_script = String::new();
+            for script_file in &phase_copy.script_files {
+                let content = executor::get_embedded_script(capability_id, script_file)?;
+                combined_script.push_str(&content);
+                combined_script.push('\n');
+            }
+            phase_copy.script = Some(combined_script);
+            phase_copy.script_files.clear();
+        }
+
+        // Mark this as a capability phase by adding CAPABILITY_ID
+        // This signals to the phase executor to inject full capability env vars
+        phase_copy
+            .env
+            .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+        phase_copy
+            .env
+            .insert("CLAUDE_VM_PHASE".to_string(), phase_type.to_string());
+
+        converted.push(phase_copy);
+    }
+
+    Ok(converted)
+}
+
 /// Get capability-defined phases and merge them with user-defined phases.
-/// Capability phases are inserted BEFORE user phases to ensure proper initialization.
+///
+/// # Phase Ordering and Execution Guarantees
+///
+/// Phases execute **sequentially** within each phase type:
+/// 1. **Setup phases** (`phase.setup`): Run during template creation
+///    - Capability phases execute BEFORE user phases
+///    - Within each group, phases execute in definition order
+/// 2. **Runtime phases** (`phase.runtime`): Run before each Claude session
+///    - Capability phases execute BEFORE user phases
+///    - Within each group, phases execute in definition order
+/// 3. **Host phases**: Run on the host machine (not inside VM)
+///    - `before_setup`: Before VM setup starts
+///    - `after_setup`: After VM setup completes, before template save
+///    - `before_runtime`: Before VM runtime scripts execute
+///    - `after_runtime`: After runtime scripts complete
+///    - `teardown`: When session ends
+///
+/// All phases within a type run sequentially (not in parallel) to ensure:
+/// - Deterministic execution order
+/// - Safe state mutations
+/// - Proper error propagation
+///
+/// # Arguments
+/// * `config` - Configuration to merge capability phases into
+///
+/// # Example
+/// ```ignore
+/// // Capability phases run first, then user phases
+/// // Given: capability defines setup phase "install-tools"
+/// //        user defines setup phase "configure-project"
+/// // Result: "install-tools" runs, then "configure-project"
+/// ```
 pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     let registry = registry::CapabilityRegistry::load()?;
     let enabled = registry.get_enabled_capabilities(config)?;
@@ -150,57 +230,42 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
         let phase_config = &capability.phase;
         let capability_id = &capability.capability.id;
 
-        // Convert embedded script_files to inline scripts for capability phases
-        // Capabilities use embedded scripts (include_str!) so we need to load them
-        // and convert to inline format for the phase system
-
-        // Helper closure to convert phases
-        let convert_phases = |phases: &[crate::config::ScriptPhase],
-                              phase_type: &str|
-         -> Result<Vec<crate::config::ScriptPhase>> {
-            let mut converted = Vec::new();
-            for phase in phases {
-                let mut phase_copy = phase.clone();
-                // Convert script_files to inline script
-                if !phase_copy.script_files.is_empty() {
-                    let mut combined_script = String::new();
-                    for script_file in &phase_copy.script_files {
-                        let content = executor::get_embedded_script(capability_id, script_file)?;
-                        combined_script.push_str(&content);
-                        combined_script.push('\n');
-                    }
-                    phase_copy.script = Some(combined_script);
-                    phase_copy.script_files.clear();
-                }
-
-                // Mark this as a capability phase by adding CAPABILITY_ID
-                // This signals to the phase executor to inject full capability env vars
-                phase_copy
-                    .env
-                    .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
-                phase_copy
-                    .env
-                    .insert("CLAUDE_VM_PHASE".to_string(), phase_type.to_string());
-
-                converted.push(phase_copy);
-            }
-            Ok(converted)
-        };
-
-        // Convert all phase types
-        capability_before_setup.extend(convert_phases(&phase_config.before_setup, "before_setup")?);
-        capability_after_setup.extend(convert_phases(&phase_config.after_setup, "after_setup")?);
-        capability_before_runtime.extend(convert_phases(
+        // Convert all phase types using the extracted function
+        capability_before_setup.extend(convert_capability_phases(
+            &phase_config.before_setup,
+            capability_id,
+            "before_setup",
+        )?);
+        capability_after_setup.extend(convert_capability_phases(
+            &phase_config.after_setup,
+            capability_id,
+            "after_setup",
+        )?);
+        capability_before_runtime.extend(convert_capability_phases(
             &phase_config.before_runtime,
+            capability_id,
             "before_runtime",
         )?);
-        capability_after_runtime.extend(convert_phases(
+        capability_after_runtime.extend(convert_capability_phases(
             &phase_config.after_runtime,
+            capability_id,
             "after_runtime",
         )?);
-        capability_teardown.extend(convert_phases(&phase_config.teardown, "teardown")?);
-        capability_setup_phases.extend(convert_phases(&phase_config.setup, "setup")?);
-        capability_runtime_phases.extend(convert_phases(&phase_config.runtime, "runtime")?);
+        capability_teardown.extend(convert_capability_phases(
+            &phase_config.teardown,
+            capability_id,
+            "teardown",
+        )?);
+        capability_setup_phases.extend(convert_capability_phases(
+            &phase_config.setup,
+            capability_id,
+            "setup",
+        )?);
+        capability_runtime_phases.extend(convert_capability_phases(
+            &phase_config.runtime,
+            capability_id,
+            "runtime",
+        )?);
     }
 
     // Helper to merge phase lists (capability phases BEFORE user phases)
