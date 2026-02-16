@@ -11,6 +11,9 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, config)?;
 
+    // Check resource allocation before creating VM
+    crate::resources::check_before_vm_creation(&config.vm, cmd.force_resources, config.verbose)?;
+
     // Resolve worktree if --worktree flag present
     if !cmd.runtime.worktree.is_empty() {
         let worktree_path = helpers::resolve_worktree(&cmd.runtime.worktree, config, project)?;
