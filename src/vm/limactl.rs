@@ -429,7 +429,7 @@ impl LimaCtl {
     }
 }
 
-/// Parse Lima memory format (e.g., "8GiB", "8G", "2048MiB") to GB
+/// Parse Lima memory format (e.g., "8GiB", "8G", "2048MiB", or raw bytes) to GB
 fn parse_memory_string(s: &str) -> Option<u32> {
     // Remove quotes if present
     let s = s.trim_matches('"');
@@ -447,7 +447,15 @@ fn parse_memory_string(s: &str) -> Option<u32> {
         "gib" | "g" => num,
         "mib" | "m" => num / 1024.0,
         "kib" | "k" => num / (1024.0 * 1024.0),
-        "" => num, // Assume GB if no unit
+        "" => {
+            // If no unit and the number is very large (> 1000), assume it's in bytes
+            // This handles output from limactl list --format "{{.Memory}}"
+            if num > 1000.0 {
+                num / (1024.0 * 1024.0 * 1024.0) // Convert bytes to GB
+            } else {
+                num // Small numbers without units are assumed to be GB
+            }
+        }
         _ => return None,
     };
 
@@ -539,6 +547,7 @@ mod tests {
 
     #[test]
     fn test_parse_memory_string() {
+        // Formatted strings (GiB, MiB, etc.)
         assert_eq!(parse_memory_string("8GiB"), Some(8));
         assert_eq!(parse_memory_string("8G"), Some(8));
         assert_eq!(parse_memory_string("16GiB"), Some(16));
@@ -546,8 +555,18 @@ mod tests {
         assert_eq!(parse_memory_string("2048MiB"), Some(2));
         assert_eq!(parse_memory_string("512MiB"), Some(1)); // Rounds up
         assert_eq!(parse_memory_string("\"8GiB\""), Some(8)); // Handles quotes
-        assert_eq!(parse_memory_string("8"), Some(8)); // No unit assumes GB
         assert_eq!(parse_memory_string("1048576KiB"), Some(1)); // KiB to GB
+
+        // Raw byte values (from limactl list --format "{{.Memory}}")
+        assert_eq!(parse_memory_string("8589934592"), Some(8)); // 8 GB in bytes
+        assert_eq!(parse_memory_string("17179869184"), Some(16)); // 16 GB in bytes
+        assert_eq!(parse_memory_string("4294967296"), Some(4)); // 4 GB in bytes
+
+        // Small numbers without units (assumed to be GB)
+        assert_eq!(parse_memory_string("8"), Some(8)); // No unit, small number = GB
+        assert_eq!(parse_memory_string("16"), Some(16));
+
+        // Invalid formats
         assert_eq!(parse_memory_string("invalid"), None); // Invalid format
         assert_eq!(parse_memory_string("8TiB"), None); // Unsupported unit
     }
