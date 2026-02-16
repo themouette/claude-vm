@@ -914,6 +914,20 @@ impl Config {
         self.phase.setup.extend(other.phase.setup);
         self.phase.runtime.extend(other.phase.runtime);
 
+        // Host phases (flat): append (preserves order)
+        self.phase.before_setup.extend(other.phase.before_setup);
+        self.phase.after_setup.extend(other.phase.after_setup);
+        self.phase.before_runtime.extend(other.phase.before_runtime);
+        self.phase.after_runtime.extend(other.phase.after_runtime);
+        self.phase.teardown.extend(other.phase.teardown);
+
+        // Host phases (nested): append before flattening
+        self.phase.host.before_setup.extend(other.phase.host.before_setup);
+        self.phase.host.after_setup.extend(other.phase.host.after_setup);
+        self.phase.host.before_runtime.extend(other.phase.host.before_runtime);
+        self.phase.host.after_runtime.extend(other.phase.host.after_runtime);
+        self.phase.host.teardown.extend(other.phase.host.teardown);
+
         // Mounts (append)
         self.mounts.extend(other.mounts);
         self.setup.mounts.extend(other.setup.mounts);
