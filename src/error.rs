@@ -65,6 +65,9 @@ pub enum ClaudeVmError {
 
     #[error("Branch '{branch}' does not exist")]
     BranchNotFound { branch: String },
+
+    #[error("Resource overprovisioning detected: {message}\n\n{details}\n\nUse --force-resources flag to bypass this check.")]
+    ResourceOverprovisioned { message: String, details: String },
 }
 
 impl From<self_update::errors::Error> for ClaudeVmError {

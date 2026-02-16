@@ -226,6 +226,10 @@ pub struct AgentCmd {
     #[arg(long = "no-conversations")]
     pub no_conversations: bool,
 
+    /// Bypass resource overprovisioning checks
+    #[arg(long = "force-resources")]
+    pub force_resources: bool,
+
     /// Arguments to pass to Claude
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub claude_args: Vec<String>,
@@ -236,6 +240,10 @@ pub struct ShellCmd {
     /// Runtime configuration flags
     #[command(flatten)]
     pub runtime: RuntimeFlags,
+
+    /// Bypass resource overprovisioning checks
+    #[arg(long = "force-resources")]
+    pub force_resources: bool,
 
     /// Command to execute (optional, opens interactive shell if not provided)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]

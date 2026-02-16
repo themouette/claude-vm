@@ -372,10 +372,14 @@ impl LimaCtl {
         Ok(())
     }
 
-    /// List all Lima VMs
+    /// List all Lima VMs with their resource allocations
     pub fn list() -> Result<Vec<VmInfo>> {
         let output = Command::new("limactl")
-            .args(["list", "--format", "{{.Name}}\t{{.Status}}"])
+            .args([
+                "list",
+                "--format",
+                "{{.Name}}\t{{.Status}}\t{{.CPUs}}\t{{.Memory}}",
+            ])
             .output()
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to list VMs: {}", e)))?;
 
@@ -391,9 +395,23 @@ impl LimaCtl {
             .filter_map(|line| {
                 let parts: Vec<&str> = line.split('\t').collect();
                 if parts.len() >= 2 {
+                    let cpus = if parts.len() >= 3 {
+                        parts[2].trim().parse::<u32>().ok()
+                    } else {
+                        None
+                    };
+
+                    let memory_gb = if parts.len() >= 4 {
+                        parse_memory_string(parts[3].trim())
+                    } else {
+                        None
+                    };
+
                     Some(VmInfo {
                         name: parts[0].to_string(),
                         status: parts[1].to_string(),
+                        cpus,
+                        memory_gb,
                     })
                 } else {
                     None
@@ -411,10 +429,37 @@ impl LimaCtl {
     }
 }
 
-#[derive(Debug)]
+/// Parse Lima memory format (e.g., "8GiB", "8G", "2048MiB") to GB
+fn parse_memory_string(s: &str) -> Option<u32> {
+    // Remove quotes if present
+    let s = s.trim_matches('"');
+
+    // Extract number and unit
+    let (num_str, unit) = s
+        .chars()
+        .position(|c| c.is_alphabetic())
+        .map(|pos| s.split_at(pos))
+        .unwrap_or((s, ""));
+
+    let num = num_str.parse::<f64>().ok()?;
+
+    let gb = match unit.to_lowercase().as_str() {
+        "gib" | "g" => num,
+        "mib" | "m" => num / 1024.0,
+        "kib" | "k" => num / (1024.0 * 1024.0),
+        "" => num, // Assume GB if no unit
+        _ => return None,
+    };
+
+    Some(gb.ceil() as u32)
+}
+
+#[derive(Debug, Clone)]
 pub struct VmInfo {
     pub name: String,
     pub status: String,
+    pub cpus: Option<u32>,
+    pub memory_gb: Option<u32>,
 }
 
 #[cfg(test)]
@@ -490,5 +535,20 @@ mod tests {
             !config.use_rosetta,
             "Rosetta should only be enabled on macOS"
         );
+    }
+
+    #[test]
+    fn test_parse_memory_string() {
+        assert_eq!(parse_memory_string("8GiB"), Some(8));
+        assert_eq!(parse_memory_string("8G"), Some(8));
+        assert_eq!(parse_memory_string("16GiB"), Some(16));
+        assert_eq!(parse_memory_string("1024MiB"), Some(1));
+        assert_eq!(parse_memory_string("2048MiB"), Some(2));
+        assert_eq!(parse_memory_string("512MiB"), Some(1)); // Rounds up
+        assert_eq!(parse_memory_string("\"8GiB\""), Some(8)); // Handles quotes
+        assert_eq!(parse_memory_string("8"), Some(8)); // No unit assumes GB
+        assert_eq!(parse_memory_string("1048576KiB"), Some(1)); // KiB to GB
+        assert_eq!(parse_memory_string("invalid"), None); // Invalid format
+        assert_eq!(parse_memory_string("8TiB"), None); // Unsupported unit
     }
 }

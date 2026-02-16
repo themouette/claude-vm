@@ -71,6 +71,27 @@ pub struct VmConfig {
 
     #[serde(default = "default_cpus")]
     pub cpus: u32,
+
+    #[serde(default = "default_cpu_threshold_percent")]
+    pub cpu_threshold_percent: u32,
+
+    #[serde(default = "default_memory_threshold_percent")]
+    pub memory_threshold_percent: u32,
+
+    #[serde(default)]
+    pub resource_check_mode: ResourceCheckMode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ResourceCheckMode {
+    #[serde(rename = "ask")]
+    #[default]
+    Ask,
+    #[serde(rename = "warn")]
+    Warn,
+    #[serde(rename = "prevent")]
+    Prevent,
 }
 
 impl Default for VmConfig {
@@ -79,6 +100,9 @@ impl Default for VmConfig {
             disk: default_disk(),
             memory: default_memory(),
             cpus: default_cpus(),
+            cpu_threshold_percent: default_cpu_threshold_percent(),
+            memory_threshold_percent: default_memory_threshold_percent(),
+            resource_check_mode: ResourceCheckMode::default(),
         }
     }
 }
@@ -95,7 +119,36 @@ fn default_cpus() -> u32 {
     4
 }
 
+fn default_cpu_threshold_percent() -> u32 {
+    75
+}
+
+fn default_memory_threshold_percent() -> u32 {
+    70
+}
+
 impl VmConfig {
+    /// Validate VM configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate CPU threshold
+        if self.cpu_threshold_percent == 0 || self.cpu_threshold_percent > 100 {
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "cpu_threshold_percent must be between 1-100, got {}",
+                self.cpu_threshold_percent
+            )));
+        }
+
+        // Validate memory threshold
+        if self.memory_threshold_percent == 0 || self.memory_threshold_percent > 100 {
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "memory_threshold_percent must be between 1-100, got {}",
+                self.memory_threshold_percent
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Apply CI-specific resource constraints
     /// GitHub Actions runners have limited resources, especially with VZ driver
     pub fn apply_ci_constraints(&mut self) {
@@ -749,6 +802,15 @@ impl Config {
         if other.vm.cpus != default_cpus() {
             self.vm.cpus = other.vm.cpus;
         }
+        if other.vm.cpu_threshold_percent != default_cpu_threshold_percent() {
+            self.vm.cpu_threshold_percent = other.vm.cpu_threshold_percent;
+        }
+        if other.vm.memory_threshold_percent != default_memory_threshold_percent() {
+            self.vm.memory_threshold_percent = other.vm.memory_threshold_percent;
+        }
+        if other.vm.resource_check_mode != ResourceCheckMode::default() {
+            self.vm.resource_check_mode = other.vm.resource_check_mode.clone();
+        }
 
         // Tools
         self.tools.docker = self.tools.docker || other.tools.docker;
@@ -919,6 +981,27 @@ impl Config {
         if let Ok(cpus) = std::env::var("CLAUDE_VM_CPUS") {
             if let Ok(cpus) = cpus.parse::<u32>() {
                 self.vm.cpus = cpus;
+            }
+        }
+
+        if let Ok(threshold) = std::env::var("CLAUDE_VM_CPU_THRESHOLD_PERCENT") {
+            if let Ok(threshold) = threshold.parse::<u32>() {
+                self.vm.cpu_threshold_percent = threshold;
+            }
+        }
+
+        if let Ok(threshold) = std::env::var("CLAUDE_VM_MEMORY_THRESHOLD_PERCENT") {
+            if let Ok(threshold) = threshold.parse::<u32>() {
+                self.vm.memory_threshold_percent = threshold;
+            }
+        }
+
+        if let Ok(mode) = std::env::var("CLAUDE_VM_RESOURCE_CHECK_MODE") {
+            match mode.to_lowercase().as_str() {
+                "ask" => self.vm.resource_check_mode = ResourceCheckMode::Ask,
+                "warn" => self.vm.resource_check_mode = ResourceCheckMode::Warn,
+                "prevent" => self.vm.resource_check_mode = ResourceCheckMode::Prevent,
+                _ => {}
             }
         }
 

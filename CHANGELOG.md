@@ -6,6 +6,22 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Resource overprovisioning detection**: Prevents system instability from running too many concurrent VMs
+  - **Automatic checks**: Detects host resources (CPUs, memory) and queries running VMs before creating new sessions
+  - **Configurable thresholds**: Set CPU and memory limits via config or environment variables
+    - Default: 75% CPU threshold, 70% memory threshold
+    - Configure in `.claude-vm.toml` with `cpu_threshold_percent` and `memory_threshold_percent`
+    - Override with `CLAUDE_VM_CPU_THRESHOLD_PERCENT` and `CLAUDE_VM_MEMORY_THRESHOLD_PERCENT`
+  - **Three behavior modes**: Choose how to handle threshold violations
+    - `ask` (default): Prompt user for confirmation with detailed resource breakdown
+    - `warn`: Display warning and proceed automatically
+    - `prevent`: Block VM creation when thresholds exceeded
+    - Configure with `resource_check_mode` in config or `CLAUDE_VM_RESOURCE_CHECK_MODE` env var
+  - **Force bypass**: Use `--force-resources` flag to skip checks when needed
+  - **Detailed warnings**: Shows current allocation, new total, and specific threshold violations
+  - **Special alerts**: Extra warning when all CPU cores would be allocated (risk of system reboot)
+  - **Graceful fallback**: If resource detection fails, allows VM creation with optional warning
+  - Available on both `agent` and `shell` commands
 - **Git worktree management**: Comprehensive worktree support for parallel branch development
   - **Worktree commands**: New `worktree` subcommand (alias: `w`) with create, list, and remove operations
     - `claude-vm worktree create <branch> [base]` or `claude-vm w create <branch> [base]` - Create new worktree with branch name
