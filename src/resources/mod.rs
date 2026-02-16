@@ -23,6 +23,9 @@ use crate::error::Result;
 /// * `Ok(())` if resource check passed or user approved proceeding
 /// * `Err` if thresholds exceeded and mode is Prevent, or user declined in Ask mode
 pub fn check_before_vm_creation(config: &VmConfig, force: bool, verbose: bool) -> Result<()> {
+    // Validate configuration
+    config.validate()?;
+
     // Detect host resources
     let host = match HostResources::detect() {
         Ok(h) => h,

@@ -128,6 +128,27 @@ fn default_memory_threshold_percent() -> u32 {
 }
 
 impl VmConfig {
+    /// Validate VM configuration values
+    pub fn validate(&self) -> Result<()> {
+        // Validate CPU threshold
+        if self.cpu_threshold_percent == 0 || self.cpu_threshold_percent > 100 {
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "cpu_threshold_percent must be between 1-100, got {}",
+                self.cpu_threshold_percent
+            )));
+        }
+
+        // Validate memory threshold
+        if self.memory_threshold_percent == 0 || self.memory_threshold_percent > 100 {
+            return Err(crate::error::ClaudeVmError::InvalidConfig(format!(
+                "memory_threshold_percent must be between 1-100, got {}",
+                self.memory_threshold_percent
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Apply CI-specific resource constraints
     /// GitHub Actions runners have limited resources, especially with VZ driver
     pub fn apply_ci_constraints(&mut self) {
