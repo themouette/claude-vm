@@ -9,13 +9,6 @@ use crate::vm::{mount, session::VmSession};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Legacy directory for pre-installed runtime scripts (backward compatibility)
-///
-/// In older versions of claude-vm, capability scripts were pre-installed to this directory
-/// during template creation. The phase-based system no longer pre-installs scripts, but we
-/// check this directory for backward compatibility with existing templates.
-const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
-
 /// Type alias for runtime script metadata: (name, content, env_vars, source, when_condition, continue_on_error)
 type RuntimeScriptInfo = (
     String,
@@ -471,21 +464,7 @@ pub fn execute_command_with_runtime_scripts(
     }
     entrypoint.push('\n');
 
-    // Backward compatibility: source any pre-installed scripts from legacy directory
-    // (Phase-based system no longer pre-installs scripts, but older templates might have them)
-    entrypoint.push_str("# Legacy runtime scripts (backward compatibility)\n");
-    entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
-    entrypoint.push_str(&format!(
-        "  for script in {}/*.sh; do\n",
-        RUNTIME_SCRIPT_DIR
-    ));
-    entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
-    entrypoint.push_str("      . \"$script\" 2>&1 || echo \"Warning: Failed to source $script\"\n");
-    entrypoint.push_str("    fi\n");
-    entrypoint.push_str("  done\n");
-    entrypoint.push_str("fi\n\n");
-
-    // Then run user runtime scripts
+    // Run user runtime scripts
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
@@ -619,20 +598,7 @@ pub fn execute_command_with_runtime_scripts(
 fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) -> String {
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
 
-    // Backward compatibility: source any pre-installed scripts from legacy directory
-    entrypoint.push_str("# Legacy runtime scripts (backward compatibility)\n");
-    entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
-    entrypoint.push_str(&format!(
-        "  for script in {}/*.sh; do\n",
-        RUNTIME_SCRIPT_DIR
-    ));
-    entrypoint.push_str("    if [ -f \"$script\" ]; then\n");
-    entrypoint.push_str("      . \"$script\"\n");
-    entrypoint.push_str("    fi\n");
-    entrypoint.push_str("  done\n");
-    entrypoint.push_str("fi\n\n");
-
-    // Then run user runtime scripts
+    // Run user runtime scripts
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
@@ -786,11 +752,9 @@ mod tests {
 
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
-        // Even with no user scripts, should source capability scripts and have basic structure
+        // Even with no user scripts, should have basic structure
         assert!(entrypoint.contains("#!/bin/bash"));
         assert!(entrypoint.contains("set -e"));
-        assert!(entrypoint.contains("# Legacy runtime scripts (backward compatibility)"));
-        assert!(entrypoint.contains("/usr/local/share/claude-vm/runtime"));
         assert!(entrypoint.contains("exec \"$@\""));
     }
 
@@ -814,7 +778,6 @@ mod tests {
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
         // Verify helpful comments are present
-        assert!(entrypoint.contains("# Legacy runtime scripts (backward compatibility)"));
         assert!(entrypoint.contains("# User runtime scripts"));
         assert!(entrypoint.contains("# Execute main command"));
     }
