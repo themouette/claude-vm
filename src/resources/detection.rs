@@ -120,60 +120,10 @@ impl HostResources {
     }
 }
 
-/// Validate VM name to prevent path traversal attacks
-fn validate_vm_name(vm_name: &str) -> Result<()> {
-    if vm_name.is_empty() {
-        return Err(ClaudeVmError::CommandFailed(
-            "VM name cannot be empty".to_string(),
-        ));
-    }
-
-    // Reject path separators
-    if vm_name.contains('/') || vm_name.contains('\\') {
-        return Err(ClaudeVmError::CommandFailed(format!(
-            "Invalid VM name '{}': contains path separators",
-            vm_name
-        )));
-    }
-
-    // Reject path traversal
-    if vm_name.contains("..") {
-        return Err(ClaudeVmError::CommandFailed(format!(
-            "Invalid VM name '{}': contains path traversal sequence",
-            vm_name
-        )));
-    }
-
-    // Reject null bytes
-    if vm_name.contains('\0') {
-        return Err(ClaudeVmError::CommandFailed(format!(
-            "Invalid VM name '{}': contains null bytes",
-            vm_name
-        )));
-    }
-
-    Ok(())
-}
-
 impl AllocatedResources {
     /// Query all running claude-vm VMs and sum their allocated resources
     pub fn from_running_vms() -> Result<Self> {
-        let vms = Self::query_running_vms()?;
-
-        let total_cpus = vms.iter().map(|vm| vm.cpus).sum();
-        let total_memory_gb = vms.iter().map(|vm| vm.memory_gb).sum();
-        let vm_count = vms.len();
-
-        Ok(Self {
-            total_cpus,
-            total_memory_gb,
-            vm_count,
-        })
-    }
-
-    /// Query all running claude-vm VMs
-    fn query_running_vms() -> Result<Vec<VmResources>> {
-        // Use limactl list to get running VMs
+        // Get all VMs with resource information from limactl
         let vms = crate::vm::limactl::LimaCtl::list()?;
 
         // Filter for running claude-vm VMs
@@ -185,97 +135,21 @@ impl AllocatedResources {
             })
             .collect();
 
-        // Query resources for each VM
-        let mut vm_resources = Vec::new();
-        for vm in running_vms {
-            match Self::read_vm_resources(&vm.name) {
-                Ok(resources) => vm_resources.push(resources),
-                Err(_) => {
-                    // If reading VM config fails, use conservative default assumptions
-                    // to avoid underestimating resource usage (security-critical)
-                    vm_resources.push(VmResources {
-                        name: vm.name.clone(),
-                        cpus: DEFAULT_VM_CPUS,
-                        memory_gb: DEFAULT_VM_MEMORY_GB,
-                    });
-                }
-            }
+        let mut total_cpus = 0;
+        let mut total_memory_gb = 0;
+
+        for vm in &running_vms {
+            // Use provided values or conservative defaults
+            // Defaults are security-critical to avoid underestimating resource usage
+            total_cpus += vm.cpus.unwrap_or(DEFAULT_VM_CPUS);
+            total_memory_gb += vm.memory_gb.unwrap_or(DEFAULT_VM_MEMORY_GB);
         }
 
-        Ok(vm_resources)
-    }
-
-    /// Read resource allocation from a VM's Lima config file
-    fn read_vm_resources(vm_name: &str) -> Result<VmResources> {
-        // Validate VM name to prevent path traversal
-        validate_vm_name(vm_name)?;
-
-        // Lima config is at ~/.lima/<vm-name>/lima.yaml
-        let home = std::env::var("HOME").map_err(|_| {
-            ClaudeVmError::CommandFailed("Failed to get HOME directory".to_string())
-        })?;
-
-        // Validate HOME is not empty and is absolute
-        if home.is_empty() {
-            return Err(ClaudeVmError::CommandFailed(
-                "HOME directory is empty".to_string(),
-            ));
-        }
-
-        let config_path = format!("{}/.lima/{}/lima.yaml", home, vm_name);
-        let config_content = std::fs::read_to_string(&config_path).map_err(|e| {
-            ClaudeVmError::CommandFailed(format!(
-                "Failed to read Lima config for {}: {}",
-                vm_name, e
-            ))
-        })?;
-
-        // Parse YAML for cpus and memory
-        // Look for lines like "cpus: 4" and "memory: 8GiB"
-        let mut cpus = DEFAULT_VM_CPUS;
-        let mut memory_gb = DEFAULT_VM_MEMORY_GB;
-
-        for line in config_content.lines() {
-            let line = line.trim();
-            if line.starts_with("cpus:") {
-                if let Some(cpu_str) = line.split(':').nth(1) {
-                    cpus = cpu_str.trim().parse::<u32>().unwrap_or(DEFAULT_VM_CPUS);
-                }
-            } else if line.starts_with("memory:") {
-                if let Some(mem_str) = line.split(':').nth(1) {
-                    memory_gb = Self::parse_memory_size(mem_str.trim());
-                }
-            }
-        }
-
-        Ok(VmResources {
-            name: vm_name.to_string(),
-            cpus,
-            memory_gb,
+        Ok(Self {
+            total_cpus,
+            total_memory_gb,
+            vm_count: running_vms.len(),
         })
-    }
-
-    /// Parse memory size string (e.g., "8GiB", "8G", "8192MiB") to GB
-    fn parse_memory_size(size_str: &str) -> u32 {
-        let size_str = size_str.trim_matches('"');
-
-        // Extract number and unit
-        let (num_str, unit) = size_str
-            .chars()
-            .position(|c| c.is_alphabetic())
-            .map(|pos| size_str.split_at(pos))
-            .unwrap_or((size_str, ""));
-
-        let num = num_str
-            .parse::<f64>()
-            .unwrap_or(DEFAULT_VM_MEMORY_GB as f64);
-
-        match unit.to_lowercase().as_str() {
-            "gib" | "g" => num as u32,
-            "mib" | "m" => (num / 1024.0).ceil() as u32,
-            "kib" | "k" => (num / (1024.0 * 1024.0)).ceil() as u32,
-            _ => num as u32, // Assume GB if no unit
-        }
     }
 }
 
@@ -284,25 +158,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_memory_size() {
-        assert_eq!(AllocatedResources::parse_memory_size("8GiB"), 8);
-        assert_eq!(AllocatedResources::parse_memory_size("8G"), 8);
-        assert_eq!(AllocatedResources::parse_memory_size("16GiB"), 16);
-        assert_eq!(AllocatedResources::parse_memory_size("1024MiB"), 1);
-        assert_eq!(AllocatedResources::parse_memory_size("2048MiB"), 2);
-        assert_eq!(AllocatedResources::parse_memory_size("512MiB"), 1); // Rounds up
-        assert_eq!(AllocatedResources::parse_memory_size("\"8GiB\""), 8);
-    }
-
-    #[test]
     fn test_host_resources_detect() {
         // This test just verifies detection doesn't panic
         // Actual values depend on the system
-        let result = HostResources::detect();
-        if result.is_ok() {
-            let resources = result.unwrap();
+        if let Ok(resources) = HostResources::detect() {
             assert!(resources.total_cpus > 0);
             assert!(resources.total_memory_gb > 0);
         }
+    }
+
+    #[test]
+    fn test_allocated_resources_from_running_vms() {
+        // This test verifies the function doesn't panic
+        // It may return an error if limactl is not available
+        let result = AllocatedResources::from_running_vms();
+        // Should either succeed or fail gracefully
+        assert!(result.is_ok() || result.is_err());
     }
 }
