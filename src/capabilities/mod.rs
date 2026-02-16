@@ -54,30 +54,8 @@ pub fn execute_host_setup(project: &Project, config: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Execute all enabled capabilities' vm_setup hooks in VM
-pub fn execute_vm_setup(project: &Project, config: &Config) -> Result<()> {
-    let registry = registry::CapabilityRegistry::load()?;
-    let enabled = registry.get_enabled_capabilities(config)?;
-
-    for capability in enabled {
-        executor::execute_vm_setup(project, &capability)?;
-    }
-
-    Ok(())
-}
-
-/// Execute all enabled capabilities' vm_runtime hooks in VM
-/// vm_name: The actual VM instance name (e.g., ephemeral session name)
-pub fn execute_vm_runtime(vm_name: &str, config: &Config) -> Result<()> {
-    let registry = registry::CapabilityRegistry::load()?;
-    let enabled = registry.get_enabled_capabilities(config)?;
-
-    for capability in enabled {
-        executor::execute_vm_runtime_in_vm(vm_name, &capability)?;
-    }
-
-    Ok(())
-}
+// NOTE: VM setup and runtime are now handled through the phase system
+// See merge_capability_phases() which merges capability phases with user phases
 
 /// Get all MCP servers from enabled capabilities
 pub fn get_mcp_servers(config: &Config) -> Result<Vec<definition::McpServer>> {
@@ -99,26 +77,9 @@ pub fn configure_mcp_servers(project: &Project, config: &Config) -> Result<()> {
     Ok(())
 }
 
-/// Install vm_runtime scripts into the template
-pub fn install_vm_runtime_scripts(project: &Project, config: &Config) -> Result<()> {
-    let registry = registry::CapabilityRegistry::load()?;
-    let enabled = registry.get_enabled_capabilities(config)?;
-
-    // Filter capabilities that have vm_runtime scripts
-    let capabilities_with_runtime: Vec<_> = enabled
-        .into_iter()
-        .filter(|cap| cap.vm_runtime.is_some())
-        .collect();
-
-    if capabilities_with_runtime.is_empty() {
-        return Ok(());
-    }
-
-    println!("Installing runtime scripts into template...");
-    executor::install_vm_runtime_scripts_to_template(project, &capabilities_with_runtime)?;
-
-    Ok(())
-}
+// NOTE: Runtime script installation is now handled through the phase system
+// Capability runtime phases are merged into config and executed dynamically
+// This eliminates the need to pre-install scripts into the template
 
 /// Get all port forwards from enabled capabilities
 pub fn get_port_forwards(config: &Config) -> Result<Vec<PortForward>> {
@@ -175,6 +136,95 @@ pub fn install_system_packages(project: &Project, config: &Config) -> Result<()>
 
     println!("Installing system packages: {}", packages.join(", "));
     executor::batch_install_system_packages(project, &packages)?;
+
+    Ok(())
+}
+
+/// Get capability-defined phases and merge them with user-defined phases.
+/// Capability phases are inserted BEFORE user phases to ensure proper initialization.
+pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
+    let registry = registry::CapabilityRegistry::load()?;
+    let enabled = registry.get_enabled_capabilities(config)?;
+
+    let mut capability_setup_phases = Vec::new();
+    let mut capability_runtime_phases = Vec::new();
+
+    for capability in enabled {
+        let phase_config = &capability.phase;
+        let capability_id = &capability.capability.id;
+
+        // Convert embedded script_files to inline scripts for capability phases
+        // Capabilities use embedded scripts (include_str!) so we need to load them
+        // and convert to inline format for the phase system
+
+        // Add capability setup phases
+        for phase in &phase_config.setup {
+            let mut phase_copy = phase.clone();
+            // Convert script_files to inline script
+            if !phase_copy.script_files.is_empty() {
+                let mut combined_script = String::new();
+                for script_file in &phase_copy.script_files {
+                    let content = executor::get_embedded_script(capability_id, script_file)?;
+                    combined_script.push_str(&content);
+                    combined_script.push('\n');
+                }
+                phase_copy.script = Some(combined_script);
+                phase_copy.script_files.clear();
+            }
+
+            // Mark this as a capability phase by adding CAPABILITY_ID
+            // This signals to the phase executor to inject full capability env vars
+            phase_copy
+                .env
+                .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+            phase_copy
+                .env
+                .insert("CLAUDE_VM_PHASE".to_string(), "setup".to_string());
+
+            capability_setup_phases.push(phase_copy);
+        }
+
+        // Add capability runtime phases
+        for phase in &phase_config.runtime {
+            let mut phase_copy = phase.clone();
+            // Convert script_files to inline script
+            if !phase_copy.script_files.is_empty() {
+                let mut combined_script = String::new();
+                for script_file in &phase_copy.script_files {
+                    let content = executor::get_embedded_script(capability_id, script_file)?;
+                    combined_script.push_str(&content);
+                    combined_script.push('\n');
+                }
+                phase_copy.script = Some(combined_script);
+                phase_copy.script_files.clear();
+            }
+
+            // Mark this as a capability phase by adding CAPABILITY_ID
+            // This signals to the phase executor to inject full capability env vars
+            phase_copy
+                .env
+                .insert("CAPABILITY_ID".to_string(), capability_id.to_string());
+            phase_copy
+                .env
+                .insert("CLAUDE_VM_PHASE".to_string(), "runtime".to_string());
+
+            capability_runtime_phases.push(phase_copy);
+        }
+    }
+
+    // Merge: capability phases BEFORE user phases
+    // This ensures capabilities initialize before user-defined scripts run
+    if !capability_setup_phases.is_empty() {
+        let user_setup = std::mem::take(&mut config.phase.setup);
+        config.phase.setup = capability_setup_phases;
+        config.phase.setup.extend(user_setup);
+    }
+
+    if !capability_runtime_phases.is_empty() {
+        let user_runtime = std::mem::take(&mut config.phase.runtime);
+        config.phase.runtime = capability_runtime_phases;
+        config.phase.runtime.extend(user_runtime);
+    }
 
     Ok(())
 }

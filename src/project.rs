@@ -159,6 +159,21 @@ impl Project {
     pub fn is_worktree(&self) -> bool {
         self.root != self.main_repo_root
     }
+
+    /// Create a Project instance for testing purposes
+    /// Uses the provided path as both root and main_repo_root
+    ///
+    /// # Note
+    /// This is only intended for use in tests. In production code, use `Project::detect()`.
+    #[doc(hidden)]
+    pub fn new_for_test(root: PathBuf) -> Self {
+        let template_name = Self::generate_template_name(&root);
+        Self {
+            root: root.clone(),
+            main_repo_root: root,
+            template_name,
+        }
+    }
 }
 
 #[cfg(test)]

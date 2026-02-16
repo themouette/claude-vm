@@ -9,7 +9,11 @@ use crate::vm::{mount, session::VmSession};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-/// Directory where capability runtime scripts are installed in the VM
+/// Legacy directory for pre-installed runtime scripts (backward compatibility)
+///
+/// In older versions of claude-vm, capability scripts were pre-installed to this directory
+/// during template creation. The phase-based system no longer pre-installs scripts, but we
+/// check this directory for backward compatibility with existing templates.
 const RUNTIME_SCRIPT_DIR: &str = "/usr/local/share/claude-vm/runtime";
 
 /// Type alias for runtime script metadata: (name, content, env_vars, source, when_condition, continue_on_error)
@@ -297,41 +301,41 @@ pub fn execute_command_with_runtime_scripts(
     }
 
     // New phase-based runtime scripts
+    use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
+
     for phase in &config.phase.runtime {
         // Validate phase and emit warnings for potential issues
         phase.validate_and_warn();
 
-        // Get scripts for this phase
-        let scripts = match phase.get_scripts(project.root()) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!(
-                    "\n❌ Failed to load scripts for runtime phase '{}'",
-                    phase.name
-                );
-                eprintln!("   Error: {}", e);
-                if !phase.script_files.is_empty() {
-                    eprintln!("   Script files:");
-                    for file in &phase.script_files {
-                        eprintln!("   - {}", file);
-                    }
-                    eprintln!("\n   Hint: Check that script files exist and are readable");
-                }
+        // Load scripts with common error handling
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Runtime)?
+        else {
+            continue; // continue_on_error was true
+        };
 
-                if phase.continue_on_error {
-                    eprintln!("   ℹ Continuing due to continue_on_error=true");
-                    continue;
-                } else {
-                    return Err(e);
-                }
+        // Build environment setup with validation and capability env var injection
+        // This automatically validates env keys and injects capability vars if CAPABILITY_ID is present
+        let phase_env_setup = match build_phase_env_setup(phase, project, vm_name) {
+            Ok(setup) => setup,
+            Err(e) => {
+                use crate::phase_executor::handle_phase_error;
+                handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
+                continue;
             }
         };
 
         for (name, content) in scripts {
+            // Prepend environment setup to script content
+            let content_with_env = if phase_env_setup.is_empty() {
+                content
+            } else {
+                format!("{}\\n\\n{}", phase_env_setup, content)
+            };
+
             script_contents.push((
                 name,
-                content,
-                phase.env.clone(),
+                content_with_env,
+                HashMap::new(), // Env vars already injected into script content
                 phase.source,
                 phase.when.clone(), // Store condition for runtime evaluation
                 phase.continue_on_error,
@@ -467,8 +471,9 @@ pub fn execute_command_with_runtime_scripts(
     }
     entrypoint.push('\n');
 
-    // Source capability runtime scripts first
-    entrypoint.push_str("# Source capability runtime scripts\n");
+    // Backward compatibility: source any pre-installed scripts from legacy directory
+    // (Phase-based system no longer pre-installs scripts, but older templates might have them)
+    entrypoint.push_str("# Legacy runtime scripts (backward compatibility)\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
     entrypoint.push_str(&format!(
         "  for script in {}/*.sh; do\n",
@@ -484,7 +489,7 @@ pub fn execute_command_with_runtime_scripts(
     entrypoint.push_str("# User runtime scripts - executed in order\n");
 
     for (i, vm_path) in vm_script_paths.iter().enumerate() {
-        let (name, _content, script_env, source_script, when_condition, continue_on_error) =
+        let (name, _content, _script_env, source_script, when_condition, continue_on_error) =
             &script_contents[i];
 
         // Wrap in conditional block if 'when' is specified
@@ -502,54 +507,18 @@ pub fn execute_command_with_runtime_scripts(
         // Determine command: 'source' (or '.') if sourced, 'bash' otherwise
         let run_cmd = if *source_script { "." } else { "bash" };
 
-        // Set phase-specific environment variables if any
-        if !script_env.is_empty() {
-            entrypoint.push_str("  # Phase-specific environment variables\n");
+        // Note: Environment variables are now prepended to script content by build_phase_env_setup()
+        // This includes both user-defined env vars and capability env vars (if CAPABILITY_ID present)
 
-            // Only use subshell if NOT sourcing (sourcing needs exports to persist)
-            if !*source_script {
-                entrypoint.push_str("  (\n"); // Start subshell to isolate env vars
-            }
-
-            for (key, value) in script_env {
-                let escaped_value = value.replace('\'', "'\\''");
-                let indent = if *source_script { "  " } else { "    " };
-                entrypoint.push_str(&format!("{}export {}='{}'\n", indent, key, escaped_value));
-            }
-
-            // Use shell_escape to prevent injection attacks
-            let indent = if *source_script { "  " } else { "    " };
-            if *continue_on_error {
-                entrypoint.push_str(&format!(
-                    "{}{} {} || true\n",
-                    indent,
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            } else {
-                entrypoint.push_str(&format!(
-                    "{}{} {}\n",
-                    indent,
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            }
-
-            if !*source_script {
-                entrypoint.push_str("  )\n"); // End subshell
-            }
-            entrypoint.push('\n');
+        // Use shell_escape to prevent injection attacks
+        if *continue_on_error {
+            entrypoint.push_str(&format!(
+                "  {} {} || true\n\n",
+                run_cmd,
+                shell_escape(vm_path)
+            ));
         } else {
-            // Use shell_escape to prevent injection attacks
-            if *continue_on_error {
-                entrypoint.push_str(&format!(
-                    "  {} {} || true\n\n",
-                    run_cmd,
-                    shell_escape(vm_path)
-                ));
-            } else {
-                entrypoint.push_str(&format!("  {} {}\n\n", run_cmd, shell_escape(vm_path)));
-            }
+            entrypoint.push_str(&format!("  {} {}\n\n", run_cmd, shell_escape(vm_path)));
         }
 
         // Close conditional block if 'when' was specified
@@ -650,8 +619,8 @@ pub fn execute_command_with_runtime_scripts(
 fn build_entrypoint_script(vm_script_paths: &[String], script_names: &[String]) -> String {
     let mut entrypoint = String::from("#!/bin/bash\nset -e\n\n");
 
-    // Source capability runtime scripts first
-    entrypoint.push_str("# Source capability runtime scripts\n");
+    // Backward compatibility: source any pre-installed scripts from legacy directory
+    entrypoint.push_str("# Legacy runtime scripts (backward compatibility)\n");
     entrypoint.push_str(&format!("if [ -d {} ]; then\n", RUNTIME_SCRIPT_DIR));
     entrypoint.push_str(&format!(
         "  for script in {}/*.sh; do\n",
@@ -820,7 +789,7 @@ mod tests {
         // Even with no user scripts, should source capability scripts and have basic structure
         assert!(entrypoint.contains("#!/bin/bash"));
         assert!(entrypoint.contains("set -e"));
-        assert!(entrypoint.contains("# Source capability runtime scripts"));
+        assert!(entrypoint.contains("# Legacy runtime scripts (backward compatibility)"));
         assert!(entrypoint.contains("/usr/local/share/claude-vm/runtime"));
         assert!(entrypoint.contains("exec \"$@\""));
     }
@@ -845,7 +814,7 @@ mod tests {
         let entrypoint = build_entrypoint_script(&vm_paths, &names);
 
         // Verify helpful comments are present
-        assert!(entrypoint.contains("# Source capability runtime scripts"));
+        assert!(entrypoint.contains("# Legacy runtime scripts (backward compatibility)"));
         assert!(entrypoint.contains("# User runtime scripts"));
         assert!(entrypoint.contains("# Execute main command"));
     }
