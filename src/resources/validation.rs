@@ -14,9 +14,24 @@ pub fn check_resources(
     host: &HostResources,
     allocated: &AllocatedResources,
 ) -> Result<ResourceCheck> {
-    // Calculate what the new total would be after adding this VM
-    let new_total_cpus = allocated.total_cpus + config.cpus;
-    let new_total_memory = allocated.total_memory_gb + config.memory;
+    // Calculate what the new total would be after adding this VM (with overflow protection)
+    let new_total_cpus = allocated
+        .total_cpus
+        .checked_add(config.cpus)
+        .ok_or_else(|| {
+            crate::error::ClaudeVmError::CommandFailed(
+                "CPU count overflow: too many VMs allocated".to_string(),
+            )
+        })?;
+
+    let new_total_memory = allocated
+        .total_memory_gb
+        .checked_add(config.memory)
+        .ok_or_else(|| {
+            crate::error::ClaudeVmError::CommandFailed(
+                "Memory overflow: too many VMs allocated".to_string(),
+            )
+        })?;
 
     // Calculate thresholds
     let cpu_threshold =
