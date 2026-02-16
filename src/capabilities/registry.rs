@@ -101,9 +101,13 @@ impl CapabilityRegistry {
         ];
 
         for (id, content) in CAPABILITY_FILES {
-            let capability: Capability = toml::from_str(content).map_err(|e| {
+            let mut capability: Capability = toml::from_str(content).map_err(|e| {
                 ClaudeVmError::InvalidConfig(format!("Failed to parse capability '{}': {}", id, e))
             })?;
+
+            // Flatten host phases: merge [[phase.host.before_setup]] into [[phase.before_setup]]
+            capability.phase.flatten_host_phases();
+
             capabilities.insert(id.to_string(), Arc::new(capability));
         }
 

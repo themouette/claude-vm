@@ -440,6 +440,26 @@ impl ScriptPhase {
     }
 }
 
+/// Host phases wrapper for TOML deserialization
+/// Allows [[phase.host.before_setup]] syntax in TOML files
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HostPhases {
+    #[serde(default)]
+    pub before_setup: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub after_setup: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub before_runtime: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub after_runtime: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub teardown: Vec<ScriptPhase>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PhaseConfig {
     /// Setup phases (run during template creation, inside VM)
@@ -450,25 +470,56 @@ pub struct PhaseConfig {
     #[serde(default)]
     pub runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine before VM setup scripts
+    /// Host phases wrapper - allows [[phase.host.before_setup]] syntax
+    #[serde(default)]
+    pub host: HostPhases,
+
+    /// Direct host phases (backward compatibility) - run on HOST machine before VM setup scripts
+    /// Merged with host.before_setup during loading
     #[serde(default)]
     pub before_setup: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine after VM setup, before template save
+    /// Direct host phases (backward compatibility) - run on HOST machine after VM setup
+    /// Merged with host.after_setup during loading
     #[serde(default)]
     pub after_setup: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine before VM runtime scripts
+    /// Direct host phases (backward compatibility) - run on HOST machine before VM runtime scripts
+    /// Merged with host.before_runtime during loading
     #[serde(default)]
     pub before_runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine after VM runtime, before shell/agent
+    /// Direct host phases (backward compatibility) - run on HOST machine after VM runtime
+    /// Merged with host.after_runtime during loading
     #[serde(default)]
     pub after_runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine when session ends
+    /// Direct host phases (backward compatibility) - run on HOST machine when session ends
+    /// Merged with host.teardown during loading
     #[serde(default)]
     pub teardown: Vec<ScriptPhase>,
+}
+
+impl PhaseConfig {
+    /// Flatten host phases into direct fields for easier access
+    /// This merges [[phase.host.before_setup]] with [[phase.before_setup]]
+    pub fn flatten_host_phases(&mut self) {
+        if !self.host.before_setup.is_empty() {
+            self.before_setup.append(&mut self.host.before_setup);
+        }
+        if !self.host.after_setup.is_empty() {
+            self.after_setup.append(&mut self.host.after_setup);
+        }
+        if !self.host.before_runtime.is_empty() {
+            self.before_runtime.append(&mut self.host.before_runtime);
+        }
+        if !self.host.after_runtime.is_empty() {
+            self.after_runtime.append(&mut self.host.after_runtime);
+        }
+        if !self.host.teardown.is_empty() {
+            self.teardown.append(&mut self.host.teardown);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
