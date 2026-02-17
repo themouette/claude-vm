@@ -194,6 +194,24 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub network_isolation: bool,
+
+    #[serde(default)]
+    pub rtk: Option<RtkToolConfig>,
+}
+
+/// RTK-specific configuration
+/// Presence of [tools.rtk] section enables RTK capability
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RtkToolConfig {
+    /// Enable hook-first mode (transparent command rewriting)
+    /// When true, commands like "git status" are automatically rewritten to "rtk git status"
+    /// Default: true (opt-out by setting to false)
+    #[serde(default = "default_hook_mode_true")]
+    pub hook_mode: bool,
+}
+
+fn default_hook_mode_true() -> bool {
+    true
 }
 
 impl ToolsConfig {
@@ -209,6 +227,7 @@ impl ToolsConfig {
             "gh" => self.gh,
             "git" => self.git,
             "network-isolation" => self.network_isolation,
+            "rtk" => self.rtk.is_some(),
             _ => false,
         }
     }
@@ -225,6 +244,7 @@ impl ToolsConfig {
             "gh" => self.gh = true,
             "git" => self.git = true,
             "network-isolation" => self.network_isolation = true,
+            "rtk" => self.rtk = Some(RtkToolConfig { hook_mode: true }),
             _ => {}
         }
     }
@@ -894,6 +914,11 @@ impl Config {
         self.tools.git = self.tools.git || other.tools.git;
         self.tools.network_isolation =
             self.tools.network_isolation || other.tools.network_isolation;
+
+        // RTK: other takes precedence if present
+        if other.tools.rtk.is_some() {
+            self.tools.rtk = other.tools.rtk;
+        }
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);
