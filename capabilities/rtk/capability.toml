@@ -37,8 +37,8 @@ script = """
 # Configure hook-first mode (opt-out via RTK_HOOK_MODE env var)
 if [ "${RTK_HOOK_MODE:-true}" = "true" ]; then
     echo "Configuring RTK hook-first mode..."
-    # Auto-confirm patching of existing settings with 'y'
-    if echo y | rtk init --global; then
+    # Use --auto-patch to bypass interactive confirmation
+    if rtk init --global --auto-patch; then
         echo "✓ RTK hook-first mode enabled"
     else
         echo "Warning: RTK hook initialization failed"
