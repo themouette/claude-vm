@@ -6,6 +6,15 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **Command aliases**: Short aliases for frequently used commands to reduce typing
+  - `claude-vm ls` - Alias for `list` (list all templates)
+  - `claude-vm sh` - Alias for `shell` (open shell or run commands)
+  - `claude-vm net` - Alias for `network` (network isolation management)
+  - `claude-vm w` - Alias for `worktree` (worktree management)
+  - `claude-vm worktree new` - Alias for `worktree create`
+  - `claude-vm worktree ls` - Alias for `worktree list`
+  - `claude-vm worktree rm` - Alias for `worktree remove`
+  - All aliases follow Unix conventions and work identically to their full command names
 - **Host phases**: Five new host phase types for executing operations on the HOST machine at specific lifecycle points
   - `[[phase.host.before_setup]]` - Runs on host before VM setup scripts (e.g., export host configuration)
   - `[[phase.host.after_setup]]` - Runs on host after VM setup, before template save (e.g., validate setup, backup template)

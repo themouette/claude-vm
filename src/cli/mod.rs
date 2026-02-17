@@ -51,6 +51,7 @@ pub enum NetworkCommands {
 #[derive(Subcommand, Debug)]
 pub enum WorktreeCommands {
     /// Create a new worktree for a branch
+    #[command(alias = "new")]
     Create {
         /// Branch name for the worktree
         branch: String,
@@ -60,6 +61,7 @@ pub enum WorktreeCommands {
     },
 
     /// List all worktrees
+    #[command(alias = "ls")]
     List {
         /// Show only worktrees for branches merged into base
         #[arg(long)]
@@ -137,6 +139,7 @@ pub enum Commands {
 
     /// Open a shell or execute a command in an ephemeral VM
     #[command(
+        alias = "sh",
         long_about = "Open a shell or execute a command in an ephemeral VM.\n\n\
         Without arguments: Opens an interactive shell in a fresh VM.\n\
         With arguments: Executes the command in the VM and exits."
@@ -156,6 +159,7 @@ pub enum Commands {
     },
 
     /// List all claude-vm templates
+    #[command(alias = "ls")]
     List {
         /// Show only unused templates (not used in 30 days)
         #[arg(long)]
@@ -203,6 +207,7 @@ pub enum Commands {
     },
 
     /// Network isolation commands
+    #[command(alias = "net")]
     Network {
         #[command(subcommand)]
         command: NetworkCommands,

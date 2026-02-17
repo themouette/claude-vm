@@ -43,17 +43,22 @@ Both forms work identically. The explicit `agent` command makes the default beha
 
 ```bash
 claude-vm agent [flags] [args]     # Run Claude (also the default)
-claude-vm shell [flags] [args]     # Interactive shell or run commands
+claude-vm shell [flags] [args]     # Interactive shell or run commands (alias: sh)
 claude-vm setup [flags] <name>     # Create a template VM
-claude-vm worktree <subcommand>    # Worktree management (create, list, delete, clean)
-claude-vm info                     # Show project information
-claude-vm config <subcommand>      # Configuration management
-claude-vm list [flags]             # List templates
+claude-vm worktree <subcommand>    # Worktree management (alias: w)
+claude-vm info                     # Show project information (alias: i)
+claude-vm config <subcommand>      # Configuration management (alias: cfg)
+claude-vm list [flags]             # List templates (alias: ls)
 claude-vm clean [flags]            # Remove current template
 claude-vm clean-all [flags]        # Remove all templates
-claude-vm update [flags]           # Update claude-vm
-claude-vm network <subcommand>     # Network isolation management
+claude-vm update [flags]           # Update claude-vm (alias: up)
+claude-vm network <subcommand>     # Network isolation management (alias: net)
 ```
+
+**Worktree subcommands:**
+- `worktree create` (alias: `new`) - Create a new worktree
+- `worktree list` (alias: `ls`) - List all worktrees
+- `worktree remove` (alias: `rm`) - Remove worktrees
 
 Runtime flags like `--disk`, `--memory`, `--mount`, `--env`, and `--worktree` are available on `agent`, `shell`, and `setup` commands. Other commands show only their own flags.
 
