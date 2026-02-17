@@ -322,7 +322,7 @@ pub fn execute_command_with_runtime_scripts(
             let content_with_env = if phase_env_setup.is_empty() {
                 content
             } else {
-                format!("{}\\n\\n{}", phase_env_setup, content)
+                format!("{}\n\n{}", phase_env_setup, content)
             };
 
             script_contents.push((
