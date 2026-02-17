@@ -337,21 +337,6 @@ impl LimaCtl {
         command.arg(cmd);
         command.args(args);
 
-        // Debug: print the full command
-        let workdir_str = workdir
-            .map(|wd| format!(" --workdir {}", wd.display()))
-            .unwrap_or_default();
-        let ssh_str = if forward_ssh_agent { " -A" } else { "" };
-        eprintln!("[DEBUG] LimaCtl::shell - Full command:");
-        eprintln!(
-            "  limactl shell{}{} {} {} {}",
-            workdir_str,
-            ssh_str,
-            name,
-            cmd,
-            args.join(" ")
-        );
-
         let status = command
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())

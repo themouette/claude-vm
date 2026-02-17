@@ -614,41 +614,15 @@ fn execute_script_in_vm(
     let temp_path = format!("/tmp/{}", sanitize_filename(script_name));
     let local_temp = std::env::temp_dir().join(script_name);
 
-    eprintln!("[DEBUG] execute_script_in_vm:");
-    eprintln!("  vm_name: {}", vm_name);
-    eprintln!("  script_name: {}", script_name);
-    eprintln!("  temp_path (VM): {}", temp_path);
-    eprintln!("  source: {}", source);
-    eprintln!(
-        "  script_content (first 200 chars):\n{}",
-        &script_content.chars().take(200).collect::<String>()
-    );
-
-    // Add debug wrapper to trace bash execution
-    let debug_wrapper = format!(
-        "#!/bin/bash\nset -x\necho '[BASH DEBUG] Starting script execution' >&2\necho '[BASH DEBUG] PWD='\"$PWD\" >&2\necho '[BASH DEBUG] HOME='\"$HOME\" >&2\necho '[BASH DEBUG] OLDPWD='\"$OLDPWD\" >&2\n{}\n",
-        script_content
-    );
-
-    std::fs::write(&local_temp, &debug_wrapper)?;
+    std::fs::write(&local_temp, script_content)?;
 
     // Copy to VM
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
 
     // Make executable
-    eprintln!(
-        "[DEBUG] Calling: limactl shell {} chmod +x {}",
-        vm_name, temp_path
-    );
     LimaCtl::shell(vm_name, workdir, "chmod", &["+x", &temp_path], false)?;
 
     // Execute: source if requested, otherwise run with bash
-    eprintln!(
-        "[DEBUG] Calling: limactl shell {} {} {}",
-        vm_name,
-        if source { "." } else { "bash" },
-        temp_path
-    );
     let result = if source {
         LimaCtl::shell(vm_name, workdir, ".", &[&temp_path], false)
     } else {
