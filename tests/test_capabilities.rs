@@ -513,3 +513,69 @@ fn test_rtk_detailed_syntax() {
         "Hook mode should be disabled when set to false"
     );
 }
+
+#[test]
+fn test_capability_cleanup_phases_are_merged() {
+    use claude_vm::capabilities::merge_capability_phases;
+    use claude_vm::config::{RtkConfig, ScriptPhase};
+
+    let mut config = Config::default();
+
+    // Add a user-defined cleanup phase
+    config.phase.cleanup.push(ScriptPhase {
+        name: "user-cleanup".to_string(),
+        script: Some("echo 'user cleanup'".to_string()),
+        ..Default::default()
+    });
+
+    // Enable RTK capability which has cleanup phases
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+
+    // Merge capability phases
+    merge_capability_phases(&mut config).expect("Failed to merge capability phases");
+
+    // Verify cleanup phases exist
+    assert!(
+        !config.phase.cleanup.is_empty(),
+        "Should have cleanup phases after merge"
+    );
+
+    // Find RTK cleanup phase (should have CAPABILITY_ID env var)
+    let rtk_cleanup = config
+        .phase
+        .cleanup
+        .iter()
+        .find(|p| p.env.get("CAPABILITY_ID") == Some(&"rtk".to_string()));
+
+    assert!(
+        rtk_cleanup.is_some(),
+        "RTK cleanup phase should be present after merge"
+    );
+
+    // Verify RTK cleanup phase has correct metadata
+    let rtk_phase = rtk_cleanup.unwrap();
+    assert_eq!(
+        rtk_phase.env.get("CAPABILITY_ID"),
+        Some(&"rtk".to_string()),
+        "RTK cleanup phase should have CAPABILITY_ID set"
+    );
+    assert_eq!(
+        rtk_phase.env.get("CLAUDE_VM_PHASE"),
+        Some(&"cleanup".to_string()),
+        "RTK cleanup phase should have CLAUDE_VM_PHASE set to 'cleanup'"
+    );
+
+    // Verify capability cleanup phases come before user cleanup phases
+    let first_cleanup = &config.phase.cleanup[0];
+    assert!(
+        first_cleanup.env.contains_key("CAPABILITY_ID"),
+        "First cleanup phase should be a capability phase"
+    );
+
+    // User phase should come after capability phases
+    let last_cleanup = config.phase.cleanup.last().unwrap();
+    assert_eq!(
+        &last_cleanup.name, "user-cleanup",
+        "User cleanup phase should come after capability cleanup phases"
+    );
+}

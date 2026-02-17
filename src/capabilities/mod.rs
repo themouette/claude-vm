@@ -225,6 +225,7 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     let mut capability_teardown = Vec::new();
     let mut capability_setup_phases = Vec::new();
     let mut capability_runtime_phases = Vec::new();
+    let mut capability_cleanup_phases = Vec::new();
 
     for capability in enabled {
         let phase_config = &capability.phase;
@@ -266,6 +267,11 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
             capability_id,
             "runtime",
         )?);
+        capability_cleanup_phases.extend(convert_capability_phases(
+            &phase_config.cleanup,
+            capability_id,
+            "cleanup",
+        )?);
     }
 
     // Helper to merge phase lists (capability phases BEFORE user phases)
@@ -288,6 +294,7 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     merge_phase_list(&mut config.phase.host.teardown, capability_teardown);
     merge_phase_list(&mut config.phase.setup, capability_setup_phases);
     merge_phase_list(&mut config.phase.runtime, capability_runtime_phases);
+    merge_phase_list(&mut config.phase.cleanup, capability_cleanup_phases);
 
     Ok(())
 }
