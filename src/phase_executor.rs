@@ -68,12 +68,13 @@ pub fn build_phase_env_setup(
     phase: &ScriptPhase,
     project: &crate::project::Project,
     vm_name: &str,
+    config: Option<&crate::config::Config>,
 ) -> Result<String> {
     let mut env = phase.env.clone();
 
     // If this is a capability phase, inject capability-specific environment variables
     if phase.env.contains_key("CAPABILITY_ID") {
-        inject_capability_env_vars(&mut env, project, vm_name)?;
+        inject_capability_env_vars(&mut env, project, vm_name, config)?;
     }
 
     if env.is_empty() {
@@ -95,10 +96,12 @@ pub fn build_phase_env_setup(
 /// - CLAUDE_VM_PHASE (already present), CLAUDE_VM_VERSION
 /// - PROJECT_ROOT, PROJECT_NAME
 /// - PROJECT_WORKTREE_ROOT, PROJECT_WORKTREE (if git worktree)
+/// - RTK_HOOK_MODE (for RTK capability only)
 fn inject_capability_env_vars(
     env: &mut std::collections::HashMap<String, String>,
     project: &crate::project::Project,
     vm_name: &str,
+    config: Option<&crate::config::Config>,
 ) -> Result<()> {
     // VM identification
     env.insert(
@@ -142,6 +145,21 @@ fn inject_capability_env_vars(
     // Ensure empty strings for worktree vars if not detected
     env.entry("PROJECT_WORKTREE_ROOT".to_string()).or_default();
     env.entry("PROJECT_WORKTREE".to_string()).or_default();
+
+    // RTK-specific: inject RTK_HOOK_MODE for rtk capability
+    if let Some(capability_id) = env.get("CAPABILITY_ID") {
+        if capability_id == "rtk" {
+            if let Some(cfg) = config {
+                let hook_mode = cfg
+                    .tools
+                    .rtk
+                    .as_ref()
+                    .map(|rtk| rtk.hook_mode)
+                    .unwrap_or(true); // Default to true (opt-out)
+                env.insert("RTK_HOOK_MODE".to_string(), hook_mode.to_string());
+            }
+        }
+    }
 
     Ok(())
 }
