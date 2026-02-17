@@ -26,12 +26,11 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
 ///
 /// # Routing Logic
 ///
-/// The router inspects only `args[1]` (the first argument after the program name):
-///
-/// - If `args[1]` is `--help`, `-h`, `--version`, or `-V`: unchanged (preserve main help/version)
-/// - If `args[1]` is a known subcommand: unchanged
-/// - If `args[1]` starts with `-` (any flag): insert "agent" after program name
-/// - If `args[1]` is anything else (not a known subcommand): insert "agent" after program name
+/// 1. If `args[1]` is `--help`, `-h`, `--version`, or `-V`: unchanged (preserve main help/version)
+/// 2. If `args[1]` is a known subcommand: unchanged
+/// 3. Otherwise, scan all args for a known subcommand:
+///    - If found: move it to position 1 (after program name)
+///    - If not found: insert "agent" at position 1
 ///
 /// # Examples
 ///
@@ -39,18 +38,11 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
 /// claude-vm /clear              -> claude-vm agent /clear
 /// claude-vm --disk 50 /clear    -> claude-vm agent --disk 50 /clear
 /// claude-vm --verbose /clear    -> claude-vm agent --verbose /clear
+/// claude-vm --verbose agent     -> claude-vm agent --verbose
 /// claude-vm agent /clear        -> claude-vm agent /clear (unchanged)
 /// claude-vm shell ls            -> claude-vm shell ls (unchanged)
 /// claude-vm --help              -> claude-vm --help (unchanged)
 /// ```
-///
-/// # Known Trade-off
-///
-/// `claude-vm --verbose agent /clear` will produce `claude-vm agent --verbose agent /clear`,
-/// treating the literal "agent" as a trailing arg. This is acceptable because:
-/// - Users can write `claude-vm agent --verbose /clear` instead
-/// - This edge case is uncommon
-/// - The simplicity benefit outweighs this minor issue
 pub fn route_args<I, T>(args: I) -> Vec<OsString>
 where
     I: IntoIterator<Item = T>,
@@ -80,12 +72,29 @@ where
         return normalize_worktree_args(args);
     }
 
-    // If first arg starts with '-' (any flag) OR is not a known subcommand,
-    // insert "agent" after program name
+    // First arg is not a known subcommand. Check if any subsequent arg is a known subcommand.
+    let subcommand_pos = args[1..]
+        .iter()
+        .position(|arg| {
+            let arg_str = arg.to_string_lossy();
+            KNOWN_SUBCOMMANDS.contains(&arg_str.as_ref())
+        })
+        .map(|pos| pos + 1); // Adjust for slice offset
+
     let mut routed = Vec::with_capacity(args.len() + 1);
     routed.push(args[0].clone());
-    routed.push("agent".into());
-    routed.extend_from_slice(&args[1..]);
+
+    if let Some(pos) = subcommand_pos {
+        // Found a subcommand later in args, move it to position 1
+        routed.push(args[pos].clone());
+        // Add all args except the subcommand we just moved
+        routed.extend(args[1..pos].iter().cloned());
+        routed.extend(args[pos + 1..].iter().cloned());
+    } else {
+        // No subcommand found, insert "agent" as default
+        routed.push("agent".into());
+        routed.extend_from_slice(&args[1..]);
+    }
 
     // Normalize --worktree arguments before passing to clap
     normalize_worktree_args(routed)
@@ -320,13 +329,14 @@ mod tests {
     // Edge case / known trade-off tests
 
     #[test]
-    fn test_global_flag_before_explicit_subcommand_inserts_agent() {
+    fn test_global_flag_before_explicit_subcommand_fixed() {
+        // FIXED: Previously this had a trade-off where "agent" was duplicated
         let input = args(&["claude-vm", "--verbose", "agent", "/clear"]);
-        let expected = args(&["claude-vm", "agent", "--verbose", "agent", "/clear"]);
+        let expected = args(&["claude-vm", "agent", "--verbose", "/clear"]);
         let output = route_args(input);
         assert_eq!(
             output, expected,
-            "Known trade-off: --verbose before explicit subcommand causes agent insertion"
+            "Subcommand is now correctly moved to position 1"
         );
     }
 
@@ -561,6 +571,43 @@ mod tests {
             "/clear",
         ]);
         let output = route_args(input);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_verbose_agent_fixed() {
+        // FIXED: When user runs "claude-vm --verbose agent", the router now
+        // correctly produces "claude-vm agent --verbose" without duplicating "agent"
+        let input = args(&["claude-vm", "--verbose", "agent"]);
+        let output = route_args(input);
+        let expected = args(&["claude-vm", "agent", "--verbose"]);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_short_verbose_agent_fixed() {
+        // FIXED: Same fix with short flag
+        let input = args(&["claude-vm", "-v", "agent"]);
+        let output = route_args(input);
+        let expected = args(&["claude-vm", "agent", "-v"]);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_multiple_flags_before_agent() {
+        // Test with multiple flags before the agent subcommand
+        let input = args(&["claude-vm", "--verbose", "--disk", "50", "agent", "/clear"]);
+        let output = route_args(input);
+        let expected = args(&["claude-vm", "agent", "--verbose", "--disk", "50", "/clear"]);
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_flag_before_shell_subcommand() {
+        // Should work with other subcommands too
+        let input = args(&["claude-vm", "-v", "shell", "ls"]);
+        let output = route_args(input);
+        let expected = args(&["claude-vm", "shell", "-v", "ls"]);
         assert_eq!(output, expected);
     }
 }
