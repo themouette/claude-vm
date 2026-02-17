@@ -50,8 +50,13 @@ pub fn execute_host_phases(
         phase_env.insert("VM_NAME".to_string(), vm_name.to_string());
         phase_env.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
 
-        // Get scripts (inline + files)
-        let scripts = phase.get_scripts(project.root())?;
+        // Get scripts (inline + files) with error context
+        let scripts = phase.get_scripts(project.root()).map_err(|e| {
+            ClaudeVmError::InvalidConfig(format!(
+                "Failed to load scripts for host phase '{}': {}",
+                phase.name, e
+            ))
+        })?;
 
         if scripts.is_empty() {
             println!("⚠ Warning: Phase '{}' has no scripts", phase.name);
@@ -214,5 +219,109 @@ mod tests {
         assert_eq!(env.get("PROJECT_ROOT").unwrap(), "/test/project");
         assert_eq!(env.get("PHASE_TYPE").unwrap(), "setup");
         assert!(env.contains_key("TEMPLATE_NAME"));
+    }
+
+    #[test]
+    fn test_execute_host_script_with_stderr() {
+        let script = "echo 'error message' >&2 && exit 1";
+        let env = HashMap::new();
+
+        let result = execute_host_script(script, &env);
+        assert!(result.is_err());
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Host script failed"));
+        assert!(err_msg.contains("error message"));
+    }
+
+    #[test]
+    fn test_execute_host_script_with_env_vars() {
+        let script = "test \"$TEST_VAR\" = \"test_value\"";
+        let mut env = HashMap::new();
+        env.insert("TEST_VAR".to_string(), "test_value".to_string());
+
+        let result = execute_host_script(script, &env);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_check_host_condition_with_env() {
+        let condition = "test \"$MY_VAR\" = \"expected\"";
+        let mut env = HashMap::new();
+        env.insert("MY_VAR".to_string(), "expected".to_string());
+
+        let result = check_host_condition(condition, &env).unwrap();
+        assert!(result);
+
+        // Test with wrong value
+        env.insert("MY_VAR".to_string(), "wrong".to_string());
+        let result = check_host_condition(condition, &env).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_execute_host_phases_with_missing_script_files() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let project = Project::new_for_test(temp_dir.path().to_path_buf());
+
+        let phase = ScriptPhase {
+            name: "test-phase".to_string(),
+            script_files: vec!["nonexistent.sh".to_string()],
+            ..Default::default()
+        };
+
+        let result = execute_host_phases(&[phase], &project, "test-vm", &HashMap::new());
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Failed to load scripts for host phase 'test-phase'"));
+    }
+
+    #[test]
+    fn test_execute_host_phases_continue_on_error() {
+        let phase1 = ScriptPhase {
+            name: "failing-phase".to_string(),
+            script: Some("exit 1".to_string()),
+            continue_on_error: true,
+            ..Default::default()
+        };
+
+        let phase2 = ScriptPhase {
+            name: "success-phase".to_string(),
+            script: Some("echo 'success'".to_string()),
+            ..Default::default()
+        };
+
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let project = Project::new_for_test(temp_dir.path().to_path_buf());
+
+        let result = execute_host_phases(&[phase1, phase2], &project, "test-vm", &HashMap::new());
+
+        // Should succeed because first phase has continue_on_error
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_execute_host_phases_conditional_execution() {
+        let mut env = HashMap::new();
+        env.insert("SHOULD_RUN".to_string(), "true".to_string());
+
+        let phase_with_condition = ScriptPhase {
+            name: "conditional-phase".to_string(),
+            script: Some("echo 'running'".to_string()),
+            when: Some("test \"$SHOULD_RUN\" = \"true\"".to_string()),
+            ..Default::default()
+        };
+
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let project = Project::new_for_test(temp_dir.path().to_path_buf());
+
+        let result = execute_host_phases(&[phase_with_condition], &project, "test-vm", &env);
+
+        assert!(result.is_ok());
     }
 }

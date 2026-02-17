@@ -283,4 +283,113 @@ mod tests {
         assert_eq!(PhaseContext::Setup.name(), "Setup");
         assert_eq!(PhaseContext::Runtime.name(), "Runtime");
     }
+
+    #[test]
+    fn test_validate_phase_multiple_invalid_env_keys() {
+        let mut env = HashMap::new();
+        env.insert("VALID_KEY".to_string(), "value".to_string());
+        env.insert("INVALID-KEY".to_string(), "value".to_string());
+        env.insert("ANOTHER$BAD".to_string(), "value".to_string());
+
+        let phase = ScriptPhase {
+            name: "test".to_string(),
+            script: Some("echo hello".to_string()),
+            env,
+            ..Default::default()
+        };
+
+        let result = validate_phase(&phase, PhaseContext::Setup);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("invalid environment variable"));
+    }
+
+    #[test]
+    fn test_validate_phase_both_script_and_files() {
+        let phase = ScriptPhase {
+            name: "test".to_string(),
+            script: Some("echo inline".to_string()),
+            script_files: vec!["test.sh".to_string()],
+            ..Default::default()
+        };
+
+        // Should be valid - having both is allowed
+        assert!(validate_phase(&phase, PhaseContext::Setup).is_ok());
+    }
+
+    #[test]
+    fn test_validate_phase_empty_script_content() {
+        let phase = ScriptPhase {
+            name: "test".to_string(),
+            script: Some("".to_string()),
+            ..Default::default()
+        };
+
+        // Empty string is still "some" script content, so it's valid
+        assert!(validate_phase(&phase, PhaseContext::Setup).is_ok());
+    }
+
+    #[test]
+    fn test_handle_phase_error_with_continue_on_error() {
+        let phase = ScriptPhase {
+            name: "test-phase".to_string(),
+            script: Some("exit 1".to_string()),
+            continue_on_error: true,
+            ..Default::default()
+        };
+
+        let error = crate::error::ClaudeVmError::CommandFailed("Test error".to_string());
+        let result = handle_phase_error(&phase, PhaseContext::Setup, error, Some("test.sh"));
+
+        // Should return Ok because continue_on_error is true
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_phase_error_without_continue_on_error() {
+        let phase = ScriptPhase {
+            name: "test-phase".to_string(),
+            script: Some("exit 1".to_string()),
+            continue_on_error: false,
+            ..Default::default()
+        };
+
+        let error = crate::error::ClaudeVmError::CommandFailed("Test error".to_string());
+        let result = handle_phase_error(&phase, PhaseContext::Runtime, error, None);
+
+        // Should propagate the error
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_handle_script_load_error_with_continue() {
+        let phase = ScriptPhase {
+            name: "test-phase".to_string(),
+            script_files: vec!["missing.sh".to_string()],
+            continue_on_error: true,
+            ..Default::default()
+        };
+
+        let error = crate::error::ClaudeVmError::InvalidConfig("File not found".to_string());
+        let result = handle_script_load_error(&phase, PhaseContext::Setup, error);
+
+        // Should return Ok because continue_on_error is true
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_script_load_error_without_continue() {
+        let phase = ScriptPhase {
+            name: "test-phase".to_string(),
+            script_files: vec!["missing.sh".to_string()],
+            continue_on_error: false,
+            ..Default::default()
+        };
+
+        let error = crate::error::ClaudeVmError::InvalidConfig("File not found".to_string());
+        let result = handle_script_load_error(&phase, PhaseContext::Runtime, error);
+
+        // Should propagate the error
+        assert!(result.is_err());
+    }
 }

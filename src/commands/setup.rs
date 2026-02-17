@@ -95,10 +95,11 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
 
     // === END PACKAGE MANAGEMENT ===
 
-    // NOTE: VM setup is now handled through capability phases merged into config
-    // No need for separate execute_vm_setup or install_vm_runtime_scripts calls
+    // Execute setup phases (capability + user)
+    // These run BEFORE Claude Code installation so capabilities are properly set up
+    run_setup_scripts(project, config)?;
 
-    // Install Claude Code (skip if --no-agent-install flag is set)
+    // Install Claude Code AFTER capabilities are set up (skip if --no-agent-install flag is set)
     if !no_agent_install {
         install_claude(project)?;
 
@@ -110,9 +111,6 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
     } else {
         println!("Skipping Claude Code installation (--no-agent-install flag set)");
     }
-
-    // Run user-defined setup scripts
-    run_setup_scripts(project, config)?;
 
     // Execute after_setup host phases
     if !config.phase.after_setup.is_empty() {

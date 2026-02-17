@@ -440,6 +440,26 @@ impl ScriptPhase {
     }
 }
 
+/// Host phases wrapper for TOML deserialization
+/// Allows [[phase.host.before_setup]] syntax in TOML files
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct HostPhases {
+    #[serde(default)]
+    pub before_setup: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub after_setup: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub before_runtime: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub after_runtime: Vec<ScriptPhase>,
+
+    #[serde(default)]
+    pub teardown: Vec<ScriptPhase>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PhaseConfig {
     /// Setup phases (run during template creation, inside VM)
@@ -450,25 +470,56 @@ pub struct PhaseConfig {
     #[serde(default)]
     pub runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine before VM setup scripts
+    /// Host phases wrapper - allows [[phase.host.before_setup]] syntax
+    #[serde(default)]
+    pub host: HostPhases,
+
+    /// Direct host phases (backward compatibility) - run on HOST machine before VM setup scripts
+    /// Merged with host.before_setup during loading
     #[serde(default)]
     pub before_setup: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine after VM setup, before template save
+    /// Direct host phases (backward compatibility) - run on HOST machine after VM setup
+    /// Merged with host.after_setup during loading
     #[serde(default)]
     pub after_setup: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine before VM runtime scripts
+    /// Direct host phases (backward compatibility) - run on HOST machine before VM runtime scripts
+    /// Merged with host.before_runtime during loading
     #[serde(default)]
     pub before_runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine after VM runtime, before shell/agent
+    /// Direct host phases (backward compatibility) - run on HOST machine after VM runtime
+    /// Merged with host.after_runtime during loading
     #[serde(default)]
     pub after_runtime: Vec<ScriptPhase>,
 
-    /// Host phases - run on HOST machine when session ends
+    /// Direct host phases (backward compatibility) - run on HOST machine when session ends
+    /// Merged with host.teardown during loading
     #[serde(default)]
     pub teardown: Vec<ScriptPhase>,
+}
+
+impl PhaseConfig {
+    /// Flatten host phases into direct fields for easier access
+    /// This merges [[phase.host.before_setup]] with [[phase.before_setup]]
+    pub fn flatten_host_phases(&mut self) {
+        if !self.host.before_setup.is_empty() {
+            self.before_setup.append(&mut self.host.before_setup);
+        }
+        if !self.host.after_setup.is_empty() {
+            self.after_setup.append(&mut self.host.after_setup);
+        }
+        if !self.host.before_runtime.is_empty() {
+            self.before_runtime.append(&mut self.host.before_runtime);
+        }
+        if !self.host.after_runtime.is_empty() {
+            self.after_runtime.append(&mut self.host.after_runtime);
+        }
+        if !self.host.teardown.is_empty() {
+            self.teardown.append(&mut self.host.teardown);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -806,7 +857,11 @@ impl Config {
     /// Load configuration from a TOML file
     pub fn from_file(path: &Path) -> Result<Self> {
         let contents = std::fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&contents)?;
+        let mut config: Config = toml::from_str(&contents)?;
+
+        // Flatten host phases: merge [[phase.host.before_setup]] into [[phase.before_setup]]
+        config.phase.flatten_host_phases();
+
         Ok(config)
     }
 
@@ -858,6 +913,32 @@ impl Config {
         // New phases: append (preserves order)
         self.phase.setup.extend(other.phase.setup);
         self.phase.runtime.extend(other.phase.runtime);
+
+        // Host phases (flat): append (preserves order)
+        self.phase.before_setup.extend(other.phase.before_setup);
+        self.phase.after_setup.extend(other.phase.after_setup);
+        self.phase.before_runtime.extend(other.phase.before_runtime);
+        self.phase.after_runtime.extend(other.phase.after_runtime);
+        self.phase.teardown.extend(other.phase.teardown);
+
+        // Host phases (nested): append before flattening
+        self.phase
+            .host
+            .before_setup
+            .extend(other.phase.host.before_setup);
+        self.phase
+            .host
+            .after_setup
+            .extend(other.phase.host.after_setup);
+        self.phase
+            .host
+            .before_runtime
+            .extend(other.phase.host.before_runtime);
+        self.phase
+            .host
+            .after_runtime
+            .extend(other.phase.host.after_runtime);
+        self.phase.host.teardown.extend(other.phase.host.teardown);
 
         // Mounts (append)
         self.mounts.extend(other.mounts);
