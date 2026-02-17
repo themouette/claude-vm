@@ -4,7 +4,7 @@ name = "RTK (Rust Token Killer)"
 description = "CLI proxy that reduces LLM token consumption by 60-90% on common commands"
 
 [packages]
-system = []  # No system packages - single binary
+system = [] # No system packages - single binary
 setup_script = """
 #!/bin/bash
 set -e
