@@ -341,3 +341,121 @@ fn test_capability_phases_run_before_user_phases() {
         "User runtime phase should come after capability phases"
     );
 }
+
+#[test]
+fn test_rtk_capability_loads() {
+    use claude_vm::config::RtkToolConfig;
+
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get enabled capabilities");
+
+    let has_rtk = enabled.iter().any(|c| c.capability.id == "rtk");
+    assert!(has_rtk, "RTK capability should be enabled");
+
+    let rtk_cap = enabled.iter().find(|c| c.capability.id == "rtk").unwrap();
+    assert!(
+        !rtk_cap.phase.setup.is_empty(),
+        "RTK should have setup phases"
+    );
+    assert!(
+        !rtk_cap.phase.runtime.is_empty(),
+        "RTK should have runtime phases"
+    );
+}
+
+#[test]
+fn test_rtk_config_defaults() {
+    use claude_vm::config::RtkToolConfig;
+
+    let config = Config::default();
+    assert!(
+        config.tools.rtk.is_none(),
+        "RTK should be disabled by default"
+    );
+
+    // When enabled, hook mode should default to true (opt-out)
+    let rtk_config = RtkToolConfig { hook_mode: true };
+    assert!(
+        rtk_config.hook_mode,
+        "RTK hook mode should be enabled by default"
+    );
+}
+
+#[test]
+fn test_rtk_hook_mode_opt_out() {
+    use claude_vm::config::RtkToolConfig;
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkToolConfig { hook_mode: false });
+
+    assert!(config.tools.is_enabled("rtk"), "RTK should be enabled");
+    assert!(
+        !config.tools.rtk.unwrap().hook_mode,
+        "Hook mode should be disabled when opted out"
+    );
+}
+
+#[test]
+fn test_rtk_with_other_capabilities() {
+    use claude_vm::config::RtkToolConfig;
+
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+    config.tools.rust = true;
+    config.tools.git = true;
+
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get enabled capabilities");
+
+    let ids: Vec<_> = enabled.iter().map(|c| c.capability.id.as_str()).collect();
+    assert!(ids.contains(&"rtk"), "Should include RTK");
+    assert!(ids.contains(&"rust"), "Should include Rust");
+    assert!(ids.contains(&"git"), "Should include Git");
+}
+
+#[test]
+fn test_rtk_is_enabled_check() {
+    use claude_vm::config::RtkToolConfig;
+
+    let mut config = Config::default();
+
+    // RTK should not be enabled by default
+    assert!(
+        !config.tools.is_enabled("rtk"),
+        "RTK should not be enabled by default"
+    );
+
+    // Enable RTK
+    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+
+    // RTK should now be enabled
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled when configured"
+    );
+}
+
+#[test]
+fn test_rtk_enable_method() {
+    let mut config = Config::default();
+
+    // RTK should not be enabled by default
+    assert!(!config.tools.is_enabled("rtk"));
+
+    // Enable RTK via enable() method
+    config.tools.enable("rtk");
+
+    // RTK should now be enabled with default hook_mode = true
+    assert!(config.tools.is_enabled("rtk"));
+    assert!(config.tools.rtk.is_some());
+    assert!(config.tools.rtk.as_ref().unwrap().hook_mode);
+}
