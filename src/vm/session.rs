@@ -61,24 +61,28 @@ impl VmSession {
 
     /// Get a cleanup guard that ensures VM cleanup on drop
     ///
-    /// The config parameter is needed for executing teardown phases
-    pub fn ensure_cleanup_with_config(&self, config: &Config) -> CleanupGuard {
+    /// The config parameter is needed for executing cleanup and teardown phases.
+    /// The command parameter identifies which command is running ("agent" or "shell")
+    /// and is passed to cleanup phases via the CLAUDE_VM_COMMAND environment variable.
+    pub fn ensure_cleanup_with_config(&self, config: &Config, command: &str) -> CleanupGuard {
         CleanupGuard {
             vm_name: self.name.clone(),
             project: self.project.clone(),
             config: Some(config.clone()),
+            command: Some(command.to_string()),
             cleaned_up: Arc::clone(&self.cleaned_up),
             verbose: self.verbose,
         }
     }
 
     /// Get a cleanup guard without config (for backward compatibility and tests)
-    /// Teardown phases won't run without config
+    /// Cleanup and teardown phases won't run without config
     pub fn ensure_cleanup(&self) -> CleanupGuard {
         CleanupGuard {
             vm_name: self.name.clone(),
             project: self.project.clone(),
             config: None,
+            command: None,
             cleaned_up: Arc::clone(&self.cleaned_up),
             verbose: self.verbose,
         }
@@ -90,6 +94,7 @@ pub struct CleanupGuard {
     vm_name: String,
     project: Project,
     config: Option<Config>,
+    command: Option<String>,
     cleaned_up: Arc<AtomicBool>,
     verbose: bool,
 }
@@ -98,14 +103,33 @@ impl Drop for CleanupGuard {
     fn drop(&mut self) {
         // Only cleanup if not already done
         if !self.cleaned_up.swap(true, Ordering::SeqCst) {
-            // Execute teardown phases before VM cleanup
             if let Some(config) = &self.config {
-                if !config.phase.teardown.is_empty() {
+                // 1. Execute VM-based cleanup phases INSIDE VM
+                if !config.phase.cleanup.is_empty() {
+                    if let Some(command) = &self.command {
+                        if let Err(e) = crate::scripts::runner::execute_cleanup_phases(
+                            &self.vm_name,
+                            &self.project,
+                            config,
+                            command,
+                        ) {
+                            eprintln!("⚠ Warning: Cleanup phases failed: {}", e);
+                            // Continue with teardown anyway
+                        }
+                    }
+                }
+
+                // 2. Execute host-based teardown phases
+                if !config.phase.host.teardown.is_empty() {
                     if let Err(e) = host_executor::execute_host_phases(
-                        &config.phase.teardown,
+                        &config.phase.host.teardown,
                         &self.project,
                         &self.vm_name,
-                        &host_executor::build_host_env(&self.project, "teardown"),
+                        &host_executor::build_host_env(
+                            &self.project,
+                            "teardown",
+                            self.command.as_deref(),
+                        ),
                     ) {
                         eprintln!("⚠ Warning: Teardown phases failed: {}", e);
                         // Continue with VM cleanup anyway
@@ -113,6 +137,7 @@ impl Drop for CleanupGuard {
                 }
             }
 
+            // 3. Stop and delete VM
             eprintln!("Cleaning up VM: {}", self.vm_name);
 
             // Best effort cleanup - ignore errors
@@ -134,6 +159,7 @@ mod tests {
                 vm_name: "test-vm".to_string(),
                 project: Project::new_for_test(std::path::PathBuf::from("/test")),
                 config: None,
+                command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
                 verbose: false,
             };
@@ -156,6 +182,7 @@ mod tests {
                 vm_name: "test-vm".to_string(),
                 project: Project::new_for_test(std::path::PathBuf::from("/test")),
                 config: None,
+                command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
                 verbose: false,
             };

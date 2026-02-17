@@ -275,29 +275,26 @@ fn test_flatten_host_after_runtime() {
     assert_eq!(config.phase.after_runtime[0].name, "host-post-runtime");
 }
 
-/// Test that flatten_host_phases merges host.teardown into teardown
+/// Test that host.teardown phases are properly loaded
+/// Note: [[phase.teardown]] is no longer supported (backward compat removed)
 #[test]
-fn test_flatten_host_teardown() {
+fn test_host_teardown_phases() {
     let toml = r#"
         [[phase.host.teardown]]
-        name = "host-teardown"
-        script = "echo 'teardown'"
+        name = "teardown-1"
+        script = "echo 'teardown 1'"
 
-        [[phase.teardown]]
-        name = "direct-teardown"
-        script = "echo 'also teardown'"
+        [[phase.host.teardown]]
+        name = "teardown-2"
+        script = "echo 'teardown 2'"
     "#;
 
-    let mut config: Config = toml::from_str(toml).expect("Failed to parse TOML");
+    let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
 
-    // Flatten
-    config.phase.flatten_host_phases();
-
-    // After flattening
-    assert_eq!(config.phase.host.teardown.len(), 0);
-    assert_eq!(config.phase.teardown.len(), 2);
-    assert_eq!(config.phase.teardown[0].name, "direct-teardown");
-    assert_eq!(config.phase.teardown[1].name, "host-teardown");
+    // Verify both teardown phases are loaded
+    assert_eq!(config.phase.host.teardown.len(), 2);
+    assert_eq!(config.phase.host.teardown[0].name, "teardown-1");
+    assert_eq!(config.phase.host.teardown[1].name, "teardown-2");
 }
 
 /// Test that flattening all host phases at once works correctly
@@ -330,19 +327,18 @@ fn test_flatten_all_host_phases() {
     // Flatten
     config.phase.flatten_host_phases();
 
-    // All host arrays should be empty
+    // After flattening, host.teardown should still have phases (no backward compat field removed)
     assert_eq!(config.phase.host.before_setup.len(), 0);
     assert_eq!(config.phase.host.after_setup.len(), 0);
     assert_eq!(config.phase.host.before_runtime.len(), 0);
     assert_eq!(config.phase.host.after_runtime.len(), 0);
-    assert_eq!(config.phase.host.teardown.len(), 0);
+    assert_eq!(config.phase.host.teardown.len(), 1);
 
-    // All direct arrays should have the phases
+    // Direct arrays should have the phases (except teardown which no longer exists)
     assert_eq!(config.phase.before_setup.len(), 1);
     assert_eq!(config.phase.after_setup.len(), 1);
     assert_eq!(config.phase.before_runtime.len(), 1);
     assert_eq!(config.phase.after_runtime.len(), 1);
-    assert_eq!(config.phase.teardown.len(), 1);
 }
 
 /// Test that multiple host phases from same type accumulate (merging behavior)

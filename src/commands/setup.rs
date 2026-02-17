@@ -72,7 +72,7 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
             &config.phase.before_setup,
             project,
             project.template_name(),
-            &host_executor::build_host_env(project, "setup"),
+            &host_executor::build_host_env(project, "setup", None),
         )?;
     }
 
@@ -118,7 +118,7 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
             &config.phase.after_setup,
             project,
             project.template_name(),
-            &host_executor::build_host_env(project, "setup"),
+            &host_executor::build_host_env(project, "setup", None),
         )?;
     }
 
