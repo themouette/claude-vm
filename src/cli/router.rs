@@ -5,17 +5,20 @@ use std::ffi::OsString;
 const KNOWN_SUBCOMMANDS: &[&str] = &[
     "agent",
     "shell",
+    "sh", // Alias for shell
     "setup",
     "info",
     "config",
     "list",
+    "ls", // Alias for list
     "clean",
     "clean-all",
     "version",
     "update",
     "network",
+    "net", // Alias for network
     "worktree",
-    "w", // Short alias for worktree
+    "w", // Alias for worktree
 ];
 
 /// Route CLI arguments to the appropriate command.
@@ -373,6 +376,27 @@ mod tests {
                 valid_names.contains(name),
                 "KNOWN_SUBCOMMANDS has '{}' but Commands enum does not (neither as command nor alias)",
                 name
+            );
+        }
+    }
+
+    #[test]
+    fn test_command_aliases() {
+        // Test that command aliases are recognized and not routed to agent
+        let test_cases = vec![
+            ("ls", "list"),
+            ("sh", "shell"),
+            ("net", "network"),
+            ("w", "worktree"),
+        ];
+
+        for (alias, _full_name) in test_cases {
+            let input = args(&["claude-vm", alias]);
+            let output = route_args(input.clone());
+            assert_eq!(
+                output, input,
+                "Alias '{}' should be recognized as a subcommand and not modified",
+                alias
             );
         }
     }
