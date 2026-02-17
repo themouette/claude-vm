@@ -247,7 +247,8 @@ echo 'ran after error' > {}
     let project_dir = create_test_project(&config);
 
     // Run setup - should succeed despite first phase failing
-    run_setup(&project_dir.path().to_path_buf()).expect("Setup should succeed with continue_on_error");
+    run_setup(&project_dir.path().to_path_buf())
+        .expect("Setup should succeed with continue_on_error");
 
     // Verify the second phase still ran
     assert!(
@@ -445,14 +446,8 @@ echo 'cleanup done' > {}
         .expect("Shell command should run");
 
     // Verify cleanup happened
-    assert!(
-        !cleanup_target.exists(),
-        "Cleanup target should be deleted"
-    );
-    assert!(
-        marker_file.exists(),
-        "Cleanup marker should exist"
-    );
+    assert!(!cleanup_target.exists(), "Cleanup target should be deleted");
+    assert!(marker_file.exists(), "Cleanup marker should exist");
 }
 
 // ============================================================================

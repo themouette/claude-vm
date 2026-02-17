@@ -922,10 +922,22 @@ impl Config {
         self.phase.teardown.extend(other.phase.teardown);
 
         // Host phases (nested): append before flattening
-        self.phase.host.before_setup.extend(other.phase.host.before_setup);
-        self.phase.host.after_setup.extend(other.phase.host.after_setup);
-        self.phase.host.before_runtime.extend(other.phase.host.before_runtime);
-        self.phase.host.after_runtime.extend(other.phase.host.after_runtime);
+        self.phase
+            .host
+            .before_setup
+            .extend(other.phase.host.before_setup);
+        self.phase
+            .host
+            .after_setup
+            .extend(other.phase.host.after_setup);
+        self.phase
+            .host
+            .before_runtime
+            .extend(other.phase.host.before_runtime);
+        self.phase
+            .host
+            .after_runtime
+            .extend(other.phase.host.after_runtime);
         self.phase.host.teardown.extend(other.phase.host.teardown);
 
         // Mounts (append)
