@@ -2244,7 +2244,23 @@ mod tests {
     fn test_worktree_config_loading() {
         use std::io::Write;
 
-        // Check if we're in CI (std::env::remove_var doesn't work reliably in CI)
+        // Save CI environment state (other tests may have modified it)
+        let ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI"];
+        let saved_vars: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+
+        // Restore CI state if we were in CI (defensive against other tests unsetting vars)
+        let was_in_ci = saved_vars.iter().any(|(_, val)| val.is_some());
+        if was_in_ci {
+            // Ensure at least one CI var is set for consistent behavior
+            if std::env::var("CI").is_err() {
+                std::env::set_var("CI", "true");
+            }
+        }
+
+        // Check if we're in CI
         let is_ci = std::env::var("CI").is_ok()
             || std::env::var("GITHUB_ACTIONS").is_ok()
             || std::env::var("GITLAB_CI").is_ok()
@@ -2314,6 +2330,14 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(temp_dir.join(&test_id)).unwrap();
+
+        // Restore CI environment variables
+        for (var, value) in saved_vars {
+            match value {
+                Some(val) => std::env::set_var(var, val),
+                None => std::env::remove_var(var),
+            }
+        }
     }
 
     #[test]
@@ -2321,7 +2345,23 @@ mod tests {
     fn test_worktree_config_cascade() {
         use std::io::Write;
 
-        // Check if we're in CI (std::env::remove_var doesn't work reliably in CI)
+        // Save CI environment state (other tests may have modified it)
+        let ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI"];
+        let saved_vars: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+
+        // Restore CI state if we were in CI (defensive against other tests unsetting vars)
+        let was_in_ci = saved_vars.iter().any(|(_, val)| val.is_some());
+        if was_in_ci {
+            // Ensure at least one CI var is set for consistent behavior
+            if std::env::var("CI").is_err() {
+                std::env::set_var("CI", "true");
+            }
+        }
+
+        // Check if we're in CI
         let is_ci = std::env::var("CI").is_ok()
             || std::env::var("GITHUB_ACTIONS").is_ok()
             || std::env::var("GITLAB_CI").is_ok()
@@ -2370,6 +2410,14 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(test_root).unwrap();
+
+        // Restore CI environment variables
+        for (var, value) in saved_vars {
+            match value {
+                Some(val) => std::env::set_var(var, val),
+                None => std::env::remove_var(var),
+            }
+        }
     }
 
     #[test]
