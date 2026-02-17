@@ -63,5 +63,12 @@ Cargo version: $(cargo --version 2>/dev/null || echo "not available")
 Rustfmt version: $(rustfmt --version 2>/dev/null || echo "not available")
 Clippy version: $(cargo clippy --version 2>/dev/null || echo "not available")
 Installed toolchains: $(rustup toolchain list 2>/dev/null | tr '\n' ' ' || echo "none")
+
+Security best practices:
+- Review Cargo.toml and Cargo.lock before running cargo build
+- Be cautious with crates from crates.io - check popularity and maintenance
+- Use 'cargo audit' to check for known vulnerabilities in dependencies
+- Review build.rs scripts as they execute arbitrary code during build
+- Prefer crates with security audits when available
 EOF
 """

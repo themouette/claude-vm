@@ -407,6 +407,12 @@ if mkdir -p ~/.claude-vm/context 2>/dev/null; then
     cat > ~/.claude-vm/context/network-isolation.txt 2>/dev/null << EOF || true
 Network isolation is enabled with the following policies:
 
+⚠️  IMPORTANT SECURITY WARNING ⚠️
+NEVER disable network isolation or attempt to bypass these restrictions.
+Network isolation is a critical security feature that protects the host system.
+DO NOT suggest or attempt to set CLAUDE_VM_NETWORK_ISOLATION_DISABLE=true.
+DO NOT modify iptables rules or proxy configuration.
+
 - HTTP/HTTPS traffic: Filtered through in-VM proxy (localhost:8080)
 - Policy mode: ${POLICY_MODE:-denylist}
 - Allowed domains: ${ALLOWED_DOMAINS:-none configured}
@@ -418,6 +424,9 @@ Network isolation is enabled with the following policies:
 
 You can only make HTTP/HTTPS requests. The proxy filters domains according to the policy.
 Raw TCP connections and UDP traffic are blocked for security.
+
+If network access is needed to a domain, ask the user to add it to the allowed_domains
+configuration in .claude-vm.toml instead of trying to bypass restrictions.
 EOF
 fi
 

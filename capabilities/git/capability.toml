@@ -12,12 +12,37 @@ name = "git-environment"
 script = """#!/bin/bash
 # Write git context for Claude
 mkdir -p ~/.claude-vm/context
+
+# Check if signing is enabled
+SIGNING_ENABLED=$(git config commit.gpgsign 2>/dev/null || echo "false")
+SIGNING_KEY=$(git config user.signingkey 2>/dev/null || echo "none")
+
+# Check GPG key status if signing is enabled
+GPG_KEY_STATUS=""
+if [ "$SIGNING_ENABLED" = "true" ] && [ "$SIGNING_KEY" != "none" ]; then
+    # Try to use the key to check if it's unlocked
+    # This will fail if the key is locked or password not cached
+    if echo "test" | gpg --sign --local-user "$SIGNING_KEY" --armor > /dev/null 2>&1; then
+        GPG_KEY_STATUS="✓ GPG key is unlocked and ready"
+    else
+        GPG_KEY_STATUS="⚠️  GPG key appears to be locked - signing will fail
+   Ask the user to unlock it on the host with: echo test | gpg --sign --local-user $SIGNING_KEY
+   The user may need to enter their GPG passphrase on the host system."
+    fi
+fi
+
 cat > ~/.claude-vm/context/git.txt <<EOF
 Git version: $(git --version 2>/dev/null || echo "not available")
 User: $(git config user.name 2>/dev/null || echo "not configured")
 Email: $(git config user.email 2>/dev/null || echo "not configured")
-Signing: $(git config commit.gpgsign 2>/dev/null || echo "disabled")
-Signing format: $(git config gpg.format 2>/dev/null || echo "default")
-Signing key: $(git config user.signingkey 2>/dev/null || echo "none")
+Signing: $SIGNING_ENABLED
+Signing format: $(git config gpg.format 2>/dev/null || echo "openpgp")
+Signing key: $SIGNING_KEY
+
+⚠️  IMPORTANT: NEVER disable commit signing (git config commit.gpgsign false).
+Commit signing is a security feature that verifies the authenticity of commits.
+If signing is enabled, ALL commits must be signed - DO NOT use --no-gpg-sign.
+
+$GPG_KEY_STATUS
 EOF
 """

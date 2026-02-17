@@ -48,6 +48,15 @@ cat > ~/.claude-vm/context/gpg.txt <<EOF
 GPG agent forwarded from host
 Socket: $FORWARDED_SOCKET -> $GPG_SOCKET
 Available keys: $(gpg --list-keys 2>/dev/null | grep -c "^pub" || echo "0")
+
+The GPG agent is forwarded from the host system for secure signing operations.
+Private keys remain on the host - only the agent socket is forwarded.
+This ensures that signing operations can occur without exposing private keys to the VM.
+
+If signing fails, the issue is likely on the host side:
+- Check if the GPG key is unlocked on the host
+- Ensure gpg-agent is running on the host
+- Verify the key has not expired
 EOF
 """
 

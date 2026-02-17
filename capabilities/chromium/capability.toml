@@ -29,6 +29,19 @@ mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/chromium.txt <<EOF
 Chromium browser available for headless web automation and testing
 Chromium binary: $(which chromium 2>/dev/null || echo "not found")
+
+Chromium is configured for headless operation with --headless flag.
+The browser runs in a sandboxed environment for security.
+
+Common usage patterns:
+- Web scraping: chromium --headless --dump-dom https://example.com
+- Screenshots: chromium --headless --screenshot=output.png https://example.com
+- PDF generation: chromium --headless --print-to-pdf=output.pdf https://example.com
+
+Security considerations:
+- Always use --headless mode for automation
+- Be cautious when visiting untrusted URLs
+- The sandbox provides isolation but is not perfect
 EOF
 """
 

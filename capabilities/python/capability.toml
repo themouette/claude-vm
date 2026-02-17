@@ -16,5 +16,12 @@ cat > ~/.claude-vm/context/python.txt <<EOF
 Python version: $(python3 --version 2>/dev/null || echo "not available")
 pip version: $(pip3 --version 2>/dev/null || echo "not available")
 Virtual environment: $([ -n "$VIRTUAL_ENV" ] && echo "$VIRTUAL_ENV" || echo "none")
+
+Security best practices:
+- Use virtual environments (python3 -m venv) to isolate project dependencies
+- Review requirements.txt before running pip install
+- Be cautious with packages from PyPI - verify authenticity and downloads
+- Avoid running Python scripts from untrusted sources without review
+- Use 'pip install --require-hashes' for additional security when possible
 EOF
 """
