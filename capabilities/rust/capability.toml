@@ -63,5 +63,8 @@ Cargo version: $(cargo --version 2>/dev/null || echo "not available")
 Rustfmt version: $(rustfmt --version 2>/dev/null || echo "not available")
 Clippy version: $(cargo clippy --version 2>/dev/null || echo "not available")
 Installed toolchains: $(rustup toolchain list 2>/dev/null | tr '\n' ' ' || echo "none")
+
+Review Cargo.toml and build.rs scripts before building from untrusted sources.
+Use 'cargo audit' to check for known vulnerabilities.
 EOF
 """

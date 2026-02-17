@@ -52,5 +52,8 @@ Volta version: $(volta --version 2>/dev/null || echo "not available")
 Node.js version: $(node --version 2>/dev/null || echo "not available")
 npm version: $(npm --version 2>/dev/null || echo "not available")
 Installed Node versions: $(volta list node 2>/dev/null | grep -E "^\\s+v[0-9]" | tr '\\n' ' ' || echo "none")
+
+Review package.json and use 'npm audit' to check for vulnerabilities before
+installing dependencies from untrusted sources.
 EOF
 """

@@ -48,6 +48,9 @@ cat > ~/.claude-vm/context/gpg.txt <<EOF
 GPG agent forwarded from host
 Socket: $FORWARDED_SOCKET -> $GPG_SOCKET
 Available keys: $(gpg --list-keys 2>/dev/null | grep -c "^pub" || echo "0")
+
+The GPG agent is forwarded from the host - private keys remain on the host for security.
+If signing fails, check if the GPG key is unlocked on the host and gpg-agent is running.
 EOF
 """
 

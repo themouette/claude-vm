@@ -12,12 +12,60 @@ name = "git-environment"
 script = """#!/bin/bash
 # Write git context for Claude
 mkdir -p ~/.claude-vm/context
+
+# Check if signing is enabled
+SIGNING_ENABLED=$(git config commit.gpgsign 2>/dev/null || echo "false")
+SIGNING_KEY=$(git config user.signingkey 2>/dev/null || echo "none")
+
+# Check GPG key cache status if signing is enabled (fast, non-blocking check)
+GPG_KEY_STATUS=""
+if [ "$SIGNING_ENABLED" = "true" ] && [ "$SIGNING_KEY" != "none" ]; then
+    # Use --batch --pinentry-mode cancel to fail immediately if key is locked (no hanging)
+    # This prevents the 30s hang when trying to commit with a locked key
+    if echo "test" | timeout 1 gpg --batch --pinentry-mode cancel --sign --local-user "$SIGNING_KEY" --armor > /dev/null 2>&1; then
+        GPG_KEY_STATUS="✓ GPG key is cached (checked at startup)"
+    else
+        GPG_KEY_STATUS="⚠️  GPG key is NOT cached - commits will hang for 30s then fail
+   Ask the user to unlock the key on the host before committing:
+     echo test | gpg --sign --local-user $SIGNING_KEY"
+    fi
+fi
+
+# Check SSH agent availability
+SSH_STATUS=""
+if [ -z "$SSH_AUTH_SOCK" ] || ! ssh-add -l >/dev/null 2>&1; then
+    SSH_STATUS="⚠️  SSH agent is NOT available - you cannot push/pull to SSH remotes from the VM.
+DO NOT attempt to reconfigure remotes, change URLs, or find workarounds.
+Ask the user to push from the host instead.
+If the user asks to push from the VM, tell them to enable SSH agent forwarding using: claude-vm -A agent"
+else
+    SSH_STATUS="✓ SSH agent is available"
+fi
+
 cat > ~/.claude-vm/context/git.txt <<EOF
 Git version: $(git --version 2>/dev/null || echo "not available")
 User: $(git config user.name 2>/dev/null || echo "not configured")
 Email: $(git config user.email 2>/dev/null || echo "not configured")
-Signing: $(git config commit.gpgsign 2>/dev/null || echo "disabled")
-Signing format: $(git config gpg.format 2>/dev/null || echo "default")
-Signing key: $(git config user.signingkey 2>/dev/null || echo "none")
+Signing: $SIGNING_ENABLED
+Signing format: $(git config gpg.format 2>/dev/null || echo "openpgp")
+Signing key: $SIGNING_KEY
+
+$SSH_STATUS
 EOF
+
+# Add signing warning only if signing is enabled
+if [ "$SIGNING_ENABLED" = "true" ]; then
+    cat >> ~/.claude-vm/context/git.txt <<EOF
+
+⚠️  IMPORTANT: Commit signing is enabled. ALL commits must be signed.
+DO NOT disable signing (git config commit.gpgsign false) or use --no-gpg-sign.
+
+$GPG_KEY_STATUS
+
+Note: The key cache can expire during the session. If commits start failing,
+ask the user to unlock the key on the host.
+EOF
+else
+    echo "" >> ~/.claude-vm/context/git.txt
+fi
 """

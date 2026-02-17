@@ -27,8 +27,10 @@ script = """
 # Write Chromium context for Claude
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/chromium.txt <<EOF
-Chromium browser available for headless web automation and testing
+Chromium browser available for headless automation (--headless flag).
 Chromium binary: $(which chromium 2>/dev/null || echo "not found")
+
+Use caution when visiting untrusted URLs as the sandbox provides isolation but is not perfect.
 EOF
 """
 

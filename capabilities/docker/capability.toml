@@ -54,5 +54,8 @@ cat > ~/.claude-vm/context/docker.txt <<EOF
 Docker version: $(docker --version 2>/dev/null || echo "not available")
 Docker Compose version: $(docker compose version 2>/dev/null || echo "not available")
 Docker daemon status: $(systemctl is-active docker 2>/dev/null || echo "unknown")
+
+Use official images from trusted registries. Avoid --privileged flag and mounting
+/var/run/docker.sock unless necessary.
 EOF
 """

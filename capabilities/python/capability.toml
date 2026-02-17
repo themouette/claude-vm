@@ -16,5 +16,8 @@ cat > ~/.claude-vm/context/python.txt <<EOF
 Python version: $(python3 --version 2>/dev/null || echo "not available")
 pip version: $(pip3 --version 2>/dev/null || echo "not available")
 Virtual environment: $([ -n "$VIRTUAL_ENV" ] && echo "$VIRTUAL_ENV" || echo "none")
+
+Use virtual environments (python3 -m venv) to isolate dependencies and review
+requirements.txt before installing from untrusted sources.
 EOF
 """

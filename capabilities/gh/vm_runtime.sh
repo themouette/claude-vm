@@ -35,6 +35,9 @@ GHEOF
 
         echo "" >> ~/.claude-vm/context/gh.txt
         echo "Manage your tokens: https://github.com/settings/personal-access-tokens" >> ~/.claude-vm/context/gh.txt
+        echo "" >> ~/.claude-vm/context/gh.txt
+        echo "This token has specific scopes - respect those limitations and verify" >> ~/.claude-vm/context/gh.txt
+        echo "repository names before creating/modifying issues, PRs, or repository content." >> ~/.claude-vm/context/gh.txt
     else
         # For device flow or unknown, show standard info
         cat > ~/.claude-vm/context/gh.txt <<'GHEOF'
@@ -50,6 +53,10 @@ GHEOF
         if [ -n "$token_created" ]; then
             echo "Created: $token_created" >> ~/.claude-vm/context/gh.txt
         fi
+
+        echo "" >> ~/.claude-vm/context/gh.txt
+        echo "This authentication has specific scopes - respect those limitations and verify" >> ~/.claude-vm/context/gh.txt
+        echo "repository names before creating/modifying issues, PRs, or repository content." >> ~/.claude-vm/context/gh.txt
     fi
 else
     # Not authenticated - show re-authentication instructions based on stored method

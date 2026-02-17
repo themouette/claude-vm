@@ -138,7 +138,7 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
 ///
 /// Creates a markdown file with VM configuration, enabled capabilities,
 /// mounted directories, and user-provided instructions.
-fn generate_base_context(config: &Config) -> Result<String> {
+fn generate_base_context(vm_name: &str, config: &Config) -> Result<String> {
     let mut context = String::new();
 
     // Header
@@ -149,6 +149,7 @@ fn generate_base_context(config: &Config) -> Result<String> {
 
     // VM Configuration
     context.push_str("## VM Configuration\n");
+    context.push_str(&format!("- **VM Name**: {}\n", vm_name));
     context.push_str(&format!("- **Disk**: {} GB\n", config.vm.disk));
     context.push_str(&format!("- **Memory**: {} GB\n", config.vm.memory));
     context.push('\n');
@@ -365,7 +366,7 @@ pub fn execute_command_with_runtime_scripts(
     }
 
     // Generate and copy base context
-    let base_context = generate_base_context(config)?;
+    let base_context = generate_base_context(vm_name, config)?;
     let temp_dir = std::env::temp_dir();
     let pid = std::process::id();
     let context_file = temp_dir.join(format!("claude-vm-context-{}.md", pid));
@@ -926,7 +927,7 @@ mod tests {
     #[test]
     fn test_generate_base_context_structure() {
         let config = Config::default();
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-12345", &config).unwrap();
 
         // Verify HTML markers
         assert!(context.contains("<!-- claude-vm-context-start -->"));
@@ -946,7 +947,7 @@ mod tests {
         config.vm.disk = 50;
         config.vm.memory = 16;
 
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-67890", &config).unwrap();
 
         // Verify VM config values
         assert!(context.contains("**Disk**: 50 GB"));
@@ -958,7 +959,7 @@ mod tests {
         let mut config = Config::default();
         config.context.instructions = "Test instructions\nMultiple lines".to_string();
 
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-111", &config).unwrap();
 
         // Verify user instructions section
         assert!(context.contains("## User Instructions"));
@@ -969,7 +970,7 @@ mod tests {
     #[test]
     fn test_generate_base_context_no_instructions() {
         let config = Config::default();
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-222", &config).unwrap();
 
         // Should not have user instructions section when empty
         assert!(!context.contains("## User Instructions"));
@@ -981,7 +982,7 @@ mod tests {
         config.tools.docker = true;
         config.tools.node = true;
 
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-333", &config).unwrap();
 
         // Verify capabilities are listed
         assert!(context.contains("docker"));
@@ -993,7 +994,7 @@ mod tests {
     #[test]
     fn test_generate_base_context_no_capabilities() {
         let config = Config::default();
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-444", &config).unwrap();
 
         // Should show "None" when no capabilities enabled
         assert!(context.contains("## Enabled Capabilities"));
@@ -1006,7 +1007,7 @@ mod tests {
         // Test instructions without trailing newline
         config.context.instructions = "Test without newline".to_string();
 
-        let context = generate_base_context(&config).unwrap();
+        let context = generate_base_context("test-vm-555", &config).unwrap();
 
         // Should add newline after instructions
         assert!(context.contains("Test without newline\n\n"));

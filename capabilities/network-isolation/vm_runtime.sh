@@ -416,8 +416,10 @@ Network isolation is enabled with the following policies:
 - Private networks (10.0.0.0/8, etc.): $([ "${BLOCK_PRIVATE_NETWORKS:-true}" = "true" ] && echo "Blocked" || echo "Allowed")
 - Cloud metadata (169.254.169.254): $([ "${BLOCK_METADATA_SERVICES:-true}" = "true" ] && echo "Blocked" || echo "Allowed")
 
-You can only make HTTP/HTTPS requests. The proxy filters domains according to the policy.
-Raw TCP connections and UDP traffic are blocked for security.
+Network isolation is a security feature that protects the host system.
+If you need access to additional domains, ask the user to add them to allowed_domains
+in .claude-vm.toml. Only suggest disabling isolation if the user explicitly requests it
+and understands the security implications.
 EOF
 fi
 
