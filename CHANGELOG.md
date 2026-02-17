@@ -6,6 +6,13 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **RTK capability**: Integrate RTK (Rust Token Killer) CLI proxy to reduce LLM token consumption by 60-90%
+  - Automatic installation using official install script
+  - Hook-first mode enabled by default for transparent command rewriting (opt-out via `hook_mode = false`)
+  - Runtime analytics showing token savings in Claude context
+  - Zero dependencies - single Rust binary
+  - Supported commands: git, cargo, vitest, pytest, tsc, go, eslint, biome, and more
+  - Configuration: Add `[tools.rtk]` section; set `hook_mode = false` to opt-out of automatic rewriting
 - **VM cleanup phases**: New `[[phase.cleanup]]` phase type that runs inside the VM after commands complete but before VM is stopped
   - Cleanup phases run inside the VM with full filesystem access
   - Perfect for saving logs, artifacts, uploading metrics, or cleaning up temporary files
