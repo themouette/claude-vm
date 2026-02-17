@@ -1,5 +1,7 @@
+use crate::config::Config;
 use crate::error::Result;
 use crate::project::Project;
+use crate::scripts::host_executor;
 use crate::vm::{limactl::LimaCtl, mount};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -7,6 +9,7 @@ use std::sync::Arc;
 /// Represents an ephemeral VM session with RAII cleanup
 pub struct VmSession {
     name: String,
+    project: Project,
     cleaned_up: Arc<AtomicBool>,
     verbose: bool,
 }
@@ -45,6 +48,7 @@ impl VmSession {
 
         Ok(Self {
             name,
+            project: project.clone(),
             cleaned_up: Arc::new(AtomicBool::new(false)),
             verbose,
         })
@@ -56,9 +60,25 @@ impl VmSession {
     }
 
     /// Get a cleanup guard that ensures VM cleanup on drop
+    ///
+    /// The config parameter is needed for executing teardown phases
+    pub fn ensure_cleanup_with_config(&self, config: &Config) -> CleanupGuard {
+        CleanupGuard {
+            vm_name: self.name.clone(),
+            project: self.project.clone(),
+            config: Some(config.clone()),
+            cleaned_up: Arc::clone(&self.cleaned_up),
+            verbose: self.verbose,
+        }
+    }
+
+    /// Get a cleanup guard without config (for backward compatibility and tests)
+    /// Teardown phases won't run without config
     pub fn ensure_cleanup(&self) -> CleanupGuard {
         CleanupGuard {
             vm_name: self.name.clone(),
+            project: self.project.clone(),
+            config: None,
             cleaned_up: Arc::clone(&self.cleaned_up),
             verbose: self.verbose,
         }
@@ -68,6 +88,8 @@ impl VmSession {
 /// RAII guard that ensures VM cleanup even on panic
 pub struct CleanupGuard {
     vm_name: String,
+    project: Project,
+    config: Option<Config>,
     cleaned_up: Arc<AtomicBool>,
     verbose: bool,
 }
@@ -76,6 +98,21 @@ impl Drop for CleanupGuard {
     fn drop(&mut self) {
         // Only cleanup if not already done
         if !self.cleaned_up.swap(true, Ordering::SeqCst) {
+            // Execute teardown phases before VM cleanup
+            if let Some(config) = &self.config {
+                if !config.phase.teardown.is_empty() {
+                    if let Err(e) = host_executor::execute_host_phases(
+                        &config.phase.teardown,
+                        &self.project,
+                        &self.vm_name,
+                        &host_executor::build_host_env(&self.project, "teardown"),
+                    ) {
+                        eprintln!("⚠ Warning: Teardown phases failed: {}", e);
+                        // Continue with VM cleanup anyway
+                    }
+                }
+            }
+
             eprintln!("Cleaning up VM: {}", self.vm_name);
 
             // Best effort cleanup - ignore errors
@@ -95,6 +132,8 @@ mod tests {
         {
             let _guard = CleanupGuard {
                 vm_name: "test-vm".to_string(),
+                project: Project::new_for_test(std::path::PathBuf::from("/test")),
+                config: None,
                 cleaned_up: Arc::clone(&cleaned_up),
                 verbose: false,
             };
@@ -115,6 +154,8 @@ mod tests {
         let result: Result<()> = {
             let _guard = CleanupGuard {
                 vm_name: "test-vm".to_string(),
+                project: Project::new_for_test(std::path::PathBuf::from("/test")),
+                config: None,
                 cleaned_up: Arc::clone(&cleaned_up),
                 verbose: false,
             };

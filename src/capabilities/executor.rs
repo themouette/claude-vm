@@ -1,12 +1,10 @@
-use super::definition::{Capability, McpServer, ScriptConfig};
+use super::definition::{McpServer, ScriptConfig};
 use crate::error::{ClaudeVmError, Result};
 use crate::project::Project;
 use crate::scripts::runner;
 use crate::version;
 use crate::vm::limactl::LimaCtl;
 use std::collections::HashMap;
-use std::process::Command;
-use std::sync::Arc;
 
 // NOTE: Runtime scripts are no longer pre-installed in a fixed directory.
 // They are now executed dynamically through the phase system.
@@ -90,62 +88,6 @@ fn build_capability_env_vars(
     ensure_env_var(&mut env_vars, "PROJECT_WORKTREE");
 
     Ok(env_vars)
-}
-
-/// Execute a capability's host_setup hook (runs on host machine)
-pub fn execute_host_setup(project: &Project, capability: &Arc<Capability>) -> Result<()> {
-    let Some(host_setup) = &capability.host_setup else {
-        return Ok(());
-    };
-
-    println!("Running host setup for {}...", capability.capability.name);
-
-    execute_host_script(project, host_setup, &capability.capability.id)?;
-
-    Ok(())
-}
-
-/// Execute a script on the host machine
-fn execute_host_script(
-    project: &Project,
-    script_config: &ScriptConfig,
-    capability_id: &str,
-) -> Result<()> {
-    let script_content = get_script_content(script_config, capability_id)?;
-
-    // Set up environment variables
-    let project_root = project.root().to_string_lossy();
-    let template_name = project.template_name();
-
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(&script_content)
-        .env("PROJECT_ROOT", project_root.as_ref())
-        .env("TEMPLATE_NAME", template_name)
-        .env("LIMA_INSTANCE", template_name)
-        .env("CAPABILITY_ID", capability_id)
-        .output()
-        .map_err(|e| {
-            ClaudeVmError::LimaExecution(format!(
-                "Failed to execute host script for capability '{}': {}",
-                capability_id, e
-            ))
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(ClaudeVmError::LimaExecution(format!(
-            "Host setup failed for capability '{}': {}",
-            capability_id, stderr
-        )));
-    }
-
-    // Print stdout if any
-    if !output.stdout.is_empty() {
-        print!("{}", String::from_utf8_lossy(&output.stdout));
-    }
-
-    Ok(())
 }
 
 /// Execute a script in the VM with environment variables
