@@ -2240,6 +2240,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_worktree_config_loading() {
         use std::io::Write;
 
@@ -2313,6 +2314,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_worktree_config_cascade() {
         use std::io::Write;
 
