@@ -98,10 +98,55 @@ Scripts run in this order:
 1. **Project runtime script** - `./.claude-vm.runtime.sh` (if exists)
 2. **Config runtime scripts** - From `[runtime] scripts` in `.claude-vm.toml`
 3. **CLI runtime scripts** - From `--runtime-script` flags
+4. **Main command** - Claude agent or shell
+5. **Cleanup phases** - `[[phase.cleanup]]` phases (inside VM, after command completes)
+6. **VM stop** - VM is stopped and deleted
 
 All scripts and the main command run in a single shell invocation, sharing environment and processes.
 
+### Cleanup Phases
+
+Use `[[phase.cleanup]]` phases for cleanup operations that need VM filesystem access:
+
+```toml
+[[phase.cleanup]]
+name = "save-logs"
+script = """
+# Runs after agent/shell completes, before VM stops
+cp ~/.claude/logs/*.log /mounted-backup/ 2>/dev/null || true
+"""
+```
+
+See [Configuration](../configuration.md#cleanup-phases) for details.
+
 ## Features
+
+### Command Detection
+
+Runtime and cleanup scripts have access to `$CLAUDE_VM_COMMAND` to detect which command is running:
+
+```bash
+#!/bin/bash
+# .claude-vm.runtime.sh
+
+if [ "$CLAUDE_VM_COMMAND" = "agent" ]; then
+  echo "Running Claude Code agent"
+  # Agent-specific setup
+elif [ "$CLAUDE_VM_COMMAND" = "shell" ]; then
+  echo "Running interactive shell"
+  # Shell-specific setup
+fi
+```
+
+**Available in:**
+- Runtime phases (`[[phase.runtime]]`)
+- Cleanup phases (`[[phase.cleanup]]`)
+- Host runtime phases (`[[phase.host.before_runtime]]`, `[[phase.host.after_runtime]]`)
+- Host teardown phases (`[[phase.host.teardown]]`)
+
+**Values:**
+- `"agent"` - when running `claude-vm agent` or `claude-vm` (default)
+- `"shell"` - when running `claude-vm shell`
 
 ### Shared Environment
 

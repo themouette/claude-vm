@@ -252,6 +252,7 @@ pub fn execute_command_with_runtime_scripts(
     cmd: &str,
     args: &[&str],
     env_vars: &HashMap<String, String>,
+    command: &str,
 ) -> Result<()> {
     // Collect all runtime scripts as (name, content, env_vars, source, when_condition, continue_on_error) tuples
     let mut script_contents: Vec<RuntimeScriptInfo> = Vec::new();
@@ -306,9 +307,16 @@ pub fn execute_command_with_runtime_scripts(
             continue; // continue_on_error was true
         };
 
+        // Inject CLAUDE_VM_COMMAND environment variable
+        let mut phase_env = phase.env.clone();
+        phase_env.insert("CLAUDE_VM_COMMAND".to_string(), command.to_string());
+
+        let mut phase_with_env = phase.clone();
+        phase_with_env.env = phase_env;
+
         // Build environment setup with validation and capability env var injection
         // This automatically validates env keys and injects capability vars if CAPABILITY_ID is present
-        let phase_env_setup = match build_phase_env_setup(phase, project, vm_name) {
+        let phase_env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
             Ok(setup) => setup,
             Err(e) => {
                 use crate::phase_executor::handle_phase_error;
@@ -591,6 +599,133 @@ pub fn execute_command_with_runtime_scripts(
         &shell_args,
         config.forward_ssh_agent,
     )
+}
+
+/// Execute a single script inside the VM (used for cleanup phases)
+fn execute_script_in_vm(
+    vm_name: &str,
+    script_content: &str,
+    script_name: &str,
+    source: bool,
+) -> Result<()> {
+    // Write script to temp file
+    let temp_path = format!("/tmp/{}", sanitize_filename(script_name));
+    let local_temp = std::env::temp_dir().join(script_name);
+
+    std::fs::write(&local_temp, script_content)?;
+
+    // Copy to VM
+    LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
+
+    // Make executable
+    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+
+    // Execute: source if requested, otherwise run with bash
+    let result = if source {
+        LimaCtl::shell(vm_name, None, ".", &[&temp_path], false)
+    } else {
+        LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)
+    };
+
+    // Cleanup local temp file
+    std::fs::remove_file(&local_temp)?;
+
+    result
+}
+
+/// Execute cleanup phases inside the VM after a command completes
+///
+/// This function runs all cleanup phases defined in `config.phase.cleanup`.
+/// Cleanup phases run inside the VM (not on host) and have access to the VM filesystem.
+///
+/// # Arguments
+/// - `vm_name`: Name of the VM instance
+/// - `project`: Project context for resolving script paths
+/// - `config`: Configuration containing cleanup phases
+/// - `command`: The command that was executed ("agent" or "shell")
+///
+/// # Behavior
+/// - Iterates through all cleanup phases in order
+/// - Validates phases and loads scripts
+/// - Injects CLAUDE_VM_COMMAND environment variable into each phase
+/// - Executes scripts inside VM via LimaCtl::shell()
+/// - Respects `continue_on_error`, `when` conditions, and `source` flag
+///
+/// # Errors
+/// Returns error if any phase fails (unless continue_on_error is true)
+pub fn execute_cleanup_phases(
+    vm_name: &str,
+    project: &Project,
+    config: &Config,
+    command: &str,
+) -> Result<()> {
+    use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
+
+    if config.phase.cleanup.is_empty() {
+        return Ok(());
+    }
+
+    eprintln!("Running cleanup phases...");
+
+    for phase in &config.phase.cleanup {
+        eprintln!("  Phase: {}", phase.name);
+
+        // Validate phase
+        phase.validate_and_warn();
+
+        // Check conditional execution
+        if !phase.should_execute(vm_name)? {
+            eprintln!("    ⊘ Skipped (condition not met)");
+            continue;
+        }
+
+        // Load scripts
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Cleanup)?
+        else {
+            continue;
+        };
+
+        // Inject CLAUDE_VM_COMMAND into phase environment
+        let mut phase_env = phase.env.clone();
+        phase_env.insert("CLAUDE_VM_COMMAND".to_string(), command.to_string());
+
+        let mut phase_with_env = phase.clone();
+        phase_with_env.env = phase_env;
+
+        // Build environment setup string
+        let env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
+            Ok(setup) => setup,
+            Err(e) => {
+                use crate::phase_executor::handle_phase_error;
+                handle_phase_error(phase, PhaseContext::Cleanup, e, None)?;
+                continue;
+            }
+        };
+
+        // Execute each script inside VM
+        for (name, content) in scripts {
+            let full_script = if env_setup.is_empty() {
+                content
+            } else {
+                format!("{}\n\n{}", env_setup, content)
+            };
+
+            let result = execute_script_in_vm(vm_name, &full_script, &name, phase.source);
+
+            match result {
+                Ok(_) => eprintln!("    ✓ {}", name),
+                Err(e) if phase.continue_on_error => {
+                    eprintln!("    ⚠ {} failed (continuing): {}", name, e);
+                }
+                Err(e) => {
+                    use crate::phase_executor::handle_phase_error;
+                    handle_phase_error(phase, PhaseContext::Cleanup, e, Some(&name))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Build entrypoint script for testing purposes

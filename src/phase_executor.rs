@@ -6,13 +6,15 @@ use crate::config::ScriptPhase;
 use crate::error::{ClaudeVmError, Result};
 use std::path::Path;
 
-/// Phase execution context (setup or runtime)
+/// Phase execution context (setup, runtime, or cleanup)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PhaseContext {
     /// Template creation phase
     Setup,
     /// Session initialization phase
     Runtime,
+    /// Session cleanup phase (after command, before VM stop)
+    Cleanup,
 }
 
 impl PhaseContext {
@@ -20,6 +22,7 @@ impl PhaseContext {
         match self {
             PhaseContext::Setup => "Setup",
             PhaseContext::Runtime => "Runtime",
+            PhaseContext::Cleanup => "Cleanup",
         }
     }
 }

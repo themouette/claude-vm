@@ -6,6 +6,16 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Added
 
+- **VM cleanup phases**: New `[[phase.cleanup]]` phase type that runs inside the VM after commands complete but before VM is stopped
+  - Cleanup phases run inside the VM with full filesystem access
+  - Perfect for saving logs, artifacts, uploading metrics, or cleaning up temporary files
+  - Supports all phase features: `name`, `script`, `script_files`, `env`, `when`, `continue_on_error`, `source`
+  - Execution order: runtime → command → **cleanup** → host teardown → VM stop
+- **CLAUDE_VM_COMMAND environment variable**: Available in runtime and cleanup phases
+  - Value: `"agent"` when running `claude-vm agent`, `"shell"` when running `claude-vm shell`
+  - Available in: VM runtime phases, VM cleanup phases, host runtime phases, host teardown phases
+  - Allows phases to adapt behavior based on which command is running
+  - Example: `if [ "$CLAUDE_VM_COMMAND" = "agent" ]; then save_logs; fi`
 - **Command aliases**: Short aliases for frequently used commands to reduce typing
   - `claude-vm ls` - Alias for `list` (list all templates)
   - `claude-vm sh` - Alias for `shell` (open shell or run commands)
@@ -79,6 +89,23 @@ All notable changes to claude-vm will be documented in this file.
 
 ### Changed
 
+- **BREAKING: Removed backward compatibility for `[[phase.teardown]]`**: Direct teardown phases are no longer supported
+  - **Impact**: Configurations using `[[phase.teardown]]` must migrate to `[[phase.host.teardown]]`
+  - **Migration**: Replace `[[phase.teardown]]` with `[[phase.host.teardown]]` in your `.claude-vm.toml`
+  - **Reason**: This removes ambiguity - `[[phase.host.teardown]]` clearly indicates host-based execution
+  - Example:
+    ```toml
+    # Before
+    [[phase.teardown]]
+    name = "cleanup"
+    script = "echo 'cleanup on host'"
+
+    # After
+    [[phase.host.teardown]]
+    name = "cleanup"
+    script = "echo 'cleanup on host'"
+    ```
+  - For VM-based cleanup, use the new `[[phase.cleanup]]` instead
 - **BREAKING: Removed `host_setup` hook from capabilities**: The legacy `[host_setup]` hook has been replaced with the new host phase system
   - **Impact**: Capabilities using `[host_setup]` must migrate to `[[phase.host.before_setup]]`
   - **Migration**: Replace `[host_setup]` with `[[phase.host.before_setup]]` and change `script_file` to `script_files`

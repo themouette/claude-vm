@@ -37,7 +37,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         config.mount_conversations,
         &config.mounts,
     )?;
-    let _cleanup = session.ensure_cleanup_with_config(&config);
+    let _cleanup = session.ensure_cleanup_with_config(&config, "agent");
 
     // Execute before_runtime host phases
     if !config.phase.before_runtime.is_empty() {
@@ -45,7 +45,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
             &config.phase.before_runtime,
             project,
             session.name(),
-            &host_executor::build_host_env(project, "runtime"),
+            &host_executor::build_host_env(project, "runtime", Some("agent")),
         )?;
     }
 
@@ -107,6 +107,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         "claude",
         &args,
         &env_vars,
+        "agent",
     )?;
 
     // Execute after_runtime host phases
@@ -117,7 +118,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
             &config.phase.after_runtime,
             project,
             session.name(),
-            &host_executor::build_host_env(project, "runtime"),
+            &host_executor::build_host_env(project, "runtime", Some("agent")),
         )?;
     }
 

@@ -389,6 +389,58 @@ continue_on_error = true
 script_files = ["./scripts/start-optional.sh"]
 ```
 
+#### Cleanup Phases
+
+Run **inside the VM** after agent/shell commands complete but before VM is stopped. Perfect for saving logs, artifacts, or cleaning up temporary files that require VM filesystem access.
+
+```toml
+# Save logs after agent session
+[[phase.cleanup]]
+name = "save-logs"
+script = """
+if [ "$CLAUDE_VM_COMMAND" = "agent" ]; then
+  mkdir -p /tmp/logs-backup
+  cp -r ~/.claude/logs/*.log /tmp/logs-backup/ 2>/dev/null || true
+fi
+"""
+
+# Cleanup temporary files
+[[phase.cleanup]]
+name = "cleanup-temp"
+script = "rm -rf /tmp/session-* /tmp/cache-*"
+continue_on_error = true
+```
+
+**Execution Order:**
+
+1. Runtime phases (inside VM)
+2. Main command (agent or shell)
+3. **Cleanup phases** (inside VM) ← runs here
+4. Host teardown phases (on host)
+5. VM stop and delete
+
+**CLAUDE_VM_COMMAND Environment Variable:**
+
+Cleanup phases (and runtime phases) have access to `$CLAUDE_VM_COMMAND` to adapt behavior:
+
+- `"agent"` when running `claude-vm agent`
+- `"shell"` when running `claude-vm shell`
+
+Example:
+```toml
+[[phase.cleanup]]
+name = "conditional-cleanup"
+script = """
+if [ "$CLAUDE_VM_COMMAND" = "agent" ]; then
+  echo "Saving agent logs..."
+  # Save Claude logs
+elif [ "$CLAUDE_VM_COMMAND" = "shell" ]; then
+  echo "Saving shell history..."
+  # Save shell history
+fi
+"""
+```
+
 #### Host Phases
 
 Host phases run on the **HOST machine** (not inside the VM) at specific lifecycle points. They enable operations that need to execute outside the VM, such as exporting host configuration, refreshing credentials, or collecting logs.
@@ -442,6 +494,7 @@ Host phases receive these standard environment variables:
 - `TEMPLATE_NAME` - VM template name
 - `LIMA_INSTANCE` - VM instance name (runtime and teardown phases only)
 - `PHASE_TYPE` - Phase type (setup, runtime, or teardown)
+- `CLAUDE_VM_COMMAND` - Command being run: `"agent"` or `"shell"` (runtime and teardown phases only)
 
 Host phases support all the same features as VM phases: `name`, `script`, `script_files`, `env`, `when`, `continue_on_error`.
 

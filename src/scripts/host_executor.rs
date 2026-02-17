@@ -151,10 +151,15 @@ fn check_host_condition(condition: &str, env_vars: &HashMap<String, String>) -> 
 /// # Arguments
 /// * `project` - Project context
 /// * `phase_type` - Type of phase (setup, runtime, teardown)
+/// * `command` - Optional command name ("agent" or "shell") for runtime and teardown phases
 ///
 /// # Returns
 /// HashMap with standard environment variables
-pub fn build_host_env(project: &Project, phase_type: &str) -> HashMap<String, String> {
+pub fn build_host_env(
+    project: &Project,
+    phase_type: &str,
+    command: Option<&str>,
+) -> HashMap<String, String> {
     let mut env = HashMap::new();
 
     env.insert(
@@ -166,6 +171,13 @@ pub fn build_host_env(project: &Project, phase_type: &str) -> HashMap<String, St
         project.template_name().to_string(),
     );
     env.insert("PHASE_TYPE".to_string(), phase_type.to_string());
+
+    // Inject CLAUDE_VM_COMMAND for runtime and teardown phases
+    if let Some(cmd) = command {
+        if phase_type == "runtime" || phase_type == "teardown" {
+            env.insert("CLAUDE_VM_COMMAND".to_string(), cmd.to_string());
+        }
+    }
 
     env
 }
@@ -214,11 +226,29 @@ mod tests {
     #[test]
     fn test_build_host_env() {
         let project = Project::new_for_test(PathBuf::from("/test/project"));
-        let env = build_host_env(&project, "setup");
+        let env = build_host_env(&project, "setup", None);
 
         assert_eq!(env.get("PROJECT_ROOT").unwrap(), "/test/project");
         assert_eq!(env.get("PHASE_TYPE").unwrap(), "setup");
         assert!(env.contains_key("TEMPLATE_NAME"));
+        assert!(!env.contains_key("CLAUDE_VM_COMMAND"));
+    }
+
+    #[test]
+    fn test_build_host_env_with_command() {
+        let project = Project::new_for_test(PathBuf::from("/test/project"));
+
+        // Test runtime phase with command
+        let env = build_host_env(&project, "runtime", Some("agent"));
+        assert_eq!(env.get("CLAUDE_VM_COMMAND").unwrap(), "agent");
+
+        // Test teardown phase with command
+        let env = build_host_env(&project, "teardown", Some("shell"));
+        assert_eq!(env.get("CLAUDE_VM_COMMAND").unwrap(), "shell");
+
+        // Test setup phase (command should not be added)
+        let env = build_host_env(&project, "setup", Some("agent"));
+        assert!(!env.contains_key("CLAUDE_VM_COMMAND"));
     }
 
     #[test]

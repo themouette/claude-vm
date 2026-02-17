@@ -252,7 +252,7 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
             "after_runtime",
         )?);
         capability_teardown.extend(convert_capability_phases(
-            &phase_config.teardown,
+            &phase_config.host.teardown,
             capability_id,
             "teardown",
         )?);
@@ -285,7 +285,7 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     merge_phase_list(&mut config.phase.after_setup, capability_after_setup);
     merge_phase_list(&mut config.phase.before_runtime, capability_before_runtime);
     merge_phase_list(&mut config.phase.after_runtime, capability_after_runtime);
-    merge_phase_list(&mut config.phase.teardown, capability_teardown);
+    merge_phase_list(&mut config.phase.host.teardown, capability_teardown);
     merge_phase_list(&mut config.phase.setup, capability_setup_phases);
     merge_phase_list(&mut config.phase.runtime, capability_runtime_phases);
 
