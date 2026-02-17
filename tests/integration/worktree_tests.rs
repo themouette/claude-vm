@@ -48,6 +48,13 @@ fn create_test_repo() -> TempDir {
         .output()
         .unwrap();
 
+    // Ensure we're on master branch (git init may create main or another default)
+    StdCommand::new("git")
+        .args(["branch", "-M", "master"])
+        .current_dir(repo_path)
+        .output()
+        .unwrap();
+
     dir
 }
 
