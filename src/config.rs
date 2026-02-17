@@ -196,11 +196,34 @@ pub struct ToolsConfig {
     pub network_isolation: bool,
 
     #[serde(default)]
-    pub rtk: Option<RtkToolConfig>,
+    pub rtk: Option<RtkConfig>,
 }
 
-/// RTK-specific configuration
-/// Presence of [tools.rtk] section enables RTK capability
+/// RTK configuration supporting both simple boolean and detailed config
+///
+/// # Examples
+///
+/// Simple syntax:
+/// ```toml
+/// [tools]
+/// rtk = true
+/// ```
+///
+/// Advanced syntax with configuration:
+/// ```toml
+/// [tools.rtk]
+/// hook_mode = false
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RtkConfig {
+    /// Simple boolean: rtk = true
+    Simple(bool),
+    /// Detailed configuration: [tools.rtk]
+    Detailed(RtkToolConfig),
+}
+
+/// RTK-specific configuration options
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtkToolConfig {
     /// Enable hook-first mode (transparent command rewriting)
@@ -212,6 +235,29 @@ pub struct RtkToolConfig {
 
 fn default_hook_mode_true() -> bool {
     true
+}
+
+impl RtkConfig {
+    /// Check if RTK is enabled
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            RtkConfig::Simple(enabled) => *enabled,
+            RtkConfig::Detailed(_) => true, // Presence of config = enabled
+        }
+    }
+
+    /// Get the RTK configuration with defaults
+    pub fn get_config(&self) -> RtkToolConfig {
+        match self {
+            RtkConfig::Simple(true) => RtkToolConfig {
+                hook_mode: true, // Default to hook mode enabled
+            },
+            RtkConfig::Simple(false) => RtkToolConfig {
+                hook_mode: false, // Disabled entirely
+            },
+            RtkConfig::Detailed(config) => config.clone(),
+        }
+    }
 }
 
 impl ToolsConfig {
@@ -227,7 +273,7 @@ impl ToolsConfig {
             "gh" => self.gh,
             "git" => self.git,
             "network-isolation" => self.network_isolation,
-            "rtk" => self.rtk.is_some(),
+            "rtk" => self.rtk.as_ref().is_some_and(|cfg| cfg.is_enabled()),
             _ => false,
         }
     }
@@ -244,7 +290,7 @@ impl ToolsConfig {
             "gh" => self.gh = true,
             "git" => self.git = true,
             "network-isolation" => self.network_isolation = true,
-            "rtk" => self.rtk = Some(RtkToolConfig { hook_mode: true }),
+            "rtk" => self.rtk = Some(RtkConfig::Simple(true)),
             _ => {}
         }
     }

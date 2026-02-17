@@ -154,7 +154,7 @@ fn inject_capability_env_vars(
                     .tools
                     .rtk
                     .as_ref()
-                    .map(|rtk| rtk.hook_mode)
+                    .map(|rtk| rtk.get_config().hook_mode)
                     .unwrap_or(true); // Default to true (opt-out)
                 env.insert("RTK_HOOK_MODE".to_string(), hook_mode.to_string());
             }

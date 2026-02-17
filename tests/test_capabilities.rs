@@ -344,12 +344,12 @@ fn test_capability_phases_run_before_user_phases() {
 
 #[test]
 fn test_rtk_capability_loads() {
-    use claude_vm::config::RtkToolConfig;
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
 
     let registry = CapabilityRegistry::load().expect("Failed to load registry");
 
     let mut config = Config::default();
-    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: true }));
 
     let enabled = registry
         .get_enabled_capabilities(&config)
@@ -371,7 +371,7 @@ fn test_rtk_capability_loads() {
 
 #[test]
 fn test_rtk_config_defaults() {
-    use claude_vm::config::RtkToolConfig;
+    use claude_vm::config::RtkConfig;
 
     let config = Config::default();
     assert!(
@@ -379,36 +379,36 @@ fn test_rtk_config_defaults() {
         "RTK should be disabled by default"
     );
 
-    // When enabled, hook mode should default to true (opt-out)
-    let rtk_config = RtkToolConfig { hook_mode: true };
+    // When enabled with Simple(true), hook mode should default to true
+    let rtk_config = RtkConfig::Simple(true);
     assert!(
-        rtk_config.hook_mode,
-        "RTK hook mode should be enabled by default"
+        rtk_config.get_config().hook_mode,
+        "RTK hook mode should be enabled by default with Simple(true)"
     );
 }
 
 #[test]
 fn test_rtk_hook_mode_opt_out() {
-    use claude_vm::config::RtkToolConfig;
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
 
     let mut config = Config::default();
-    config.tools.rtk = Some(RtkToolConfig { hook_mode: false });
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: false }));
 
     assert!(config.tools.is_enabled("rtk"), "RTK should be enabled");
     assert!(
-        !config.tools.rtk.unwrap().hook_mode,
+        !config.tools.rtk.unwrap().get_config().hook_mode,
         "Hook mode should be disabled when opted out"
     );
 }
 
 #[test]
 fn test_rtk_with_other_capabilities() {
-    use claude_vm::config::RtkToolConfig;
+    use claude_vm::config::RtkConfig;
 
     let registry = CapabilityRegistry::load().expect("Failed to load registry");
 
     let mut config = Config::default();
-    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+    config.tools.rtk = Some(RtkConfig::Simple(true));
     config.tools.rust = true;
     config.tools.git = true;
 
@@ -424,7 +424,7 @@ fn test_rtk_with_other_capabilities() {
 
 #[test]
 fn test_rtk_is_enabled_check() {
-    use claude_vm::config::RtkToolConfig;
+    use claude_vm::config::RtkConfig;
 
     let mut config = Config::default();
 
@@ -434,8 +434,8 @@ fn test_rtk_is_enabled_check() {
         "RTK should not be enabled by default"
     );
 
-    // Enable RTK
-    config.tools.rtk = Some(RtkToolConfig { hook_mode: true });
+    // Enable RTK with simple syntax
+    config.tools.rtk = Some(RtkConfig::Simple(true));
 
     // RTK should now be enabled
     assert!(
@@ -457,5 +457,59 @@ fn test_rtk_enable_method() {
     // RTK should now be enabled with default hook_mode = true
     assert!(config.tools.is_enabled("rtk"));
     assert!(config.tools.rtk.is_some());
-    assert!(config.tools.rtk.as_ref().unwrap().hook_mode);
+    assert!(config.tools.rtk.as_ref().unwrap().get_config().hook_mode);
+}
+
+#[test]
+fn test_rtk_simple_syntax() {
+    use claude_vm::config::RtkConfig;
+
+    // Test rtk = true
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled with Simple(true)"
+    );
+    assert!(
+        config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be enabled by default with Simple(true)"
+    );
+
+    // Test rtk = false
+    config.tools.rtk = Some(RtkConfig::Simple(false));
+    assert!(
+        !config.tools.is_enabled("rtk"),
+        "RTK should be disabled with Simple(false)"
+    );
+}
+
+#[test]
+fn test_rtk_detailed_syntax() {
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
+
+    let mut config = Config::default();
+
+    // Test [tools.rtk] with hook_mode = true
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: true }));
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled with Detailed config"
+    );
+    assert!(
+        config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be enabled when set to true"
+    );
+
+    // Test [tools.rtk] with hook_mode = false
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: false }));
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should still be enabled with Detailed config (presence = enabled)"
+    );
+    assert!(
+        !config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be disabled when set to false"
+    );
 }

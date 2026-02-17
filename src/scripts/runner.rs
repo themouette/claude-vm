@@ -316,14 +316,15 @@ pub fn execute_command_with_runtime_scripts(
 
         // Build environment setup with validation and capability env var injection
         // This automatically validates env keys and injects capability vars if CAPABILITY_ID is present
-        let phase_env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
-            Ok(setup) => setup,
-            Err(e) => {
-                use crate::phase_executor::handle_phase_error;
-                handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
-                continue;
-            }
-        };
+        let phase_env_setup =
+            match build_phase_env_setup(&phase_with_env, project, vm_name, Some(config)) {
+                Ok(setup) => setup,
+                Err(e) => {
+                    use crate::phase_executor::handle_phase_error;
+                    handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
+                    continue;
+                }
+            };
 
         for (name, content) in scripts {
             // Prepend environment setup to script content
@@ -693,7 +694,8 @@ pub fn execute_cleanup_phases(
         phase_with_env.env = phase_env;
 
         // Build environment setup string
-        let env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
+        let env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name, Some(config))
+        {
             Ok(setup) => setup,
             Err(e) => {
                 use crate::phase_executor::handle_phase_error;
