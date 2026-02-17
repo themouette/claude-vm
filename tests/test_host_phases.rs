@@ -1,4 +1,4 @@
-use claude_vm::config::{Config, ScriptPhase};
+use claude_vm::config::Config;
 
 /// Test that host.before_setup phases are properly parsed from TOML
 #[test]
@@ -159,10 +159,7 @@ fn test_host_phase_conditional() {
 
     let config: Config = toml::from_str(toml).expect("Failed to parse TOML");
     let phase = &config.phase.host.before_runtime[0];
-    assert_eq!(
-        phase.when,
-        Some("test -f ~/.ssh/id_rsa".to_string())
-    );
+    assert_eq!(phase.when, Some("test -f ~/.ssh/id_rsa".to_string()));
 }
 
 /// Test that host phases with continue_on_error are properly parsed
