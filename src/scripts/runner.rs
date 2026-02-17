@@ -608,6 +608,7 @@ fn execute_script_in_vm(
     script_content: &str,
     script_name: &str,
     source: bool,
+    workdir: Option<&Path>,
 ) -> Result<()> {
     // Write script to temp file
     let temp_path = format!("/tmp/{}", sanitize_filename(script_name));
@@ -639,7 +640,7 @@ fn execute_script_in_vm(
         "[DEBUG] Calling: limactl shell {} chmod +x {}",
         vm_name, temp_path
     );
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, workdir, "chmod", &["+x", &temp_path], false)?;
 
     // Execute: source if requested, otherwise run with bash
     eprintln!(
@@ -649,9 +650,9 @@ fn execute_script_in_vm(
         temp_path
     );
     let result = if source {
-        LimaCtl::shell(vm_name, None, ".", &[&temp_path], false)
+        LimaCtl::shell(vm_name, workdir, ".", &[&temp_path], false)
     } else {
-        LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)
+        LimaCtl::shell(vm_name, workdir, "bash", &[&temp_path], false)
     };
 
     // Cleanup local temp file
@@ -671,12 +672,13 @@ fn execute_script_in_vm(
 /// - `project`: Project context for resolving script paths
 /// - `config`: Configuration containing after-runtime phases
 /// - `command`: The command that was executed ("agent" or "shell")
+/// - `workdir`: Working directory for script execution (prevents bash from trying to restore host paths)
 ///
 /// # Behavior
 /// - Iterates through all after-runtime phases in order
 /// - Validates phases and loads scripts
 /// - Injects CLAUDE_VM_COMMAND environment variable into each phase
-/// - Executes scripts inside VM via LimaCtl::shell()
+/// - Executes scripts inside VM via LimaCtl::shell() with explicit workdir
 /// - Respects `continue_on_error`, `when` conditions, and `source` flag
 ///
 /// # Errors
@@ -686,6 +688,7 @@ pub fn execute_after_runtime_phases(
     project: &Project,
     config: &Config,
     command: &str,
+    workdir: Option<&Path>,
 ) -> Result<()> {
     use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
 
@@ -739,7 +742,7 @@ pub fn execute_after_runtime_phases(
                 format!("{}\n\n{}", env_setup, content)
             };
 
-            let result = execute_script_in_vm(vm_name, &full_script, &name, phase.source);
+            let result = execute_script_in_vm(vm_name, &full_script, &name, phase.source, workdir);
 
             match result {
                 Ok(_) => eprintln!("    ✓ {}", name),

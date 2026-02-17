@@ -107,11 +107,14 @@ impl Drop for CleanupGuard {
                 // 1. Execute VM-based after-runtime phases INSIDE VM (before host after_runtime)
                 if !config.phase.after_runtime.is_empty() {
                     if let Some(command) = &self.command {
+                        // Use project root as workdir (same as runtime phases)
+                        let workdir = Some(self.project.root());
                         if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
                             &self.vm_name,
                             &self.project,
                             config,
                             command,
+                            workdir,
                         ) {
                             eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
                             // Continue with teardown anyway
