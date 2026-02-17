@@ -17,8 +17,14 @@ pub struct Capability {
     #[serde(default)]
     pub packages: Option<PackageSpec>,
 
+    /// Optional host setup script (runs on host during setup)
+    /// Host setup is required for operations that need to run on the host machine
+    /// (e.g., copying host git config, exporting GPG keys)
+    #[serde(default)]
+    pub host_setup: Option<ScriptConfig>,
+
     /// Phase-based execution model for VM setup and runtime scripts
-    /// All operations (VM and host) now use phases for better control and debugging
+    /// All VM-side operations now use phases for better control and debugging
     pub phase: PhaseConfig,
 
     /// MCP servers to register
