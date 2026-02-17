@@ -14,8 +14,9 @@ if command -v rtk &>/dev/null; then
     rtk --version
 else
     echo "Installing RTK..."
-    # Use 'yes' to auto-confirm any prompts, redirect stdin to avoid hanging
-    yes | curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh || true
+    # Download and run installer with auto-confirmation
+    # Using process substitution to properly pipe stdin to the installer
+    yes y | sh <(curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh) || true
     export PATH="$HOME/.local/bin:$PATH"
 
     # Verify installation succeeded
@@ -36,7 +37,8 @@ script = """
 # Configure hook-first mode (opt-out via RTK_HOOK_MODE env var)
 if [ "${RTK_HOOK_MODE:-true}" = "true" ]; then
     echo "Configuring RTK hook-first mode..."
-    if rtk init --global; then
+    # Auto-confirm patching of existing settings with 'y'
+    if echo y | rtk init --global; then
         echo "✓ RTK hook-first mode enabled"
     else
         echo "Warning: RTK hook initialization failed"
@@ -70,14 +72,17 @@ mkdir -p ~/.claude-vm/context
             echo "  Explicit usage: rtk git status, rtk cargo test, etc."
         fi
 
-        # Show token savings analytics
-        echo ""
-        echo "Token Savings Analytics:"
-        if rtk gain 2>/dev/null | head -20; then
+        # Show token savings analytics (only for agent sessions)
+        # Skip during shell and cleanup to avoid unnecessary output
+        if [ "${CLAUDE_VM_COMMAND:-agent}" = "agent" ]; then
             echo ""
-            echo "Run 'rtk gain --graph' for 30-day visualization"
-        else
-            echo "  No data yet (use RTK commands to start tracking)"
+            echo "Token Savings Analytics:"
+            if rtk gain 2>/dev/null | head -20; then
+                echo ""
+                echo "Run 'rtk gain --graph' for 30-day visualization"
+            else
+                echo "  No data yet (use RTK commands to start tracking)"
+            fi
         fi
 
         echo ""
@@ -86,4 +91,24 @@ mkdir -p ~/.claude-vm/context
         echo "Status: ✗ Not installed"
     fi
 } > ~/.claude-vm/context/rtk.txt
+"""
+
+[[phase.cleanup]]
+name = "rtk-final-stats"
+script = """
+#!/bin/bash
+export PATH="$HOME/.local/bin:$PATH"
+
+# Write final RTK analytics after session ends
+if command -v rtk &>/dev/null; then
+    echo ""
+    echo "=== RTK Session Summary ==="
+    if rtk gain 2>/dev/null | head -20; then
+        echo ""
+        echo "Full analytics: rtk gain --graph"
+    else
+        echo "No RTK commands used in this session"
+    fi
+    echo ""
+fi
 """
