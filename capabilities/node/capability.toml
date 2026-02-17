@@ -53,11 +53,7 @@ Node.js version: $(node --version 2>/dev/null || echo "not available")
 npm version: $(npm --version 2>/dev/null || echo "not available")
 Installed Node versions: $(volta list node 2>/dev/null | grep -E "^\\s+v[0-9]" | tr '\\n' ' ' || echo "none")
 
-Security best practices:
-- Review package.json and lock files before running npm install
-- Be cautious with packages from unknown authors or with few downloads
-- Avoid running npm scripts from untrusted sources without review
-- Use 'npm audit' to check for known vulnerabilities in dependencies
-- Do not install packages with sudo/root privileges unless absolutely necessary
+Review package.json and use 'npm audit' to check for vulnerabilities before
+installing dependencies from untrusted sources.
 EOF
 """

@@ -36,11 +36,8 @@ GHEOF
         echo "" >> ~/.claude-vm/context/gh.txt
         echo "Manage your tokens: https://github.com/settings/personal-access-tokens" >> ~/.claude-vm/context/gh.txt
         echo "" >> ~/.claude-vm/context/gh.txt
-        echo "Security considerations:" >> ~/.claude-vm/context/gh.txt
-        echo "- This token has specific scopes/permissions - respect those limitations" >> ~/.claude-vm/context/gh.txt
-        echo "- Do not attempt to access repositories or resources outside your permissions" >> ~/.claude-vm/context/gh.txt
-        echo "- Be cautious when creating/modifying issues, PRs, or repository content" >> ~/.claude-vm/context/gh.txt
-        echo "- Always verify repository names and targets before gh commands" >> ~/.claude-vm/context/gh.txt
+        echo "This token has specific scopes - respect those limitations and verify" >> ~/.claude-vm/context/gh.txt
+        echo "repository names before creating/modifying issues, PRs, or repository content." >> ~/.claude-vm/context/gh.txt
     else
         # For device flow or unknown, show standard info
         cat > ~/.claude-vm/context/gh.txt <<'GHEOF'
@@ -58,11 +55,8 @@ GHEOF
         fi
 
         echo "" >> ~/.claude-vm/context/gh.txt
-        echo "Security considerations:" >> ~/.claude-vm/context/gh.txt
-        echo "- This authentication has specific scopes/permissions - respect those limitations" >> ~/.claude-vm/context/gh.txt
-        echo "- Do not attempt to access repositories or resources outside your permissions" >> ~/.claude-vm/context/gh.txt
-        echo "- Be cautious when creating/modifying issues, PRs, or repository content" >> ~/.claude-vm/context/gh.txt
-        echo "- Always verify repository names and targets before gh commands" >> ~/.claude-vm/context/gh.txt
+        echo "This authentication has specific scopes - respect those limitations and verify" >> ~/.claude-vm/context/gh.txt
+        echo "repository names before creating/modifying issues, PRs, or repository content." >> ~/.claude-vm/context/gh.txt
     fi
 else
     # Not authenticated - show re-authentication instructions based on stored method
