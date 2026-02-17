@@ -2244,9 +2244,8 @@ mod tests {
 
         // Restore CI environment variables
         for (var, value) in saved_vars {
-            match value {
-                Some(val) => std::env::set_var(var, val),
-                None => {} // Was not set, already removed
+            if let Some(val) = value {
+                std::env::set_var(var, val);
             }
         }
     }
@@ -2306,9 +2305,8 @@ mod tests {
 
         // Restore CI environment variables
         for (var, value) in saved_vars {
-            match value {
-                Some(val) => std::env::set_var(var, val),
-                None => {} // Was not set, already removed
+            if let Some(val) = value {
+                std::env::set_var(var, val);
             }
         }
     }
@@ -2361,9 +2359,8 @@ mod tests {
 
         // Restore CI environment variables
         for (var, value) in saved_vars {
-            match value {
-                Some(val) => std::env::set_var(var, val),
-                None => {} // Was not set, already removed
+            if let Some(val) = value {
+                std::env::set_var(var, val);
             }
         }
     }
