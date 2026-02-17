@@ -269,10 +269,11 @@ fn test_flatten_host_after_runtime() {
     // Flatten
     config.phase.flatten_host_phases();
 
-    // After flattening
-    assert_eq!(config.phase.host.after_runtime.len(), 0);
-    assert_eq!(config.phase.after_runtime.len(), 1);
-    assert_eq!(config.phase.after_runtime[0].name, "host-post-runtime");
+    // After flattening, host.after_runtime is NOT flattened (no backward compat)
+    // phase.after_runtime is now for VM phases, not host phases
+    assert_eq!(config.phase.host.after_runtime.len(), 1);
+    assert_eq!(config.phase.after_runtime.len(), 0);
+    assert_eq!(config.phase.host.after_runtime[0].name, "host-post-runtime");
 }
 
 /// Test that host.teardown phases are properly loaded
@@ -327,18 +328,18 @@ fn test_flatten_all_host_phases() {
     // Flatten
     config.phase.flatten_host_phases();
 
-    // After flattening, host.teardown should still have phases (no backward compat field removed)
+    // After flattening, host.teardown and host.after_runtime should still have phases (no backward compat)
     assert_eq!(config.phase.host.before_setup.len(), 0);
     assert_eq!(config.phase.host.after_setup.len(), 0);
     assert_eq!(config.phase.host.before_runtime.len(), 0);
-    assert_eq!(config.phase.host.after_runtime.len(), 0);
+    assert_eq!(config.phase.host.after_runtime.len(), 1); // NOT flattened
     assert_eq!(config.phase.host.teardown.len(), 1);
 
-    // Direct arrays should have the phases (except teardown which no longer exists)
+    // Direct arrays should have the phases (except teardown and after_runtime which no longer exist as backward compat)
     assert_eq!(config.phase.before_setup.len(), 1);
     assert_eq!(config.phase.after_setup.len(), 1);
     assert_eq!(config.phase.before_runtime.len(), 1);
-    assert_eq!(config.phase.after_runtime.len(), 1);
+    assert_eq!(config.phase.after_runtime.len(), 0); // Now for VM phases only
 }
 
 /// Test that multiple host phases from same type accumulate (merging behavior)

@@ -93,7 +93,7 @@ mkdir -p ~/.claude-vm/context
 } > ~/.claude-vm/context/rtk.txt
 """
 
-[[phase.cleanup]]
+[[phase.after_runtime]]
 name = "rtk-final-stats"
 script = """
 #!/bin/bash

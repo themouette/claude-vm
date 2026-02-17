@@ -634,19 +634,20 @@ fn execute_script_in_vm(
     result
 }
 
-/// Execute cleanup phases inside the VM after a command completes
+/// Execute after-runtime phases inside the VM after a command completes
 ///
-/// This function runs all cleanup phases defined in `config.phase.cleanup`.
-/// Cleanup phases run inside the VM (not on host) and have access to the VM filesystem.
+/// This function runs all after-runtime phases defined in `config.phase.after_runtime`.
+/// After-runtime phases run inside the VM (not on host) and have access to the VM filesystem.
+/// They execute BEFORE host after_runtime phases (phase.host.after_runtime).
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `project`: Project context for resolving script paths
-/// - `config`: Configuration containing cleanup phases
+/// - `config`: Configuration containing after-runtime phases
 /// - `command`: The command that was executed ("agent" or "shell")
 ///
 /// # Behavior
-/// - Iterates through all cleanup phases in order
+/// - Iterates through all after-runtime phases in order
 /// - Validates phases and loads scripts
 /// - Injects CLAUDE_VM_COMMAND environment variable into each phase
 /// - Executes scripts inside VM via LimaCtl::shell()
@@ -654,7 +655,7 @@ fn execute_script_in_vm(
 ///
 /// # Errors
 /// Returns error if any phase fails (unless continue_on_error is true)
-pub fn execute_cleanup_phases(
+pub fn execute_after_runtime_phases(
     vm_name: &str,
     project: &Project,
     config: &Config,
@@ -662,13 +663,13 @@ pub fn execute_cleanup_phases(
 ) -> Result<()> {
     use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
 
-    if config.phase.cleanup.is_empty() {
+    if config.phase.after_runtime.is_empty() {
         return Ok(());
     }
 
-    eprintln!("Running cleanup phases...");
+    eprintln!("Running after-runtime phases...");
 
-    for phase in &config.phase.cleanup {
+    for phase in &config.phase.after_runtime {
         eprintln!("  Phase: {}", phase.name);
 
         // Validate phase
@@ -681,7 +682,7 @@ pub fn execute_cleanup_phases(
         }
 
         // Load scripts
-        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Cleanup)?
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::AfterRuntime)?
         else {
             continue;
         };
@@ -699,7 +700,7 @@ pub fn execute_cleanup_phases(
             Ok(setup) => setup,
             Err(e) => {
                 use crate::phase_executor::handle_phase_error;
-                handle_phase_error(phase, PhaseContext::Cleanup, e, None)?;
+                handle_phase_error(phase, PhaseContext::AfterRuntime, e, None)?;
                 continue;
             }
         };
@@ -721,7 +722,7 @@ pub fn execute_cleanup_phases(
                 }
                 Err(e) => {
                     use crate::phase_executor::handle_phase_error;
-                    handle_phase_error(phase, PhaseContext::Cleanup, e, Some(&name))?;
+                    handle_phase_error(phase, PhaseContext::AfterRuntime, e, Some(&name))?;
                 }
             }
         }

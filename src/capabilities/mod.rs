@@ -221,11 +221,10 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     let mut capability_before_setup = Vec::new();
     let mut capability_after_setup = Vec::new();
     let mut capability_before_runtime = Vec::new();
-    let mut capability_after_runtime = Vec::new();
     let mut capability_teardown = Vec::new();
     let mut capability_setup_phases = Vec::new();
     let mut capability_runtime_phases = Vec::new();
-    let mut capability_cleanup_phases = Vec::new();
+    let mut capability_after_runtime_phases = Vec::new();
 
     for capability in enabled {
         let phase_config = &capability.phase;
@@ -247,11 +246,6 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
             capability_id,
             "before_runtime",
         )?);
-        capability_after_runtime.extend(convert_capability_phases(
-            &phase_config.after_runtime,
-            capability_id,
-            "after_runtime",
-        )?);
         capability_teardown.extend(convert_capability_phases(
             &phase_config.host.teardown,
             capability_id,
@@ -267,10 +261,10 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
             capability_id,
             "runtime",
         )?);
-        capability_cleanup_phases.extend(convert_capability_phases(
-            &phase_config.cleanup,
+        capability_after_runtime_phases.extend(convert_capability_phases(
+            &phase_config.after_runtime,
             capability_id,
-            "cleanup",
+            "after_runtime",
         )?);
     }
 
@@ -290,11 +284,13 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     merge_phase_list(&mut config.phase.before_setup, capability_before_setup);
     merge_phase_list(&mut config.phase.after_setup, capability_after_setup);
     merge_phase_list(&mut config.phase.before_runtime, capability_before_runtime);
-    merge_phase_list(&mut config.phase.after_runtime, capability_after_runtime);
     merge_phase_list(&mut config.phase.host.teardown, capability_teardown);
     merge_phase_list(&mut config.phase.setup, capability_setup_phases);
     merge_phase_list(&mut config.phase.runtime, capability_runtime_phases);
-    merge_phase_list(&mut config.phase.cleanup, capability_cleanup_phases);
+    merge_phase_list(
+        &mut config.phase.after_runtime,
+        capability_after_runtime_phases,
+    );
 
     Ok(())
 }

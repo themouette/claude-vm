@@ -536,9 +536,9 @@ pub struct PhaseConfig {
     #[serde(default)]
     pub runtime: Vec<ScriptPhase>,
 
-    /// Cleanup phases (run after session ends, inside VM, before VM stop)
+    /// After-runtime phases (run after session ends, inside VM, before host after_runtime)
     #[serde(default)]
-    pub cleanup: Vec<ScriptPhase>,
+    pub after_runtime: Vec<ScriptPhase>,
 
     /// Host phases wrapper - allows [[phase.host.before_setup]] syntax
     #[serde(default)]
@@ -558,11 +558,6 @@ pub struct PhaseConfig {
     /// Merged with host.before_runtime during loading
     #[serde(default)]
     pub before_runtime: Vec<ScriptPhase>,
-
-    /// Direct host phases (backward compatibility) - run on HOST machine after VM runtime
-    /// Merged with host.after_runtime during loading
-    #[serde(default)]
-    pub after_runtime: Vec<ScriptPhase>,
 }
 
 impl PhaseConfig {
@@ -577,9 +572,6 @@ impl PhaseConfig {
         }
         if !self.host.before_runtime.is_empty() {
             self.before_runtime.append(&mut self.host.before_runtime);
-        }
-        if !self.host.after_runtime.is_empty() {
-            self.after_runtime.append(&mut self.host.after_runtime);
         }
     }
 }
@@ -980,13 +972,12 @@ impl Config {
         // VM phases: append (preserves order)
         self.phase.setup.extend(other.phase.setup);
         self.phase.runtime.extend(other.phase.runtime);
-        self.phase.cleanup.extend(other.phase.cleanup);
+        self.phase.after_runtime.extend(other.phase.after_runtime);
 
         // Host phases (flat): append (preserves order)
         self.phase.before_setup.extend(other.phase.before_setup);
         self.phase.after_setup.extend(other.phase.after_setup);
         self.phase.before_runtime.extend(other.phase.before_runtime);
-        self.phase.after_runtime.extend(other.phase.after_runtime);
 
         // Host phases (nested): append before flattening
         self.phase

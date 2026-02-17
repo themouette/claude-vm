@@ -104,16 +104,16 @@ impl Drop for CleanupGuard {
         // Only cleanup if not already done
         if !self.cleaned_up.swap(true, Ordering::SeqCst) {
             if let Some(config) = &self.config {
-                // 1. Execute VM-based cleanup phases INSIDE VM
-                if !config.phase.cleanup.is_empty() {
+                // 1. Execute VM-based after-runtime phases INSIDE VM (before host after_runtime)
+                if !config.phase.after_runtime.is_empty() {
                     if let Some(command) = &self.command {
-                        if let Err(e) = crate::scripts::runner::execute_cleanup_phases(
+                        if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
                             &self.vm_name,
                             &self.project,
                             config,
                             command,
                         ) {
-                            eprintln!("⚠ Warning: Cleanup phases failed: {}", e);
+                            eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
                             // Continue with teardown anyway
                         }
                     }

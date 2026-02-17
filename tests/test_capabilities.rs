@@ -515,67 +515,67 @@ fn test_rtk_detailed_syntax() {
 }
 
 #[test]
-fn test_capability_cleanup_phases_are_merged() {
+fn test_capability_after_runtime_phases_are_merged() {
     use claude_vm::capabilities::merge_capability_phases;
     use claude_vm::config::{RtkConfig, ScriptPhase};
 
     let mut config = Config::default();
 
-    // Add a user-defined cleanup phase
-    config.phase.cleanup.push(ScriptPhase {
-        name: "user-cleanup".to_string(),
-        script: Some("echo 'user cleanup'".to_string()),
+    // Add a user-defined after-runtime phase
+    config.phase.after_runtime.push(ScriptPhase {
+        name: "user-after-runtime".to_string(),
+        script: Some("echo 'user after runtime'".to_string()),
         ..Default::default()
     });
 
-    // Enable RTK capability which has cleanup phases
+    // Enable RTK capability which has after-runtime phases
     config.tools.rtk = Some(RtkConfig::Simple(true));
 
     // Merge capability phases
     merge_capability_phases(&mut config).expect("Failed to merge capability phases");
 
-    // Verify cleanup phases exist
+    // Verify after-runtime phases exist
     assert!(
-        !config.phase.cleanup.is_empty(),
-        "Should have cleanup phases after merge"
+        !config.phase.after_runtime.is_empty(),
+        "Should have after-runtime phases after merge"
     );
 
-    // Find RTK cleanup phase (should have CAPABILITY_ID env var)
-    let rtk_cleanup = config
+    // Find RTK after-runtime phase (should have CAPABILITY_ID env var)
+    let rtk_after_runtime = config
         .phase
-        .cleanup
+        .after_runtime
         .iter()
         .find(|p| p.env.get("CAPABILITY_ID") == Some(&"rtk".to_string()));
 
     assert!(
-        rtk_cleanup.is_some(),
-        "RTK cleanup phase should be present after merge"
+        rtk_after_runtime.is_some(),
+        "RTK after-runtime phase should be present after merge"
     );
 
-    // Verify RTK cleanup phase has correct metadata
-    let rtk_phase = rtk_cleanup.unwrap();
+    // Verify RTK after-runtime phase has correct metadata
+    let rtk_phase = rtk_after_runtime.unwrap();
     assert_eq!(
         rtk_phase.env.get("CAPABILITY_ID"),
         Some(&"rtk".to_string()),
-        "RTK cleanup phase should have CAPABILITY_ID set"
+        "RTK after-runtime phase should have CAPABILITY_ID set"
     );
     assert_eq!(
         rtk_phase.env.get("CLAUDE_VM_PHASE"),
-        Some(&"cleanup".to_string()),
-        "RTK cleanup phase should have CLAUDE_VM_PHASE set to 'cleanup'"
+        Some(&"after_runtime".to_string()),
+        "RTK after-runtime phase should have CLAUDE_VM_PHASE set to 'after_runtime'"
     );
 
-    // Verify capability cleanup phases come before user cleanup phases
-    let first_cleanup = &config.phase.cleanup[0];
+    // Verify capability after-runtime phases come before user after-runtime phases
+    let first_after_runtime = &config.phase.after_runtime[0];
     assert!(
-        first_cleanup.env.contains_key("CAPABILITY_ID"),
-        "First cleanup phase should be a capability phase"
+        first_after_runtime.env.contains_key("CAPABILITY_ID"),
+        "First after-runtime phase should be a capability phase"
     );
 
     // User phase should come after capability phases
-    let last_cleanup = config.phase.cleanup.last().unwrap();
+    let last_after_runtime = config.phase.after_runtime.last().unwrap();
     assert_eq!(
-        &last_cleanup.name, "user-cleanup",
-        "User cleanup phase should come after capability cleanup phases"
+        &last_after_runtime.name, "user-after-runtime",
+        "User after-runtime phase should come after capability after-runtime phases"
     );
 }
