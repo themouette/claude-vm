@@ -12,7 +12,8 @@ All notable changes to claude-vm will be documented in this file.
   - Runtime analytics showing token savings in Claude context
   - Zero dependencies - single Rust binary
   - Supported commands: git, cargo, vitest, pytest, tsc, go, eslint, biome, and more
-  - Configuration: Add `[tools.rtk]` section; set `hook_mode = false` to opt-out of automatic rewriting
+  - Configuration: Simple syntax `rtk = true` or advanced syntax `[tools.rtk]` with `hook_mode` option
+  - Consistent with other tools - supports both boolean and section-based configuration
 - **VM cleanup phases**: New `[[phase.cleanup]]` phase type that runs inside the VM after commands complete but before VM is stopped
   - Cleanup phases run inside the VM with full filesystem access
   - Perfect for saving logs, artifacts, uploading metrics, or cleaning up temporary files

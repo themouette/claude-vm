@@ -495,10 +495,17 @@ $ gh api /user                # Make API calls
 
 **Configuration:**
 
+Simple syntax (enable with defaults):
+```toml
+[tools]
+rtk = true  # Enable with hook_mode = true (default)
+```
+
+Advanced syntax (customize settings):
 ```toml
 [tools.rtk]
-# Enable RTK capability
-# Hook mode defaults to true (opt-out)
+# Presence of section enables RTK
+# Hook mode defaults to true
 
 # Disable hook-first mode (requires explicit rtk prefix)
 hook_mode = false
@@ -715,9 +722,11 @@ python = true     # Python 3 + pip
 chromium = true   # Chromium browser
 gpg = true        # GPG agent forwarding
 gh = true         # GitHub CLI
+rtk = true        # Token compression (simple syntax)
 
-[tools.rtk]       # Token compression (optional)
-# hook_mode = false  # Uncomment to disable auto-rewriting
+# Advanced RTK configuration (alternative to simple syntax):
+# [tools.rtk]
+# hook_mode = false  # Disable auto-rewriting
 ```
 
 ### Install Everything
