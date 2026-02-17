@@ -4,6 +4,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02-17
+
 ### Added
 
 - **RTK capability**: Integrate RTK (Rust Token Killer) CLI proxy to reduce LLM token consumption by 60-90%
@@ -500,7 +502,8 @@ All notable changes to claude-vm will be documented in this file.
 - **VM lifecycle management**: Basic commands for creating, starting, stopping, and destroying VMs
 - **Lima integration**: Leverages Lima (Linux virtual machines) for macOS to provide lightweight, fast VM creation
 
-[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/themouette/claude-vm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/themouette/claude-vm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/themouette/claude-vm/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/themouette/claude-vm/compare/v0.5.0...v0.5.1
