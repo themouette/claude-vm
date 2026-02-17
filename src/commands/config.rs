@@ -39,6 +39,7 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
         // Validate all config files in the standard locations
         let project = Project::detect()?;
         let project_config = project.root().join(".claude-vm.toml");
+        let main_repo_config = project.main_repo_root().join(".claude-vm.toml");
         let global_config = std::env::var("HOME")
             .ok()
             .map(|h| PathBuf::from(h).join(".claude-vm.toml"))
@@ -56,7 +57,38 @@ fn validate(file: Option<&std::path::Path>) -> Result<()> {
             );
         }
 
-        if project_config.exists() {
+        // Show worktree status if applicable
+        if project.is_worktree() {
+            println!("\n  Worktree detected:");
+            println!("  - Worktree root: {}", project.root().display());
+            println!("  - Main repo root: {}", project.main_repo_root().display());
+
+            // Show main repo config
+            if main_repo_config.exists() {
+                println!(
+                    "  - Main repo config: {} (loaded as base)",
+                    main_repo_config.display()
+                );
+            } else {
+                println!(
+                    "  - Main repo config: {} - not found (optional)",
+                    main_repo_config.display()
+                );
+            }
+
+            // Show worktree config
+            if project_config.exists() {
+                println!(
+                    "  - Worktree config: {} (overrides main repo)",
+                    project_config.display()
+                );
+            } else {
+                println!(
+                    "  - Worktree config: {} - not found (using main repo config)",
+                    project_config.display()
+                );
+            }
+        } else if project_config.exists() {
             println!("  Project config: {}", project_config.display());
         } else {
             println!(

@@ -2176,4 +2176,141 @@ mod tests {
             Some("command -v docker".to_string())
         );
     }
+
+    #[test]
+    fn test_worktree_config_loading() {
+        use std::io::Write;
+
+        // Create temporary directories to simulate worktree structure
+        let temp_dir = std::env::temp_dir();
+        let test_id = format!("worktree-test-{}", std::process::id());
+        let main_repo = temp_dir.join(&test_id).join("main");
+        let worktree = temp_dir.join(&test_id).join("worktree");
+
+        std::fs::create_dir_all(&main_repo).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+
+        // Create main repo config with disk=30
+        let main_config = main_repo.join(".claude-vm.toml");
+        let mut file = std::fs::File::create(&main_config).unwrap();
+        writeln!(file, "[vm]").unwrap();
+        writeln!(file, "disk = 30").unwrap();
+        writeln!(file, "memory = 16").unwrap();
+        writeln!(file, "[tools]").unwrap();
+        writeln!(file, "docker = true").unwrap();
+        drop(file);
+
+        // Create worktree config with memory=24 (override) and node=true (additional)
+        let worktree_config = worktree.join(".claude-vm.toml");
+        let mut file = std::fs::File::create(&worktree_config).unwrap();
+        writeln!(file, "[vm]").unwrap();
+        writeln!(file, "memory = 24").unwrap();
+        writeln!(file, "[tools]").unwrap();
+        writeln!(file, "node = true").unwrap();
+        drop(file);
+
+        // Test worktree loading (different project and main repo roots)
+        let config = Config::load_with_main_repo(&worktree, &main_repo).unwrap();
+
+        // Verify main repo config is loaded first
+        assert_eq!(config.vm.disk, 30, "Should get disk from main repo");
+        assert!(config.tools.docker, "Should get docker from main repo");
+
+        // Verify worktree config overrides
+        assert_eq!(config.vm.memory, 24, "Should get memory from worktree");
+        assert!(config.tools.node, "Should get node from worktree");
+
+        // Test non-worktree loading (same project and main repo roots)
+        let config_non_worktree = Config::load_with_main_repo(&main_repo, &main_repo).unwrap();
+
+        // Verify only main repo config is loaded
+        assert_eq!(config_non_worktree.vm.disk, 30);
+        assert_eq!(config_non_worktree.vm.memory, 16); // Original main repo value
+        assert!(config_non_worktree.tools.docker);
+        assert!(!config_non_worktree.tools.node); // Not in main repo config
+
+        // Cleanup
+        std::fs::remove_dir_all(temp_dir.join(&test_id)).unwrap();
+    }
+
+    #[test]
+    fn test_worktree_config_cascade() {
+        use std::io::Write;
+
+        // Test the full cascade: global -> main repo -> worktree
+        let temp_dir = std::env::temp_dir();
+        let test_id = format!("worktree-cascade-{}", std::process::id());
+        let test_root = temp_dir.join(&test_id);
+        let main_repo = test_root.join("main");
+        let worktree = test_root.join("worktree");
+
+        std::fs::create_dir_all(&main_repo).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+
+        // Create main repo config
+        let main_config = main_repo.join(".claude-vm.toml");
+        let mut file = std::fs::File::create(&main_config).unwrap();
+        writeln!(file, "[vm]").unwrap();
+        writeln!(file, "disk = 40").unwrap();
+        writeln!(file, "cpus = 8").unwrap();
+        drop(file);
+
+        // Create worktree config (only overrides cpus)
+        let worktree_config = worktree.join(".claude-vm.toml");
+        let mut file = std::fs::File::create(&worktree_config).unwrap();
+        writeln!(file, "[vm]").unwrap();
+        writeln!(file, "cpus = 2").unwrap();
+        drop(file);
+
+        let config = Config::load_with_main_repo(&worktree, &main_repo).unwrap();
+
+        // Verify cascade works correctly
+        assert_eq!(config.vm.disk, 40, "Should inherit disk from main repo");
+        assert_eq!(config.vm.cpus, 2, "Should override cpus from worktree");
+        assert_eq!(
+            config.vm.memory,
+            default_memory(),
+            "Should use default memory"
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(test_root).unwrap();
+    }
+
+    #[test]
+    fn test_worktree_with_missing_configs() {
+        use std::io::Write;
+
+        // Test when worktree has no config but main repo does
+        let temp_dir = std::env::temp_dir();
+        let test_id = format!("worktree-missing-{}", std::process::id());
+        let test_root = temp_dir.join(&test_id);
+        let main_repo = test_root.join("main");
+        let worktree = test_root.join("worktree");
+
+        std::fs::create_dir_all(&main_repo).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+
+        // Create only main repo config
+        let main_config = main_repo.join(".claude-vm.toml");
+        let mut file = std::fs::File::create(&main_config).unwrap();
+        writeln!(file, "[vm]").unwrap();
+        writeln!(file, "disk = 50").unwrap();
+        drop(file);
+
+        // No worktree config file
+
+        let config = Config::load_with_main_repo(&worktree, &main_repo).unwrap();
+
+        // Should still get main repo config
+        assert_eq!(config.vm.disk, 50, "Should get disk from main repo");
+        assert_eq!(
+            config.vm.memory,
+            default_memory(),
+            "Should use defaults for unset values"
+        );
+
+        // Cleanup
+        std::fs::remove_dir_all(test_root).unwrap();
+    }
 }

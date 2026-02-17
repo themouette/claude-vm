@@ -65,6 +65,12 @@ All notable changes to claude-vm will be documented in this file.
     - `claude-vm agent --worktree my-feature` - Create/resume worktree and run agent in one command
     - `claude-vm shell --worktree my-feature main` - Specify base branch for new worktrees
     - System defaults to current HEAD as base when base-ref not specified
+  - **Configuration cascade**: Local configuration files in worktrees override main repo settings
+    - When executed in a worktree, `.claude-vm.toml` in the worktree root takes precedence
+    - If no worktree config exists, falls back to main repo's `.claude-vm.toml`
+    - Full cascade: Global config → Main repo config → Worktree config → Environment variables
+    - Allows per-worktree customization of VM resources, tools, and runtime settings
+    - Enhanced `config validate` output shows both main repo and worktree configs with clear cascade indicators
   - **Configuration**: Configurable worktree location and path templates via `.claude-vm.toml`
     - Default location: `{repo_root}-worktrees/` for easy discovery
     - Path templates: `{repo}-{branch}` format with variable substitution
