@@ -2181,6 +2181,16 @@ mod tests {
     fn test_worktree_config_loading() {
         use std::io::Write;
 
+        // Save and unset CI environment variables to prevent CI constraints from affecting test
+        let ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI"];
+        let saved_vars: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+        for var in &ci_vars {
+            std::env::remove_var(var);
+        }
+
         // Create temporary directories to simulate worktree structure
         let temp_dir = std::env::temp_dir();
         let test_id = format!("worktree-test-{}", std::process::id());
@@ -2231,11 +2241,29 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(temp_dir.join(&test_id)).unwrap();
+
+        // Restore CI environment variables
+        for (var, value) in saved_vars {
+            match value {
+                Some(val) => std::env::set_var(var, val),
+                None => {} // Was not set, already removed
+            }
+        }
     }
 
     #[test]
     fn test_worktree_config_cascade() {
         use std::io::Write;
+
+        // Save and unset CI environment variables to prevent CI constraints from affecting test
+        let ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI"];
+        let saved_vars: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+        for var in &ci_vars {
+            std::env::remove_var(var);
+        }
 
         // Test the full cascade: global -> main repo -> worktree
         let temp_dir = std::env::temp_dir();
@@ -2275,11 +2303,29 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(test_root).unwrap();
+
+        // Restore CI environment variables
+        for (var, value) in saved_vars {
+            match value {
+                Some(val) => std::env::set_var(var, val),
+                None => {} // Was not set, already removed
+            }
+        }
     }
 
     #[test]
     fn test_worktree_with_missing_configs() {
         use std::io::Write;
+
+        // Save and unset CI environment variables to prevent CI constraints from affecting test
+        let ci_vars = ["CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI"];
+        let saved_vars: Vec<_> = ci_vars
+            .iter()
+            .map(|var| (*var, std::env::var(var).ok()))
+            .collect();
+        for var in &ci_vars {
+            std::env::remove_var(var);
+        }
 
         // Test when worktree has no config but main repo does
         let temp_dir = std::env::temp_dir();
@@ -2312,5 +2358,13 @@ mod tests {
 
         // Cleanup
         std::fs::remove_dir_all(test_root).unwrap();
+
+        // Restore CI environment variables
+        for (var, value) in saved_vars {
+            match value {
+                Some(val) => std::env::set_var(var, val),
+                None => {} // Was not set, already removed
+            }
+        }
     }
 }
