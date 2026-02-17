@@ -316,14 +316,15 @@ pub fn execute_command_with_runtime_scripts(
 
         // Build environment setup with validation and capability env var injection
         // This automatically validates env keys and injects capability vars if CAPABILITY_ID is present
-        let phase_env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
-            Ok(setup) => setup,
-            Err(e) => {
-                use crate::phase_executor::handle_phase_error;
-                handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
-                continue;
-            }
-        };
+        let phase_env_setup =
+            match build_phase_env_setup(&phase_with_env, project, vm_name, Some(config)) {
+                Ok(setup) => setup,
+                Err(e) => {
+                    use crate::phase_executor::handle_phase_error;
+                    handle_phase_error(phase, PhaseContext::Runtime, e, None)?;
+                    continue;
+                }
+            };
 
         for (name, content) in scripts {
             // Prepend environment setup to script content
@@ -601,12 +602,13 @@ pub fn execute_command_with_runtime_scripts(
     )
 }
 
-/// Execute a single script inside the VM (used for cleanup phases)
+/// Execute a single script inside the VM (used for after_runtime phases)
 fn execute_script_in_vm(
     vm_name: &str,
     script_content: &str,
     script_name: &str,
     source: bool,
+    workdir: Option<&Path>,
 ) -> Result<()> {
     // Write script to temp file
     let temp_path = format!("/tmp/{}", sanitize_filename(script_name));
@@ -618,13 +620,13 @@ fn execute_script_in_vm(
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
 
     // Make executable
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
+    LimaCtl::shell(vm_name, workdir, "chmod", &["+x", &temp_path], false)?;
 
     // Execute: source if requested, otherwise run with bash
     let result = if source {
-        LimaCtl::shell(vm_name, None, ".", &[&temp_path], false)
+        LimaCtl::shell(vm_name, workdir, ".", &[&temp_path], false)
     } else {
-        LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)
+        LimaCtl::shell(vm_name, workdir, "bash", &[&temp_path], false)
     };
 
     // Cleanup local temp file
@@ -633,41 +635,44 @@ fn execute_script_in_vm(
     result
 }
 
-/// Execute cleanup phases inside the VM after a command completes
+/// Execute after-runtime phases inside the VM after a command completes
 ///
-/// This function runs all cleanup phases defined in `config.phase.cleanup`.
-/// Cleanup phases run inside the VM (not on host) and have access to the VM filesystem.
+/// This function runs all after-runtime phases defined in `config.phase.after_runtime`.
+/// After-runtime phases run inside the VM (not on host) and have access to the VM filesystem.
+/// They execute BEFORE host after_runtime phases (phase.host.after_runtime).
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `project`: Project context for resolving script paths
-/// - `config`: Configuration containing cleanup phases
+/// - `config`: Configuration containing after-runtime phases
 /// - `command`: The command that was executed ("agent" or "shell")
+/// - `workdir`: Working directory for script execution (prevents bash from trying to restore host paths)
 ///
 /// # Behavior
-/// - Iterates through all cleanup phases in order
+/// - Iterates through all after-runtime phases in order
 /// - Validates phases and loads scripts
 /// - Injects CLAUDE_VM_COMMAND environment variable into each phase
-/// - Executes scripts inside VM via LimaCtl::shell()
+/// - Executes scripts inside VM via LimaCtl::shell() with explicit workdir
 /// - Respects `continue_on_error`, `when` conditions, and `source` flag
 ///
 /// # Errors
 /// Returns error if any phase fails (unless continue_on_error is true)
-pub fn execute_cleanup_phases(
+pub fn execute_after_runtime_phases(
     vm_name: &str,
     project: &Project,
     config: &Config,
     command: &str,
+    workdir: Option<&Path>,
 ) -> Result<()> {
     use crate::phase_executor::{build_phase_env_setup, load_phase_scripts, PhaseContext};
 
-    if config.phase.cleanup.is_empty() {
+    if config.phase.after_runtime.is_empty() {
         return Ok(());
     }
 
-    eprintln!("Running cleanup phases...");
+    eprintln!("Running after-runtime phases...");
 
-    for phase in &config.phase.cleanup {
+    for phase in &config.phase.after_runtime {
         eprintln!("  Phase: {}", phase.name);
 
         // Validate phase
@@ -680,7 +685,7 @@ pub fn execute_cleanup_phases(
         }
 
         // Load scripts
-        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::Cleanup)?
+        let Some(scripts) = load_phase_scripts(phase, project.root(), PhaseContext::AfterRuntime)?
         else {
             continue;
         };
@@ -693,11 +698,12 @@ pub fn execute_cleanup_phases(
         phase_with_env.env = phase_env;
 
         // Build environment setup string
-        let env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name) {
+        let env_setup = match build_phase_env_setup(&phase_with_env, project, vm_name, Some(config))
+        {
             Ok(setup) => setup,
             Err(e) => {
                 use crate::phase_executor::handle_phase_error;
-                handle_phase_error(phase, PhaseContext::Cleanup, e, None)?;
+                handle_phase_error(phase, PhaseContext::AfterRuntime, e, None)?;
                 continue;
             }
         };
@@ -710,7 +716,7 @@ pub fn execute_cleanup_phases(
                 format!("{}\n\n{}", env_setup, content)
             };
 
-            let result = execute_script_in_vm(vm_name, &full_script, &name, phase.source);
+            let result = execute_script_in_vm(vm_name, &full_script, &name, phase.source, workdir);
 
             match result {
                 Ok(_) => eprintln!("    ✓ {}", name),
@@ -719,7 +725,7 @@ pub fn execute_cleanup_phases(
                 }
                 Err(e) => {
                     use crate::phase_executor::handle_phase_error;
-                    handle_phase_error(phase, PhaseContext::Cleanup, e, Some(&name))?;
+                    handle_phase_error(phase, PhaseContext::AfterRuntime, e, Some(&name))?;
                 }
             }
         }

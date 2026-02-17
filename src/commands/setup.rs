@@ -326,7 +326,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
             println!("  Running: {}", script_name);
 
             // Build environment setup with validation and capability env var injection
-            let env_setup = match build_phase_env_setup(phase, project, vm_name) {
+            let env_setup = match build_phase_env_setup(phase, project, vm_name, Some(config)) {
                 Ok(setup) => setup,
                 Err(e) => {
                     handle_phase_error(phase, PhaseContext::Setup, e, Some(&script_name))?;

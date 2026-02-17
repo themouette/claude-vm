@@ -13,16 +13,17 @@ Claude VM supports installing various development tools during template creation
 
 ## Available Tools
 
-| Tool       | What it Provides               | Use Case                       |
-| ---------- | ------------------------------ | ------------------------------ |
-| `git`      | Git identity, signing config   | Any git repository             |
-| `docker`   | Docker Engine, Docker Compose  | Containerized development      |
-| `node`     | Node.js LTS, npm               | JavaScript/TypeScript projects |
-| `python`   | Python 3, pip                  | Python development             |
-| `rust`     | Rust toolchain, cargo, clippy  | Rust development               |
-| `chromium` | Chromium browser, DevTools     | Web scraping, browser testing  |
-| `gpg`      | GPG agent forwarding, key sync | Signed commits, encryption     |
-| `gh`       | GitHub CLI, authentication     | GitHub operations              |
+| Tool       | What it Provides                          | Use Case                       |
+| ---------- | ----------------------------------------- | ------------------------------ |
+| `git`      | Git identity, signing config              | Any git repository             |
+| `docker`   | Docker Engine, Docker Compose             | Containerized development      |
+| `node`     | Node.js LTS, npm                          | JavaScript/TypeScript projects |
+| `python`   | Python 3, pip                             | Python development             |
+| `rust`     | Rust toolchain, cargo, clippy             | Rust development               |
+| `chromium` | Chromium browser, DevTools                | Web scraping, browser testing  |
+| `gpg`      | GPG agent forwarding, key sync            | Signed commits, encryption     |
+| `gh`       | GitHub CLI, authentication                | GitHub operations              |
+| `rtk`      | Token compression for LLM command outputs | Reduce token costs by 60-90%   |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -483,6 +484,147 @@ $ gh issue list               # List issues
 $ gh api /user                # Make API calls
 ```
 
+### RTK (Rust Token Killer)
+
+**Installs:**
+
+- RTK CLI proxy
+- Token compression for common development commands
+- Optional hook-first mode for transparent rewriting
+- Analytics tracking
+
+**Configuration:**
+
+Simple syntax (enable with defaults):
+```toml
+[tools]
+rtk = true  # Enable with hook_mode = true (default)
+```
+
+Advanced syntax (customize settings):
+```toml
+[tools.rtk]
+# Presence of section enables RTK
+# Hook mode defaults to true
+
+# Disable hook-first mode (requires explicit rtk prefix)
+hook_mode = false
+```
+
+**CLI:**
+
+```bash
+# Enable during setup
+claude-vm setup --rtk
+
+# Or add to existing template
+# Edit .claude-vm.toml and run setup again
+```
+
+**What it does:**
+
+1. Installs RTK via official install script
+2. Configures hook-first mode (optional, enabled by default)
+3. Sets up automatic command rewriting for supported tools
+4. Tracks token savings analytics
+
+**Hook-First Mode:**
+
+When enabled (default), RTK automatically rewrites commands:
+
+```bash
+# With hook_mode = true (default):
+$ git status                  # Automatically becomes: rtk git status
+$ cargo test                  # Automatically becomes: rtk cargo test
+
+# With hook_mode = false:
+$ rtk git status             # Explicit prefix required
+$ rtk cargo test             # Explicit prefix required
+```
+
+**Context provided:**
+
+```markdown
+RTK (Rust Token Killer) version: rtk 0.1.0
+Status: ✓ Installed and ready
+
+Hook-first mode: ✓ Enabled (transparent command rewriting)
+
+Token Savings Analytics:
+  Total saved: 1.2M tokens (67% reduction)
+  Commands optimized: 342
+  Top savings: git (45%), cargo (32%), pytest (15%)
+
+Run 'rtk gain --graph' for 30-day visualization
+
+Supported: git, cargo, vitest, pytest, tsc, go, eslint, biome, ruff, etc.
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+
+# With hook-first mode (default):
+$ git status                  # Output compressed automatically
+$ cargo test                  # Test output compressed automatically
+$ npm run build               # Build output compressed automatically
+
+# Without hook-first mode:
+$ rtk git status             # Compress git status output
+$ rtk cargo test             # Compress test output
+$ rtk npm run build          # Compress build output
+
+# View analytics:
+$ rtk gain                   # Show token savings
+$ rtk gain --graph           # 30-day visualization
+```
+
+**Supported Commands:**
+
+RTK provides token compression for:
+
+- **Git**: `status`, `log`, `diff`, `blame`
+- **Cargo**: `test`, `build`, `clippy`, `check`
+- **Node**: `vitest`, `jest`, `eslint`, `biome`
+- **Python**: `pytest`, `ruff`, `mypy`
+- **Go**: `test`, `build`, `vet`
+- **TypeScript**: `tsc`, `type-check`
+- And many more...
+
+**Token Savings:**
+
+Typical reductions by command type:
+
+- **Test output**: 80-90% reduction
+- **Git logs**: 60-70% reduction
+- **Build output**: 70-85% reduction
+- **Lint/format**: 75-85% reduction
+
+**Benefits:**
+
+1. **Lower costs**: Reduce Claude API token consumption by 60-90%
+2. **Faster responses**: Smaller context = faster Claude responses
+3. **More context**: Fit more information in Claude's context window
+4. **Zero overhead**: Negligible performance impact (<10ms per command)
+5. **Transparent**: Hook mode requires no workflow changes
+
+**Opt-Out of Hook Mode:**
+
+If you prefer explicit control:
+
+```toml
+[tools.rtk]
+hook_mode = false  # Require explicit 'rtk' prefix
+```
+
+**Important Notes:**
+
+- RTK is read-only - it never modifies your code or git history
+- Original command outputs are preserved in RTK's cache
+- Analytics are stored locally in `~/.rtk/analytics.json`
+- Hook-first mode can be toggled at any time
+
 ### Network Isolation
 
 **Installs:**
@@ -580,6 +722,11 @@ python = true     # Python 3 + pip
 chromium = true   # Chromium browser
 gpg = true        # GPG agent forwarding
 gh = true         # GitHub CLI
+rtk = true        # Token compression (simple syntax)
+
+# Advanced RTK configuration (alternative to simple syntax):
+# [tools.rtk]
+# hook_mode = false  # Disable auto-rewriting
 ```
 
 ### Install Everything

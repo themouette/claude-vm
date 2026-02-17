@@ -33,7 +33,7 @@ fn test_user_phase_without_capability_id() {
         ..Default::default()
     };
 
-    let result = build_phase_env_setup(&phase, &project, "test-vm").unwrap();
+    let result = build_phase_env_setup(&phase, &project, "test-vm", None).unwrap();
 
     // Should only contain the user-defined variable
     assert!(result.contains("export MY_VAR='value'"));
@@ -57,7 +57,7 @@ fn test_capability_phase_injects_env_vars() {
         ..Default::default()
     };
 
-    let result = build_phase_env_setup(&phase, &project, "test-vm").unwrap();
+    let result = build_phase_env_setup(&phase, &project, "test-vm", None).unwrap();
 
     // Should contain all capability environment variables
     assert!(result.contains("export CAPABILITY_ID='test-capability'"));
@@ -88,7 +88,7 @@ fn test_capability_phase_with_additional_env_vars() {
         ..Default::default()
     };
 
-    let result = build_phase_env_setup(&phase, &project, "ephemeral-vm").unwrap();
+    let result = build_phase_env_setup(&phase, &project, "ephemeral-vm", None).unwrap();
 
     // Should contain both capability vars and custom vars
     assert!(result.contains("export CAPABILITY_ID='gh'"));
@@ -115,7 +115,7 @@ fn test_project_name_extraction() {
         ..Default::default()
     };
 
-    let result = build_phase_env_setup(&phase, &project, "test-vm").unwrap();
+    let result = build_phase_env_setup(&phase, &project, "test-vm", None).unwrap();
 
     // Should extract project name from directory
     assert!(result.contains("export PROJECT_NAME='my-awesome-project'"));
@@ -153,7 +153,7 @@ fn test_git_worktree_detection() {
         ..Default::default()
     };
 
-    let result = build_phase_env_setup(&phase, &project, "test-vm").unwrap();
+    let result = build_phase_env_setup(&phase, &project, "test-vm", None).unwrap();
 
     // Should detect worktree and set appropriate vars
     assert!(result.contains(&format!(

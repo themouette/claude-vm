@@ -1,0 +1,114 @@
+[capability]
+id = "rtk"
+name = "RTK (Rust Token Killer)"
+description = "CLI proxy that reduces LLM token consumption by 60-90% on common commands"
+
+[packages]
+system = [] # No system packages - single binary
+setup_script = """
+#!/bin/bash
+set -e
+# Install RTK via official script (idempotent, non-interactive)
+if command -v rtk &>/dev/null; then
+    echo "RTK already installed"
+    rtk --version
+else
+    echo "Installing RTK..."
+    # Download and run installer with auto-confirmation
+    # Using process substitution to properly pipe stdin to the installer
+    yes y | sh <(curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh) || true
+    export PATH="$HOME/.local/bin:$PATH"
+
+    # Verify installation succeeded
+    if command -v rtk &>/dev/null; then
+        rtk --version
+        echo "✓ RTK installed"
+    else
+        echo "⚠ Warning: RTK installation may have failed"
+        exit 1
+    fi
+fi
+"""
+
+[[phase.setup]]
+name = "rtk-hook-setup"
+script = """
+#!/bin/bash
+# Configure hook-first mode (opt-out via RTK_HOOK_MODE env var)
+if [ "${RTK_HOOK_MODE:-true}" = "true" ]; then
+    echo "Configuring RTK hook-first mode..."
+    # Use --auto-patch to bypass interactive confirmation
+    if rtk init --global --auto-patch; then
+        echo "✓ RTK hook-first mode enabled"
+    else
+        echo "Warning: RTK hook initialization failed"
+    fi
+else
+    echo "RTK hook-first mode disabled (set via tools.rtk.hook_mode = false)"
+    echo "  Use explicit commands: rtk git status, rtk cargo test, etc."
+fi
+"""
+
+[[phase.runtime]]
+name = "rtk-environment"
+script = """
+#!/bin/bash
+export PATH="$HOME/.local/bin:$PATH"
+mkdir -p ~/.claude-vm/context
+
+# Create RTK context file
+{
+    echo "RTK (Rust Token Killer) version: $(rtk --version 2>/dev/null || echo "not available")"
+
+    if command -v rtk &>/dev/null; then
+        echo "Status: ✓ Installed and ready"
+        echo ""
+
+        # Check hook mode status
+        if [ -f ~/.claude/hooks/rtk-rewrite.sh ] && [ -x ~/.claude/hooks/rtk-rewrite.sh ]; then
+            echo "Hook-first mode: ✓ Enabled (transparent command rewriting)"
+        else
+            echo "Hook-first mode: ✗ Disabled (set via tools.rtk.hook_mode = false)"
+            echo "  Explicit usage: rtk git status, rtk cargo test, etc."
+        fi
+
+        # Show token savings analytics (only for agent sessions)
+        # Skip during shell and cleanup to avoid unnecessary output
+        if [ "${CLAUDE_VM_COMMAND:-agent}" = "agent" ]; then
+            echo ""
+            echo "Token Savings Analytics:"
+            if rtk gain 2>/dev/null | head -20; then
+                echo ""
+                echo "Run 'rtk gain --graph' for 30-day visualization"
+            else
+                echo "  No data yet (use RTK commands to start tracking)"
+            fi
+        fi
+
+        echo ""
+        echo "Supported: git, cargo, vitest, pytest, tsc, go, eslint, biome, ruff, etc."
+    else
+        echo "Status: ✗ Not installed"
+    fi
+} > ~/.claude-vm/context/rtk.txt
+"""
+
+[[phase.after_runtime]]
+name = "rtk-final-stats"
+script = """
+#!/bin/bash
+export PATH="$HOME/.local/bin:$PATH"
+
+# Write final RTK analytics after session ends
+if command -v rtk &>/dev/null; then
+    echo ""
+    echo "=== RTK Session Summary ==="
+    if rtk gain 2>/dev/null | head -20; then
+        echo ""
+        echo "Full analytics: rtk gain --graph"
+    else
+        echo "No RTK commands used in this session"
+    fi
+    echo ""
+fi
+"""

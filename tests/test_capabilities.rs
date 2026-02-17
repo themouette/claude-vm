@@ -341,3 +341,241 @@ fn test_capability_phases_run_before_user_phases() {
         "User runtime phase should come after capability phases"
     );
 }
+
+#[test]
+fn test_rtk_capability_loads() {
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
+
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: true }));
+
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get enabled capabilities");
+
+    let has_rtk = enabled.iter().any(|c| c.capability.id == "rtk");
+    assert!(has_rtk, "RTK capability should be enabled");
+
+    let rtk_cap = enabled.iter().find(|c| c.capability.id == "rtk").unwrap();
+    assert!(
+        !rtk_cap.phase.setup.is_empty(),
+        "RTK should have setup phases"
+    );
+    assert!(
+        !rtk_cap.phase.runtime.is_empty(),
+        "RTK should have runtime phases"
+    );
+}
+
+#[test]
+fn test_rtk_config_defaults() {
+    use claude_vm::config::RtkConfig;
+
+    let config = Config::default();
+    assert!(
+        config.tools.rtk.is_none(),
+        "RTK should be disabled by default"
+    );
+
+    // When enabled with Simple(true), hook mode should default to true
+    let rtk_config = RtkConfig::Simple(true);
+    assert!(
+        rtk_config.get_config().hook_mode,
+        "RTK hook mode should be enabled by default with Simple(true)"
+    );
+}
+
+#[test]
+fn test_rtk_hook_mode_opt_out() {
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: false }));
+
+    assert!(config.tools.is_enabled("rtk"), "RTK should be enabled");
+    assert!(
+        !config.tools.rtk.unwrap().get_config().hook_mode,
+        "Hook mode should be disabled when opted out"
+    );
+}
+
+#[test]
+fn test_rtk_with_other_capabilities() {
+    use claude_vm::config::RtkConfig;
+
+    let registry = CapabilityRegistry::load().expect("Failed to load registry");
+
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+    config.tools.rust = true;
+    config.tools.git = true;
+
+    let enabled = registry
+        .get_enabled_capabilities(&config)
+        .expect("Failed to get enabled capabilities");
+
+    let ids: Vec<_> = enabled.iter().map(|c| c.capability.id.as_str()).collect();
+    assert!(ids.contains(&"rtk"), "Should include RTK");
+    assert!(ids.contains(&"rust"), "Should include Rust");
+    assert!(ids.contains(&"git"), "Should include Git");
+}
+
+#[test]
+fn test_rtk_is_enabled_check() {
+    use claude_vm::config::RtkConfig;
+
+    let mut config = Config::default();
+
+    // RTK should not be enabled by default
+    assert!(
+        !config.tools.is_enabled("rtk"),
+        "RTK should not be enabled by default"
+    );
+
+    // Enable RTK with simple syntax
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+
+    // RTK should now be enabled
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled when configured"
+    );
+}
+
+#[test]
+fn test_rtk_enable_method() {
+    let mut config = Config::default();
+
+    // RTK should not be enabled by default
+    assert!(!config.tools.is_enabled("rtk"));
+
+    // Enable RTK via enable() method
+    config.tools.enable("rtk");
+
+    // RTK should now be enabled with default hook_mode = true
+    assert!(config.tools.is_enabled("rtk"));
+    assert!(config.tools.rtk.is_some());
+    assert!(config.tools.rtk.as_ref().unwrap().get_config().hook_mode);
+}
+
+#[test]
+fn test_rtk_simple_syntax() {
+    use claude_vm::config::RtkConfig;
+
+    // Test rtk = true
+    let mut config = Config::default();
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled with Simple(true)"
+    );
+    assert!(
+        config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be enabled by default with Simple(true)"
+    );
+
+    // Test rtk = false
+    config.tools.rtk = Some(RtkConfig::Simple(false));
+    assert!(
+        !config.tools.is_enabled("rtk"),
+        "RTK should be disabled with Simple(false)"
+    );
+}
+
+#[test]
+fn test_rtk_detailed_syntax() {
+    use claude_vm::config::{RtkConfig, RtkToolConfig};
+
+    let mut config = Config::default();
+
+    // Test [tools.rtk] with hook_mode = true
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: true }));
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should be enabled with Detailed config"
+    );
+    assert!(
+        config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be enabled when set to true"
+    );
+
+    // Test [tools.rtk] with hook_mode = false
+    config.tools.rtk = Some(RtkConfig::Detailed(RtkToolConfig { hook_mode: false }));
+    assert!(
+        config.tools.is_enabled("rtk"),
+        "RTK should still be enabled with Detailed config (presence = enabled)"
+    );
+    assert!(
+        !config.tools.rtk.as_ref().unwrap().get_config().hook_mode,
+        "Hook mode should be disabled when set to false"
+    );
+}
+
+#[test]
+fn test_capability_after_runtime_phases_are_merged() {
+    use claude_vm::capabilities::merge_capability_phases;
+    use claude_vm::config::{RtkConfig, ScriptPhase};
+
+    let mut config = Config::default();
+
+    // Add a user-defined after-runtime phase
+    config.phase.after_runtime.push(ScriptPhase {
+        name: "user-after-runtime".to_string(),
+        script: Some("echo 'user after runtime'".to_string()),
+        ..Default::default()
+    });
+
+    // Enable RTK capability which has after-runtime phases
+    config.tools.rtk = Some(RtkConfig::Simple(true));
+
+    // Merge capability phases
+    merge_capability_phases(&mut config).expect("Failed to merge capability phases");
+
+    // Verify after-runtime phases exist
+    assert!(
+        !config.phase.after_runtime.is_empty(),
+        "Should have after-runtime phases after merge"
+    );
+
+    // Find RTK after-runtime phase (should have CAPABILITY_ID env var)
+    let rtk_after_runtime = config
+        .phase
+        .after_runtime
+        .iter()
+        .find(|p| p.env.get("CAPABILITY_ID") == Some(&"rtk".to_string()));
+
+    assert!(
+        rtk_after_runtime.is_some(),
+        "RTK after-runtime phase should be present after merge"
+    );
+
+    // Verify RTK after-runtime phase has correct metadata
+    let rtk_phase = rtk_after_runtime.unwrap();
+    assert_eq!(
+        rtk_phase.env.get("CAPABILITY_ID"),
+        Some(&"rtk".to_string()),
+        "RTK after-runtime phase should have CAPABILITY_ID set"
+    );
+    assert_eq!(
+        rtk_phase.env.get("CLAUDE_VM_PHASE"),
+        Some(&"after_runtime".to_string()),
+        "RTK after-runtime phase should have CLAUDE_VM_PHASE set to 'after_runtime'"
+    );
+
+    // Verify capability after-runtime phases come before user after-runtime phases
+    let first_after_runtime = &config.phase.after_runtime[0];
+    assert!(
+        first_after_runtime.env.contains_key("CAPABILITY_ID"),
+        "First after-runtime phase should be a capability phase"
+    );
+
+    // User phase should come after capability phases
+    let last_after_runtime = config.phase.after_runtime.last().unwrap();
+    assert_eq!(
+        &last_after_runtime.name, "user-after-runtime",
+        "User after-runtime phase should come after capability after-runtime phases"
+    );
+}
