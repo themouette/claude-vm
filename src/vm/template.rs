@@ -1,5 +1,6 @@
 use crate::error::{ClaudeVmError, Result};
 use crate::vm::limactl::LimaCtl;
+use crate::vm::session::is_session_vm;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -49,6 +50,7 @@ pub fn list_all() -> Result<Vec<String>> {
         .into_iter()
         .filter(|vm| vm.name.starts_with("claude-tpl_"))
         .filter(|vm| matches_build_type(&vm.name))
+        .filter(|vm| !is_session_vm(&vm.name))
         .map(|vm| vm.name)
         .collect();
     Ok(templates)
