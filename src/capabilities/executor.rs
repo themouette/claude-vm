@@ -105,13 +105,8 @@ fn execute_vm_script(
 
     let filename = format!("{}_{}.sh", capability_id, "script");
 
-    if silent {
-        // For runtime scripts, execute without printing output unless there's an error
-        runner::execute_script_silent(vm_name, &wrapped_script, &filename)?;
-    } else {
-        // For setup scripts, show output
-        runner::execute_script(vm_name, &wrapped_script, &filename)?;
-    }
+    // show_progress=true for setup scripts, false for silent runtime scripts
+    runner::execute_script(vm_name, &wrapped_script, &filename, !silent)?;
 
     Ok(())
 }

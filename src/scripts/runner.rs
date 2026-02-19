@@ -19,6 +19,17 @@ type RuntimeScriptInfo = (
     bool,
 );
 
+/// RAII guard that removes a host-side temporary file on drop.
+///
+/// Ensures cleanup even when an intermediate step returns early via `?`.
+struct LocalTempFile(PathBuf);
+
+impl Drop for LocalTempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 /// Sanitize a filename to contain only safe characters
 /// Allows: alphanumeric, dash, underscore, dot
 fn sanitize_filename(name: &str) -> String {
@@ -39,77 +50,50 @@ fn find_runtime_script_path() -> Result<PathBuf> {
 
 /// Execute a script from string content in a VM.
 ///
-/// This function writes the script content to a temporary file, copies it to the VM,
-/// makes it executable, and runs it with bash.
+/// Writes the script to a host temp file (cleaned up via RAII even on error),
+/// copies it into the VM, makes it executable, and runs it with bash.
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `script_content`: The script content as a string
 /// - `script_name`: Name to give the script file (used for temp file naming)
-///
-/// # Errors
-/// Returns error if file operations, copying, or script execution fails.
+/// - `show_progress`: When `true` prints "Running script: <name>" before executing
 ///
 /// # Note
 /// This is primarily used for embedded scripts (e.g., install_docker.sh).
 /// For user scripts, prefer `execute_script_file`.
-pub fn execute_script(vm_name: &str, script_content: &str, script_name: &str) -> Result<()> {
-    println!("Running script: {}", script_name);
+pub fn execute_script(
+    vm_name: &str,
+    script_content: &str,
+    script_name: &str,
+    show_progress: bool,
+) -> Result<()> {
+    if show_progress {
+        println!("Running script: {}", script_name);
+    }
 
-    // Write script to temp file
     let temp_path = format!("/tmp/{}", script_name);
     let local_temp = std::env::temp_dir().join(script_name);
 
     std::fs::write(&local_temp, script_content)?;
+    // Guard ensures local_temp is removed even if any step below fails.
+    let _guard = LocalTempFile(local_temp.clone());
 
-    // Copy to VM
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
-
-    // Make executable and run
     LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
     LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
-
-    Ok(())
-}
-
-/// Execute a script from string content in a VM silently (only show output on error)
-///
-/// This function is similar to `execute_script` but suppresses output unless there's an error.
-/// Used for runtime scripts that shouldn't clutter the output.
-pub fn execute_script_silent(vm_name: &str, script_content: &str, script_name: &str) -> Result<()> {
-    // Write script to temp file
-    let temp_path = format!("/tmp/{}", script_name);
-    let local_temp = std::env::temp_dir().join(script_name);
-
-    std::fs::write(&local_temp, script_content)?;
-
-    // Copy to VM
-    LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
-
-    // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
 
     Ok(())
 }
 
 /// Execute a script file from the host filesystem in a VM.
 ///
-/// This function copies a script file from the host to the VM,
-/// makes it executable, and runs it with bash.
+/// Copies the file into the VM, makes it executable, runs it with bash,
+/// and removes the VM-side temp copy afterwards.
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `script_path`: Path to the script file on the host filesystem
-///
-/// # Errors
-/// Returns error if the file doesn't exist, copying fails, or script execution fails.
 ///
 /// # Note
 /// Used by the setup command for setup scripts. For runtime scripts with entrypoint
@@ -124,12 +108,12 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
 
     let temp_path = format!("/tmp/{}", script_name);
 
-    // Copy to VM
     LimaCtl::copy(script_path, vm_name, &temp_path)?;
-
-    // Make executable and run
     LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
     LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
+
+    // Remove the temp copy from the VM
+    let _ = LimaCtl::shell(vm_name, None, "rm", &["-f", &temp_path], false);
 
     Ok(())
 }
@@ -619,6 +603,8 @@ fn execute_script_in_vm(
     let local_temp = std::env::temp_dir().join(script_name);
 
     std::fs::write(&local_temp, script_content)?;
+    // Guard ensures local_temp is removed even if any step below fails.
+    let _guard = LocalTempFile(local_temp.clone());
 
     // Copy to VM
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
@@ -627,16 +613,11 @@ fn execute_script_in_vm(
     LimaCtl::shell(vm_name, workdir, "chmod", &["+x", &temp_path], false)?;
 
     // Execute: source if requested, otherwise run with bash
-    let result = if source {
+    if source {
         LimaCtl::shell(vm_name, workdir, ".", &[&temp_path], false)
     } else {
         LimaCtl::shell(vm_name, workdir, "bash", &[&temp_path], false)
-    };
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
-
-    result
+    }
 }
 
 /// Execute after-runtime phases inside the VM after a command completes
