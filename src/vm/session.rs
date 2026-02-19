@@ -6,6 +6,52 @@ use crate::vm::{limactl::LimaCtl, mount};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+/// Returns true if the VM name is an ephemeral session clone.
+/// Works for both release (`…_hash-PID`) and debug (`…_hash-dev-PID`) builds.
+pub fn is_session_vm(name: &str) -> bool {
+    name.rsplit('_')
+        .next()
+        .and_then(|hash_part| {
+            if hash_part.contains('-') {
+                hash_part.rsplit('-').next()
+            } else {
+                None
+            }
+        })
+        .map(|suffix| !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()))
+        .unwrap_or(false)
+}
+
+/// Extracts the PID from a session VM name.
+/// Works for both release (`…_hash-PID`) and debug (`…_hash-dev-PID`).
+pub fn extract_session_pid(name: &str) -> Option<u32> {
+    let hash_part = name.rsplit('_').next()?;
+    let pid_str = hash_part.rsplit('-').next()?;
+    pid_str.parse::<u32>().ok()
+}
+
+/// Returns true if a process with the given PID is currently alive on the host.
+pub fn is_pid_running(pid: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("ps")
+            .args(["-p", &pid.to_string()])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        false
+    }
+}
+
 /// Represents an ephemeral VM session with RAII cleanup
 pub struct VmSession {
     name: String,
@@ -99,6 +145,31 @@ pub struct CleanupGuard {
     verbose: bool,
 }
 
+impl CleanupGuard {
+    /// Install SIGINT/SIGTERM handler that explicitly cleans up the VM before exit.
+    /// Without this, Ctrl+C kills the process without running Drop.
+    pub fn register_signal_handler(&self) -> crate::error::Result<()> {
+        let cleaned_up = Arc::clone(&self.cleaned_up);
+        let vm_name = self.vm_name.clone();
+        let verbose = self.verbose;
+
+        ctrlc::set_handler(move || {
+            if !cleaned_up.swap(true, Ordering::SeqCst) {
+                eprintln!("\nInterrupted — cleaning up VM {}...", vm_name);
+                let _ = LimaCtl::stop(&vm_name, verbose);
+                let _ = LimaCtl::delete(&vm_name, true, verbose);
+            }
+            std::process::exit(130); // conventional SIGINT exit code
+        })
+        .map_err(|e| {
+            crate::error::ClaudeVmError::LimaExecution(format!(
+                "Failed to register signal handler: {}",
+                e
+            ))
+        })
+    }
+}
+
 impl Drop for CleanupGuard {
     fn drop(&mut self) {
         // Only cleanup if not already done
@@ -153,6 +224,88 @@ impl Drop for CleanupGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Tests for is_session_vm()
+
+    #[test]
+    fn test_is_session_vm_release_template() {
+        // Release template: …_abcd1234 → not a session VM
+        assert!(!is_session_vm("claude-tpl_project_abcd1234"));
+    }
+
+    #[test]
+    fn test_is_session_vm_release_session() {
+        // Release session: …_abcd1234-68951 → session VM
+        assert!(is_session_vm("claude-tpl_project_abcd1234-68951"));
+    }
+
+    #[test]
+    fn test_is_session_vm_debug_template() {
+        // Debug template: …_abcd1234-dev → not a session VM
+        assert!(!is_session_vm("claude-tpl_project_abcd1234-dev"));
+    }
+
+    #[test]
+    fn test_is_session_vm_debug_session() {
+        // Debug session: …_abcd1234-dev-68951 → session VM
+        assert!(is_session_vm("claude-tpl_project_abcd1234-dev-68951"));
+    }
+
+    #[test]
+    fn test_is_session_vm_all_digit_hash_edge_case() {
+        // All-digit hash: …_12345678 → no dash in hash_part → not a session VM
+        assert!(!is_session_vm("claude-tpl_project_12345678"));
+    }
+
+    #[test]
+    fn test_is_session_vm_non_template_name() {
+        // Non-template VMs should not be session VMs
+        assert!(!is_session_vm("my-regular-vm"));
+        assert!(!is_session_vm("default"));
+    }
+
+    // Tests for extract_session_pid()
+
+    #[test]
+    fn test_extract_session_pid_release_session() {
+        // Release session: …_abcd1234-68951 → PID 68951
+        assert_eq!(
+            extract_session_pid("claude-tpl_project_abcd1234-68951"),
+            Some(68951)
+        );
+    }
+
+    #[test]
+    fn test_extract_session_pid_debug_session() {
+        // Debug session: …_abcd1234-dev-68951 → PID 68951
+        assert_eq!(
+            extract_session_pid("claude-tpl_project_abcd1234-dev-68951"),
+            Some(68951)
+        );
+    }
+
+    #[test]
+    fn test_extract_session_pid_release_template() {
+        // Release template: …_abcd1234 → no dash → None
+        assert_eq!(extract_session_pid("claude-tpl_project_abcd1234"), None);
+    }
+
+    #[test]
+    fn test_extract_session_pid_debug_template() {
+        // Debug template: …_abcd1234-dev → last segment "dev" → parse fails → None
+        assert_eq!(extract_session_pid("claude-tpl_project_abcd1234-dev"), None);
+    }
+
+    #[test]
+    fn test_extract_session_pid_all_digit_hash() {
+        // All-digit hash template: …_12345678 → rsplit('-') gives "12345678" → Some(12345678)
+        // This is expected: extract_session_pid doesn't check for the no-dash condition
+        // is_session_vm handles correctness, extract_session_pid is a simple extractor
+        assert_eq!(
+            extract_session_pid("claude-tpl_project_12345678"),
+            Some(12345678)
+        );
+    }
 
     #[test]
     fn test_cleanup_guard_sets_flag() {
