@@ -4,6 +4,29 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`prune` command**: Explicit garbage collection for orphaned session VMs left by killed processes
+  - Lists all session VMs whose parent process is no longer running
+  - Classifies orphans as stopped (safe to delete) or running with dead PID (requires force-stop)
+  - Prompts for confirmation before deletion; use `-y` / `--yes` to skip
+  - Warns explicitly when running VMs with dead PIDs are found
+  - Use `claude-vm prune` for manual cleanup or in scripts
+
+### Fixed
+
+- **`list` / `clean-all` treating session VMs as templates**: `template::list_all()` now excludes
+  ephemeral session clones (e.g., `claude-tpl_project_hash-PID`) so they no longer appear in
+  `claude-vm list` output or get deleted by `claude-vm clean-all`
+
+### Improved
+
+- **Signal handling in `agent` and `shell`**: SIGINT/SIGTERM are now caught so that Ctrl+C
+  and normal `kill` signals trigger VM cleanup instead of leaving orphaned VMs behind.
+  The VM is stopped and deleted before the process exits with code 130.
+- **Auto-prune on startup**: `agent` and `shell` commands silently clean up any stopped orphaned
+  session VMs before creating a new session, keeping disk usage in check automatically.
+
 ## [0.8.0] - 2026-02-17
 
 ### Added

@@ -96,8 +96,13 @@ fn main() -> Result<()> {
 
     // Handle commands that don't strictly need project but benefit from config validation
     match &cli.command {
-        Some(Commands::List { unused, disk_usage }) => {
-            commands::list::execute(*unused, *disk_usage)?;
+        Some(Commands::List {
+            unused,
+            disk_usage,
+            all,
+        }) => {
+            let effective_project = if *all { None } else { project.as_ref() };
+            commands::list::execute(effective_project, *unused, *disk_usage)?;
             return Ok(());
         }
         Some(Commands::Config { command }) => {
@@ -106,6 +111,10 @@ fn main() -> Result<()> {
         }
         Some(Commands::CleanAll { yes }) => {
             commands::clean_all::execute(*yes)?;
+            return Ok(());
+        }
+        Some(Commands::Prune { yes }) => {
+            commands::prune::execute(*yes)?;
             return Ok(());
         }
         _ => {}
