@@ -158,6 +158,33 @@ pub(crate) fn get_claude_conversation_folder(project_path: &Path) -> Option<Path
     }
 }
 
+/// Add `mount` to `mounts`, enforcing uniqueness and conflict rules:
+/// - Silently skips if the host location is already mounted.
+/// - Returns an error if the VM mount point is already in use.
+///
+/// Returns `true` if the mount was added, `false` if it was skipped as a duplicate.
+fn try_add_mount(mounts: &mut Vec<Mount>, mount: Mount) -> Result<bool> {
+    // Skip duplicate host locations
+    if mounts.iter().any(|m| m.location == mount.location) {
+        return Ok(false);
+    }
+
+    // Reject conflicting VM mount points
+    let target = mount.mount_point.as_ref().unwrap_or(&mount.location);
+    if mounts.iter().any(|m| {
+        let existing_target = m.mount_point.as_ref().unwrap_or(&m.location);
+        existing_target == target
+    }) {
+        return Err(ClaudeVmError::InvalidConfig(format!(
+            "Mount point conflict: {} is already mounted",
+            target.display()
+        )));
+    }
+
+    mounts.push(mount);
+    Ok(true)
+}
+
 /// Convert a slice of MountEntry configs to Mount structs with validation
 /// Checks for duplicates, conflicts, and warns about non-existent paths
 pub fn convert_mount_entries(mount_entries: &[crate::config::MountEntry]) -> Result<Vec<Mount>> {
@@ -184,24 +211,7 @@ pub fn convert_mount_entries(mount_entries: &[crate::config::MountEntry]) -> Res
             );
         }
 
-        // Check for duplicate host locations
-        if mounts.iter().any(|m| m.location == mount.location) {
-            continue; // Skip duplicate
-        }
-
-        // Check for conflicting VM mount points
-        let target_path = mount.mount_point.as_ref().unwrap_or(&mount.location);
-        if mounts.iter().any(|m| {
-            let existing_target = m.mount_point.as_ref().unwrap_or(&m.location);
-            existing_target == target_path
-        }) {
-            return Err(ClaudeVmError::InvalidConfig(format!(
-                "Mount point conflict: {} is already mounted",
-                target_path.display()
-            )));
-        }
-
-        mounts.push(mount);
+        try_add_mount(&mut mounts, mount)?;
     }
 
     Ok(mounts)
@@ -269,32 +279,10 @@ pub fn compute_mounts(
         }
     }
 
-    // Add custom mounts from configuration
+    // Add custom mounts from configuration, checking for conflicts with existing mounts
     let custom_mount_list = convert_mount_entries(custom_mounts)?;
-
-    // Merge custom mounts, checking for conflicts with existing mounts
     for custom_mount in custom_mount_list {
-        // Check for duplicate host locations
-        if mounts.iter().any(|m| m.location == custom_mount.location) {
-            continue; // Skip duplicate
-        }
-
-        // Check for conflicting VM mount points with existing mounts
-        let target_path = custom_mount
-            .mount_point
-            .as_ref()
-            .unwrap_or(&custom_mount.location);
-        if mounts.iter().any(|m| {
-            let existing_target = m.mount_point.as_ref().unwrap_or(&m.location);
-            existing_target == target_path
-        }) {
-            return Err(ClaudeVmError::InvalidConfig(format!(
-                "Mount point conflict: {} is already mounted",
-                target_path.display()
-            )));
-        }
-
-        mounts.push(custom_mount);
+        try_add_mount(&mut mounts, custom_mount)?;
     }
 
     Ok(mounts)
