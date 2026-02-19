@@ -1,14 +1,27 @@
 #![forbid(unsafe_code)]
 
-use anyhow::Result;
 use clap::Parser;
 
 use claude_vm::cli::{router, Cli, Commands, NetworkCommands, WorktreeCommands};
+use claude_vm::commands;
 use claude_vm::config::Config;
+use claude_vm::error::{ClaudeVmError, Result};
 use claude_vm::project::Project;
-use claude_vm::{commands, error::ClaudeVmError};
 
-fn main() -> Result<()> {
+fn main() {
+    match run() {
+        Ok(()) => {}
+        Err(ClaudeVmError::CommandExitCode(code)) => {
+            std::process::exit(code);
+        }
+        Err(e) => {
+            eprintln!("❌ {}", e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run() -> Result<()> {
     // Route arguments to default to agent command when appropriate
     let args = std::env::args_os();
     let routed_args = router::route_args(args);
@@ -49,13 +62,7 @@ fn main() -> Result<()> {
 
     let (project, config) = if requires_project {
         // Must have project
-        let proj = project_result.map_err(|e| match e {
-            ClaudeVmError::ProjectDetection(msg) => {
-                eprintln!("❌ Error: {}", msg);
-                std::process::exit(1);
-            }
-            _ => e,
-        })?;
+        let proj = project_result?;
 
         // Load config and apply command-specific overrides
         let cfg = match &cli.command {
@@ -86,7 +93,7 @@ fn main() -> Result<()> {
             Ok(cfg) => (Some(proj), Some(cfg)),
             Err(e) => {
                 // Config is invalid - fail even for optional-project commands
-                return Err(e.into());
+                return Err(e);
             }
         }
     } else {
