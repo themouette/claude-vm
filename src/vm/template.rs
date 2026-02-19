@@ -1,5 +1,5 @@
 use crate::error::{ClaudeVmError, Result};
-use crate::vm::limactl::LimaCtl;
+use crate::vm::limactl::{LimaCtl, VmInfo};
 use crate::vm::session::is_session_vm;
 use std::fs;
 use std::path::PathBuf;
@@ -39,6 +39,23 @@ fn matches_build_type(template_name: &str) -> bool {
     {
         !template_name.ends_with("-dev")
     }
+}
+
+/// List all VMs (both templates and sessions) with their status info.
+/// Returns the raw Lima VM list without any filtering.
+pub fn list_all_vms() -> Result<Vec<VmInfo>> {
+    LimaCtl::list()
+}
+
+/// List session VMs (ephemeral clones) for a given template from a pre-fetched VM list.
+/// A session VM is identified by its name starting with `{template_name}-` and passing `is_session_vm`.
+pub fn list_sessions_for(template_name: &str, all_vms: &[VmInfo]) -> Vec<VmInfo> {
+    let prefix = format!("{}-", template_name);
+    all_vms
+        .iter()
+        .filter(|vm| vm.name.starts_with(&prefix) && is_session_vm(&vm.name))
+        .cloned()
+        .collect()
 }
 
 /// List all claude-vm templates matching the current build type

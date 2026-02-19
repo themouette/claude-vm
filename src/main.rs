@@ -97,7 +97,7 @@ fn main() -> Result<()> {
     // Handle commands that don't strictly need project but benefit from config validation
     match &cli.command {
         Some(Commands::List { unused, disk_usage }) => {
-            commands::list::execute(*unused, *disk_usage)?;
+            commands::list::execute(project.as_ref(), *unused, *disk_usage)?;
             return Ok(());
         }
         Some(Commands::Config { command }) => {
