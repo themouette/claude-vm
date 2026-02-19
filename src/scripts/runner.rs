@@ -446,16 +446,19 @@ pub fn execute_command_with_runtime_scripts(
 
         if !config.security.network.allowed_domains.is_empty() {
             let allowed = config.security.network.allowed_domains.join(",");
+            let allowed = allowed.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export ALLOWED_DOMAINS='{}'\n", allowed));
         }
 
         if !config.security.network.blocked_domains.is_empty() {
             let blocked = config.security.network.blocked_domains.join(",");
+            let blocked = blocked.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export BLOCKED_DOMAINS='{}'\n", blocked));
         }
 
         if !config.security.network.bypass_domains.is_empty() {
             let bypass = config.security.network.bypass_domains.join(",");
+            let bypass = bypass.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export BYPASS_DOMAINS='{}'\n", bypass));
         }
 
