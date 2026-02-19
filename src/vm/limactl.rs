@@ -4,6 +4,32 @@ use crate::vm::port_forward::PortForward;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// Serialize a single [`Mount`] to a JSON object string.
+///
+/// Uses `serde_json` so that path values containing `"` or `\` are properly
+/// escaped, preventing malformed JSON when paths have unusual characters.
+fn mount_to_json(m: &Mount) -> String {
+    let mut obj = serde_json::json!({
+        "location": m.location.to_string_lossy().as_ref(),
+        "writable": m.writable,
+    });
+    if let Some(ref mp) = m.mount_point {
+        obj["mountPoint"] = serde_json::Value::String(mp.to_string_lossy().into_owned());
+    }
+    // serde_json serialization is infallible for these value types
+    obj.to_string()
+}
+
+/// Build the `.mounts=[…]` yq/jq set-expression for a list of mounts.
+fn mounts_set_expr(mounts: &[Mount]) -> String {
+    if mounts.is_empty() {
+        ".mounts=[]".to_string()
+    } else {
+        let items: Vec<String> = mounts.iter().map(mount_to_json).collect();
+        format!(".mounts=[{}]", items.join(","))
+    }
+}
+
 pub struct LimaCtl;
 
 /// VM configuration based on the host operating system
@@ -102,31 +128,7 @@ impl LimaCtl {
         }
 
         // Build mounts JSON array (same format as clone)
-        if !mounts.is_empty() {
-            let mount_jsons: Vec<String> = mounts
-                .iter()
-                .map(|m| {
-                    if let Some(ref mount_point) = m.mount_point {
-                        format!(
-                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            mount_point.display(),
-                            m.writable
-                        )
-                    } else {
-                        format!(
-                            "{{\"location\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            m.writable
-                        )
-                    }
-                })
-                .collect();
-            cmd.arg("--set")
-                .arg(format!(".mounts=[{}]", mount_jsons.join(",")));
-        } else {
-            cmd.arg("--set").arg(".mounts=[]");
-        }
+        cmd.arg("--set").arg(mounts_set_expr(mounts));
 
         cmd.arg(format!("--disk={}", disk))
             .arg(format!("--memory={}", memory))
@@ -257,39 +259,12 @@ impl LimaCtl {
         mounts: &[Mount],
         verbose: bool,
     ) -> Result<()> {
-        // Build mounts JSON array (matches bash format)
-        let mounts_array = if !mounts.is_empty() {
-            let mount_jsons: Vec<String> = mounts
-                .iter()
-                .map(|m| {
-                    if let Some(ref mount_point) = m.mount_point {
-                        format!(
-                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            mount_point.display(),
-                            m.writable
-                        )
-                    } else {
-                        format!(
-                            "{{\"location\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            m.writable
-                        )
-                    }
-                })
-                .collect();
-
-            Some(format!(".mounts=[{}]", mount_jsons.join(",")))
-        } else {
-            None
-        };
-
         let mut cmd = Command::new("limactl");
         cmd.arg(command).arg(source).arg(dest).arg("--tty=false");
 
-        // Add mount specification if present
-        if let Some(ref mounts_spec) = mounts_array {
-            cmd.arg("--set").arg(mounts_spec);
+        // Add mount specification if mounts are provided
+        if !mounts.is_empty() {
+            cmd.arg("--set").arg(mounts_set_expr(mounts));
         }
 
         // Suppress output unless in verbose mode
