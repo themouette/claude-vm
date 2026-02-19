@@ -185,6 +185,71 @@ fn generate_base_context(vm_name: &str, config: &Config) -> Result<String> {
     Ok(context)
 }
 
+/// Build the shell script fragment that merges VM context into CLAUDE.md and
+/// execs the main command.
+///
+/// `vm_context_path` is the path inside the VM where the base context file lives.
+/// The two `{vm_ctx}` slots in the template are replaced with this value.
+fn build_claudemd_section(vm_context_path: &str) -> String {
+    format!(
+        r#"# Generate final CLAUDE.md with runtime context (skip if Claude not installed)
+if command -v claude >/dev/null 2>&1; then
+  cp {vm_ctx} ~/.claude/CLAUDE.md.new
+
+  # Add runtime script results if any exist
+  if [ -d ~/.claude-vm/context ] && [ "$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)" ]; then
+    # Insert runtime context section header
+    sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\n' ~/.claude/CLAUDE.md.new
+
+    # Add each context file
+    for context_file in ~/.claude-vm/context/*.txt; do
+      if [ -f "$context_file" ]; then
+        name=$(basename "$context_file" .txt)
+        # Insert subsection header
+        sed -i "/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\n" ~/.claude/CLAUDE.md.new
+        # Insert file contents
+        sed -i "/### $name/r $context_file" ~/.claude/CLAUDE.md.new
+        # Add blank line after content
+        sed -i "/### $name/a \\" ~/.claude/CLAUDE.md.new
+      fi
+    done
+  fi
+
+  # Remove the placeholder marker
+  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new
+
+  # Merge with existing CLAUDE.md if present
+  if [ -f ~/.claude/CLAUDE.md ]; then
+    if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then
+      # Replace content between markers, preserving user content position
+      awk '
+        /<!-- claude-vm-context-start -->/ {{ skip=1; next }}
+        /<!-- claude-vm-context-end -->/ {{ skip=0; next }}
+        !skip
+      ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old
+
+      cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md
+    else
+      # Append our context to existing content
+      cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp
+      mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md
+    fi
+  else
+    # No existing file, use our generated context
+    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md
+  fi
+fi
+
+# Cleanup temporary files
+rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old {vm_ctx}
+
+# Execute main command (replaces shell process)
+exec "$@"
+"#,
+        vm_ctx = vm_context_path,
+    )
+}
+
 /// Execute a command with runtime scripts using an entrypoint pattern.
 ///
 /// This function runs all runtime scripts followed by the main command in a single
@@ -503,76 +568,7 @@ pub fn execute_command_with_runtime_scripts(
         }
     }
 
-    // Generate final CLAUDE.md with runtime context (only if Claude Code is installed)
-    entrypoint.push_str(
-        "# Generate final CLAUDE.md with runtime context (skip if Claude not installed)\n",
-    );
-    entrypoint.push_str("if command -v claude >/dev/null 2>&1; then\n");
-    entrypoint.push_str(&format!(
-        "  cp {} ~/.claude/CLAUDE.md.new\n\n",
-        vm_context_path
-    ));
-
-    entrypoint.push_str("  # Add runtime script results if any exist\n");
-    entrypoint.push_str("  if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
-    entrypoint.push_str("    # Insert runtime context section header\n");
-    entrypoint.push_str("    sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
-
-    entrypoint.push_str("    # Add each context file\n");
-    entrypoint.push_str("    for context_file in ~/.claude-vm/context/*.txt; do\n");
-    entrypoint.push_str("      if [ -f \"$context_file\" ]; then\n");
-    entrypoint.push_str("        name=$(basename \"$context_file\" .txt)\n");
-    entrypoint.push_str("        # Insert subsection header\n");
-    entrypoint.push_str("        sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("        # Insert file contents\n");
-    entrypoint.push_str("        sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("        # Add blank line after content\n");
-    entrypoint.push_str("        sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      fi\n");
-    entrypoint.push_str("    done\n");
-    entrypoint.push_str("  fi\n\n");
-
-    entrypoint.push_str("  # Remove the placeholder marker\n");
-    entrypoint.push_str(
-        "  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
-    );
-
-    entrypoint.push_str("  # Merge with existing CLAUDE.md if present\n");
-    entrypoint.push_str("  if [ -f ~/.claude/CLAUDE.md ]; then\n");
-    entrypoint
-        .push_str("    if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
-    entrypoint
-        .push_str("      # Replace content between markers, preserving user content position\n");
-    entrypoint.push_str("      awk '\n");
-    entrypoint.push_str("        /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
-    entrypoint.push_str("        /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
-    entrypoint.push_str("        !skip\n");
-    entrypoint.push_str("      ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
-    entrypoint.push_str(
-        "      cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md\n",
-    );
-    entrypoint.push_str("    else\n");
-    entrypoint.push_str("      # Append our context to existing content\n");
-    entrypoint.push_str(
-        "      cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
-    );
-    entrypoint.push_str("      mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("    fi\n");
-    entrypoint.push_str("  else\n");
-    entrypoint.push_str("    # No existing file, use our generated context\n");
-    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("  fi\n");
-    entrypoint.push_str("fi\n\n");
-
-    entrypoint.push_str("# Cleanup temporary files\n");
-    entrypoint.push_str(&format!(
-        "rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old {}\n\n",
-        vm_context_path
-    ));
-
-    // Exec main command - $@ contains all positional parameters
-    entrypoint.push_str("# Execute main command (replaces shell process)\n");
-    entrypoint.push_str("exec \"$@\"\n");
+    entrypoint.push_str(&build_claudemd_section(&vm_context_path));
 
     // Execute entrypoint with main command as positional parameters
     // bash -c 'script' -- cmd arg1 arg2
