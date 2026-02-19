@@ -19,6 +19,17 @@ type RuntimeScriptInfo = (
     bool,
 );
 
+/// RAII guard that removes a host-side temporary file on drop.
+///
+/// Ensures cleanup even when an intermediate step returns early via `?`.
+struct LocalTempFile(PathBuf);
+
+impl Drop for LocalTempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 /// Sanitize a filename to contain only safe characters
 /// Allows: alphanumeric, dash, underscore, dot
 fn sanitize_filename(name: &str) -> String {
@@ -39,77 +50,50 @@ fn find_runtime_script_path() -> Result<PathBuf> {
 
 /// Execute a script from string content in a VM.
 ///
-/// This function writes the script content to a temporary file, copies it to the VM,
-/// makes it executable, and runs it with bash.
+/// Writes the script to a host temp file (cleaned up via RAII even on error),
+/// copies it into the VM, makes it executable, and runs it with bash.
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `script_content`: The script content as a string
 /// - `script_name`: Name to give the script file (used for temp file naming)
-///
-/// # Errors
-/// Returns error if file operations, copying, or script execution fails.
+/// - `show_progress`: When `true` prints "Running script: <name>" before executing
 ///
 /// # Note
 /// This is primarily used for embedded scripts (e.g., install_docker.sh).
 /// For user scripts, prefer `execute_script_file`.
-pub fn execute_script(vm_name: &str, script_content: &str, script_name: &str) -> Result<()> {
-    println!("Running script: {}", script_name);
+pub fn execute_script(
+    vm_name: &str,
+    script_content: &str,
+    script_name: &str,
+    show_progress: bool,
+) -> Result<()> {
+    if show_progress {
+        println!("Running script: {}", script_name);
+    }
 
-    // Write script to temp file
     let temp_path = format!("/tmp/{}", script_name);
     let local_temp = std::env::temp_dir().join(script_name);
 
     std::fs::write(&local_temp, script_content)?;
+    // Guard ensures local_temp is removed even if any step below fails.
+    let _guard = LocalTempFile(local_temp.clone());
 
-    // Copy to VM
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
-
-    // Make executable and run
     LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
     LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
-
-    Ok(())
-}
-
-/// Execute a script from string content in a VM silently (only show output on error)
-///
-/// This function is similar to `execute_script` but suppresses output unless there's an error.
-/// Used for runtime scripts that shouldn't clutter the output.
-pub fn execute_script_silent(vm_name: &str, script_content: &str, script_name: &str) -> Result<()> {
-    // Write script to temp file
-    let temp_path = format!("/tmp/{}", script_name);
-    let local_temp = std::env::temp_dir().join(script_name);
-
-    std::fs::write(&local_temp, script_content)?;
-
-    // Copy to VM
-    LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
-
-    // Make executable and run
-    LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
-    LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
 
     Ok(())
 }
 
 /// Execute a script file from the host filesystem in a VM.
 ///
-/// This function copies a script file from the host to the VM,
-/// makes it executable, and runs it with bash.
+/// Copies the file into the VM, makes it executable, runs it with bash,
+/// and removes the VM-side temp copy afterwards.
 ///
 /// # Arguments
 /// - `vm_name`: Name of the VM instance
 /// - `script_path`: Path to the script file on the host filesystem
-///
-/// # Errors
-/// Returns error if the file doesn't exist, copying fails, or script execution fails.
 ///
 /// # Note
 /// Used by the setup command for setup scripts. For runtime scripts with entrypoint
@@ -124,12 +108,12 @@ pub fn execute_script_file(vm_name: &str, script_path: &Path) -> Result<()> {
 
     let temp_path = format!("/tmp/{}", script_name);
 
-    // Copy to VM
     LimaCtl::copy(script_path, vm_name, &temp_path)?;
-
-    // Make executable and run
     LimaCtl::shell(vm_name, None, "chmod", &["+x", &temp_path], false)?;
     LimaCtl::shell(vm_name, None, "bash", &[&temp_path], false)?;
+
+    // Remove the temp copy from the VM
+    let _ = LimaCtl::shell(vm_name, None, "rm", &["-f", &temp_path], false);
 
     Ok(())
 }
@@ -199,6 +183,71 @@ fn generate_base_context(vm_name: &str, config: &Config) -> Result<String> {
     context.push_str("<!-- claude-vm-context-end -->\n");
 
     Ok(context)
+}
+
+/// Build the shell script fragment that merges VM context into CLAUDE.md and
+/// execs the main command.
+///
+/// `vm_context_path` is the path inside the VM where the base context file lives.
+/// The two `{vm_ctx}` slots in the template are replaced with this value.
+fn build_claudemd_section(vm_context_path: &str) -> String {
+    format!(
+        r#"# Generate final CLAUDE.md with runtime context (skip if Claude not installed)
+if command -v claude >/dev/null 2>&1; then
+  cp {vm_ctx} ~/.claude/CLAUDE.md.new
+
+  # Add runtime script results if any exist
+  if [ -d ~/.claude-vm/context ] && [ "$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)" ]; then
+    # Insert runtime context section header
+    sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\n' ~/.claude/CLAUDE.md.new
+
+    # Add each context file
+    for context_file in ~/.claude-vm/context/*.txt; do
+      if [ -f "$context_file" ]; then
+        name=$(basename "$context_file" .txt)
+        # Insert subsection header
+        sed -i "/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\n" ~/.claude/CLAUDE.md.new
+        # Insert file contents
+        sed -i "/### $name/r $context_file" ~/.claude/CLAUDE.md.new
+        # Add blank line after content
+        sed -i "/### $name/a \\" ~/.claude/CLAUDE.md.new
+      fi
+    done
+  fi
+
+  # Remove the placeholder marker
+  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new
+
+  # Merge with existing CLAUDE.md if present
+  if [ -f ~/.claude/CLAUDE.md ]; then
+    if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then
+      # Replace content between markers, preserving user content position
+      awk '
+        /<!-- claude-vm-context-start -->/ {{ skip=1; next }}
+        /<!-- claude-vm-context-end -->/ {{ skip=0; next }}
+        !skip
+      ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old
+
+      cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md
+    else
+      # Append our context to existing content
+      cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp
+      mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md
+    fi
+  else
+    # No existing file, use our generated context
+    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md
+  fi
+fi
+
+# Cleanup temporary files
+rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old {vm_ctx}
+
+# Execute main command (replaces shell process)
+exec "$@"
+"#,
+        vm_ctx = vm_context_path,
+    )
 }
 
 /// Execute a command with runtime scripts using an entrypoint pattern.
@@ -446,16 +495,19 @@ pub fn execute_command_with_runtime_scripts(
 
         if !config.security.network.allowed_domains.is_empty() {
             let allowed = config.security.network.allowed_domains.join(",");
+            let allowed = allowed.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export ALLOWED_DOMAINS='{}'\n", allowed));
         }
 
         if !config.security.network.blocked_domains.is_empty() {
             let blocked = config.security.network.blocked_domains.join(",");
+            let blocked = blocked.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export BLOCKED_DOMAINS='{}'\n", blocked));
         }
 
         if !config.security.network.bypass_domains.is_empty() {
             let bypass = config.security.network.bypass_domains.join(",");
+            let bypass = bypass.replace('\'', "'\\''");
             entrypoint.push_str(&format!("export BYPASS_DOMAINS='{}'\n", bypass));
         }
 
@@ -516,76 +568,7 @@ pub fn execute_command_with_runtime_scripts(
         }
     }
 
-    // Generate final CLAUDE.md with runtime context (only if Claude Code is installed)
-    entrypoint.push_str(
-        "# Generate final CLAUDE.md with runtime context (skip if Claude not installed)\n",
-    );
-    entrypoint.push_str("if command -v claude >/dev/null 2>&1; then\n");
-    entrypoint.push_str(&format!(
-        "  cp {} ~/.claude/CLAUDE.md.new\n\n",
-        vm_context_path
-    ));
-
-    entrypoint.push_str("  # Add runtime script results if any exist\n");
-    entrypoint.push_str("  if [ -d ~/.claude-vm/context ] && [ \"$(ls -A ~/.claude-vm/context/*.txt 2>/dev/null)\" ]; then\n");
-    entrypoint.push_str("    # Insert runtime context section header\n");
-    entrypoint.push_str("    sed -i '/<!-- claude-vm-context-runtime-placeholder -->/i ## Runtime Script Results\\n' ~/.claude/CLAUDE.md.new\n\n");
-
-    entrypoint.push_str("    # Add each context file\n");
-    entrypoint.push_str("    for context_file in ~/.claude-vm/context/*.txt; do\n");
-    entrypoint.push_str("      if [ -f \"$context_file\" ]; then\n");
-    entrypoint.push_str("        name=$(basename \"$context_file\" .txt)\n");
-    entrypoint.push_str("        # Insert subsection header\n");
-    entrypoint.push_str("        sed -i \"/<!-- claude-vm-context-runtime-placeholder -->/i ### $name\\n\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("        # Insert file contents\n");
-    entrypoint.push_str("        sed -i \"/### $name/r $context_file\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("        # Add blank line after content\n");
-    entrypoint.push_str("        sed -i \"/### $name/a \\\\\" ~/.claude/CLAUDE.md.new\n");
-    entrypoint.push_str("      fi\n");
-    entrypoint.push_str("    done\n");
-    entrypoint.push_str("  fi\n\n");
-
-    entrypoint.push_str("  # Remove the placeholder marker\n");
-    entrypoint.push_str(
-        "  sed -i '/<!-- claude-vm-context-runtime-placeholder -->/d' ~/.claude/CLAUDE.md.new\n\n",
-    );
-
-    entrypoint.push_str("  # Merge with existing CLAUDE.md if present\n");
-    entrypoint.push_str("  if [ -f ~/.claude/CLAUDE.md ]; then\n");
-    entrypoint
-        .push_str("    if grep -q '<!-- claude-vm-context-start -->' ~/.claude/CLAUDE.md; then\n");
-    entrypoint
-        .push_str("      # Replace content between markers, preserving user content position\n");
-    entrypoint.push_str("      awk '\n");
-    entrypoint.push_str("        /<!-- claude-vm-context-start -->/ { skip=1; next }\n");
-    entrypoint.push_str("        /<!-- claude-vm-context-end -->/ { skip=0; next }\n");
-    entrypoint.push_str("        !skip\n");
-    entrypoint.push_str("      ' ~/.claude/CLAUDE.md > ~/.claude/CLAUDE.md.old\n\n");
-    entrypoint.push_str(
-        "      cat ~/.claude/CLAUDE.md.old ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md\n",
-    );
-    entrypoint.push_str("    else\n");
-    entrypoint.push_str("      # Append our context to existing content\n");
-    entrypoint.push_str(
-        "      cat ~/.claude/CLAUDE.md ~/.claude/CLAUDE.md.new > ~/.claude/CLAUDE.md.tmp\n",
-    );
-    entrypoint.push_str("      mv ~/.claude/CLAUDE.md.tmp ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("    fi\n");
-    entrypoint.push_str("  else\n");
-    entrypoint.push_str("    # No existing file, use our generated context\n");
-    entrypoint.push_str("    mv ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md\n");
-    entrypoint.push_str("  fi\n");
-    entrypoint.push_str("fi\n\n");
-
-    entrypoint.push_str("# Cleanup temporary files\n");
-    entrypoint.push_str(&format!(
-        "rm -f ~/.claude/CLAUDE.md.new ~/.claude/CLAUDE.md.old {}\n\n",
-        vm_context_path
-    ));
-
-    // Exec main command - $@ contains all positional parameters
-    entrypoint.push_str("# Execute main command (replaces shell process)\n");
-    entrypoint.push_str("exec \"$@\"\n");
+    entrypoint.push_str(&build_claudemd_section(&vm_context_path));
 
     // Execute entrypoint with main command as positional parameters
     // bash -c 'script' -- cmd arg1 arg2
@@ -616,6 +599,8 @@ fn execute_script_in_vm(
     let local_temp = std::env::temp_dir().join(script_name);
 
     std::fs::write(&local_temp, script_content)?;
+    // Guard ensures local_temp is removed even if any step below fails.
+    let _guard = LocalTempFile(local_temp.clone());
 
     // Copy to VM
     LimaCtl::copy(&local_temp, vm_name, &temp_path)?;
@@ -624,16 +609,11 @@ fn execute_script_in_vm(
     LimaCtl::shell(vm_name, workdir, "chmod", &["+x", &temp_path], false)?;
 
     // Execute: source if requested, otherwise run with bash
-    let result = if source {
+    if source {
         LimaCtl::shell(vm_name, workdir, ".", &[&temp_path], false)
     } else {
         LimaCtl::shell(vm_name, workdir, "bash", &[&temp_path], false)
-    };
-
-    // Cleanup local temp file
-    std::fs::remove_file(&local_temp)?;
-
-    result
+    }
 }
 
 /// Execute after-runtime phases inside the VM after a command completes

@@ -303,6 +303,7 @@ mod tests {
     fn test_phase_context_name() {
         assert_eq!(PhaseContext::Setup.name(), "Setup");
         assert_eq!(PhaseContext::Runtime.name(), "Runtime");
+        assert_eq!(PhaseContext::AfterRuntime.name(), "AfterRuntime");
     }
 
     #[test]

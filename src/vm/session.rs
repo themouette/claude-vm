@@ -7,7 +7,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 /// Returns true if the VM name is an ephemeral session clone.
+///
 /// Works for both release (`…_hash-PID`) and debug (`…_hash-dev-PID`) builds.
+///
+/// # Contract with `extract_session_pid`
+///
+/// Always call this function before calling `extract_session_pid`. On template
+/// names whose hash segment is all-digits (e.g. `claude-tpl_proj_12345678`),
+/// `is_session_vm` correctly returns `false` (no dash in the hash part), while
+/// `extract_session_pid` would spuriously return `Some(12345678)`. The two
+/// functions are designed to be used together: use `is_session_vm` as a gate.
 pub fn is_session_vm(name: &str) -> bool {
     name.rsplit('_')
         .next()
@@ -23,7 +32,14 @@ pub fn is_session_vm(name: &str) -> bool {
 }
 
 /// Extracts the PID from a session VM name.
+///
 /// Works for both release (`…_hash-PID`) and debug (`…_hash-dev-PID`).
+///
+/// # Precondition
+///
+/// Only call this after `is_session_vm` has returned `true` for the same
+/// name. On template names with all-digit hashes (no dash in the hash part)
+/// this function may return a spurious `Some` value.
 pub fn extract_session_pid(name: &str) -> Option<u32> {
     let hash_part = name.rsplit('_').next()?;
     let pid_str = hash_part.rsplit('-').next()?;

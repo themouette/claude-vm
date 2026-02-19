@@ -62,8 +62,8 @@ pub fn execute(yes: bool) -> Result<()> {
     println!();
 
     if has_running_orphans {
-        eprintln!("⚠  Warning: Some VMs are Running but their parent process is gone.");
-        eprintln!("   These will be force-stopped before deletion.");
+        println!("⚠  Warning: Some VMs are Running but their parent process is gone.");
+        println!("   These will be force-stopped before deletion.");
         println!();
     }
 
@@ -81,7 +81,7 @@ pub fn execute(yes: bool) -> Result<()> {
             return Ok(());
         }
     } else if has_running_orphans {
-        eprintln!("   Proceeding with force-stop and deletion (--yes).");
+        println!("   Proceeding with force-stop and deletion (--yes).");
         println!();
     }
 
@@ -91,22 +91,24 @@ pub fn execute(yes: bool) -> Result<()> {
     for orphan in &orphans {
         let name = &orphan.info.name;
         if orphan.info.status.eq_ignore_ascii_case("running") {
-            eprint!("  Stopping {}... ", name);
+            print!("  Stopping {}... ", name);
+            io::stdout().flush()?;
             if let Err(e) = LimaCtl::stop(name, false) {
-                eprintln!("failed to stop: {}", e);
+                println!("failed to stop: {}", e);
                 failed += 1;
                 continue;
             }
-            eprintln!("done");
+            println!("done");
         }
-        eprint!("  Deleting {}... ", name);
+        print!("  Deleting {}... ", name);
+        io::stdout().flush()?;
         match LimaCtl::delete(name, true, false) {
             Ok(()) => {
-                eprintln!("done");
+                println!("done");
                 deleted += 1;
             }
             Err(e) => {
-                eprintln!("failed: {}", e);
+                println!("failed: {}", e);
                 failed += 1;
             }
         }

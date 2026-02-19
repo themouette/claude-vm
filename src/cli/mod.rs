@@ -232,6 +232,25 @@ pub enum Commands {
     },
 }
 
+impl Commands {
+    /// Returns `true` for commands that require a project to be present.
+    ///
+    /// Commands that return `true` will cause `main` to abort with an error when
+    /// invoked outside a recognised project directory.
+    pub fn needs_project(&self) -> bool {
+        matches!(
+            self,
+            Commands::Agent(..)
+                | Commands::Setup(..)
+                | Commands::Shell(..)
+                | Commands::Info
+                | Commands::Clean { .. }
+                | Commands::Network { .. }
+                | Commands::Worktree { .. }
+        )
+    }
+}
+
 #[derive(Parser, Debug)]
 pub struct AgentCmd {
     /// Runtime configuration flags

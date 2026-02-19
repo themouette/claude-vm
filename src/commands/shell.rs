@@ -122,12 +122,10 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
         }
     }
 
-    // Execute after_runtime host phases
-    // Note: Currently runs after command completes. To run between runtime scripts and command
-    // execution would require refactoring execute_command_with_runtime_scripts
-    if !config.phase.after_runtime.is_empty() {
+    // Execute host-side after_runtime phases
+    if !config.phase.host.after_runtime.is_empty() {
         host_executor::execute_host_phases(
-            &config.phase.after_runtime,
+            &config.phase.host.after_runtime,
             project,
             session.name(),
             &host_executor::build_host_env(project, "runtime", Some("shell")),

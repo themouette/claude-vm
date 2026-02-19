@@ -340,7 +340,7 @@ fn run_setup_scripts(project: &Project, config: &Config) -> Result<()> {
                 format!("{}\n\n{}", env_setup, content)
             };
 
-            match runner::execute_script(vm_name, &full_script, &script_name) {
+            match runner::execute_script(vm_name, &full_script, &script_name, true) {
                 Ok(_) => println!("  ✓ Completed: {}", script_name),
                 Err(e) => {
                     // Show script preview for inline scripts before handling error

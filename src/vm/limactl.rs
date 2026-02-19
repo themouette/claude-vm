@@ -4,6 +4,41 @@ use crate::vm::port_forward::PortForward;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+/// Serialize a single [`Mount`] to a JSON object string.
+///
+/// Uses `serde_json` so that path values containing `"` or `\` are properly
+/// escaped, preventing malformed JSON when paths have unusual characters.
+fn mount_to_json(m: &Mount) -> String {
+    let mut obj = serde_json::json!({
+        "location": m.location.to_string_lossy().as_ref(),
+        "writable": m.writable,
+    });
+    if let Some(ref mp) = m.mount_point {
+        obj["mountPoint"] = serde_json::Value::String(mp.to_string_lossy().into_owned());
+    }
+    // serde_json serialization is infallible for these value types
+    obj.to_string()
+}
+
+/// Build the `.mounts=[…]` yq/jq set-expression for a list of mounts.
+fn mounts_set_expr(mounts: &[Mount]) -> String {
+    if mounts.is_empty() {
+        ".mounts=[]".to_string()
+    } else {
+        let items: Vec<String> = mounts.iter().map(mount_to_json).collect();
+        format!(".mounts=[{}]", items.join(","))
+    }
+}
+
+/// Run `cmd`, silencing stdout and stderr unless `verbose` is true.
+fn run_silent(cmd: &mut Command, verbose: bool) -> std::io::Result<std::process::ExitStatus> {
+    if verbose {
+        cmd.status()
+    } else {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
+    }
+}
+
 pub struct LimaCtl;
 
 /// VM configuration based on the host operating system
@@ -102,31 +137,7 @@ impl LimaCtl {
         }
 
         // Build mounts JSON array (same format as clone)
-        if !mounts.is_empty() {
-            let mount_jsons: Vec<String> = mounts
-                .iter()
-                .map(|m| {
-                    if let Some(ref mount_point) = m.mount_point {
-                        format!(
-                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            mount_point.display(),
-                            m.writable
-                        )
-                    } else {
-                        format!(
-                            "{{\"location\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            m.writable
-                        )
-                    }
-                })
-                .collect();
-            cmd.arg("--set")
-                .arg(format!(".mounts=[{}]", mount_jsons.join(",")));
-        } else {
-            cmd.arg("--set").arg(".mounts=[]");
-        }
+        cmd.arg("--set").arg(mounts_set_expr(mounts));
 
         cmd.arg(format!("--disk={}", disk))
             .arg(format!("--memory={}", memory))
@@ -139,13 +150,7 @@ impl LimaCtl {
             }
         }
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to create VM: {}", e)))?;
 
         if !status.success() {
@@ -163,13 +168,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(["start", name]);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to start VM: {}", e)))?;
 
         if !status.success() {
@@ -187,13 +186,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(["stop", name]);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to stop VM: {}", e)))?;
 
         if !status.success() {
@@ -217,13 +210,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(&args);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to delete VM: {}", e)))?;
 
         if !status.success() {
@@ -236,18 +223,25 @@ impl LimaCtl {
         Ok(())
     }
 
-    /// Clone a Lima VM with additional mounts
+    /// Clone a Lima VM with additional mounts.
+    ///
+    /// Tries `limactl clone` first (older Lima ≤ 0.16) and falls back to
+    /// `limactl copy` (Lima ≥ 0.17) **only** when the first attempt fails
+    /// because the sub-command is not recognised.  Any other failure
+    /// (disk full, invalid VM name, …) is returned immediately so that the
+    /// caller sees the real error instead of a confusing `copy` error.
     pub fn clone(source: &str, dest: &str, mounts: &[Mount], verbose: bool) -> Result<()> {
-        // Try "clone" first (older Lima), then "copy" (newer Lima)
-        // This ensures compatibility across Lima versions
-        let result = Self::try_clone_command("clone", source, dest, mounts, verbose);
-
-        if result.is_ok() {
-            return result;
+        match Self::try_clone_command("clone", source, dest, mounts, verbose) {
+            Ok(()) => Ok(()),
+            Err(ClaudeVmError::LimaExecution(ref msg))
+                if msg.contains("unknown command") || msg.contains("unknown subcommand") =>
+            {
+                // "clone" is not a recognised sub-command in this Lima version;
+                // fall back to the newer "copy" command.
+                Self::try_clone_command("copy", source, dest, mounts, verbose)
+            }
+            Err(e) => Err(e),
         }
-
-        // If clone failed, try copy (Lima >= 0.17)
-        Self::try_clone_command("copy", source, dest, mounts, verbose)
     }
 
     fn try_clone_command(
@@ -257,54 +251,41 @@ impl LimaCtl {
         mounts: &[Mount],
         verbose: bool,
     ) -> Result<()> {
-        // Build mounts JSON array (matches bash format)
-        let mounts_array = if !mounts.is_empty() {
-            let mount_jsons: Vec<String> = mounts
-                .iter()
-                .map(|m| {
-                    if let Some(ref mount_point) = m.mount_point {
-                        format!(
-                            "{{\"location\":\"{}\",\"mountPoint\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            mount_point.display(),
-                            m.writable
-                        )
-                    } else {
-                        format!(
-                            "{{\"location\":\"{}\",\"writable\":{}}}",
-                            m.location.display(),
-                            m.writable
-                        )
-                    }
-                })
-                .collect();
-
-            Some(format!(".mounts=[{}]", mount_jsons.join(",")))
-        } else {
-            None
-        };
-
         let mut cmd = Command::new("limactl");
         cmd.arg(command).arg(source).arg(dest).arg("--tty=false");
 
-        // Add mount specification if present
-        if let Some(ref mounts_spec) = mounts_array {
-            cmd.arg("--set").arg(mounts_spec);
+        // Add mount specification if mounts are provided
+        if !mounts.is_empty() {
+            cmd.arg("--set").arg(mounts_set_expr(mounts));
         }
 
-        // Suppress output unless in verbose mode
-        if !verbose {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        // Always capture stderr so we can inspect it for "unknown command"
+        // messages; print it only in verbose mode.
+        let output = cmd
+            .stdout(if verbose {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            })
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| {
+                ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e))
+            })?;
+
+        if verbose {
+            // Forward captured stderr to the terminal
+            let _ = std::io::Write::write_all(&mut std::io::stderr(), &output.stderr);
         }
 
-        let status = cmd.status().map_err(|e| {
-            ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e))
-        })?;
-
-        if !status.success() {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ClaudeVmError::LimaExecution(format!(
-                "Failed to {} VM from {} to {}",
-                command, source, dest
+                "Failed to {} VM from {} to {}: {}",
+                command,
+                source,
+                dest,
+                stderr.trim()
             )));
         }
 
