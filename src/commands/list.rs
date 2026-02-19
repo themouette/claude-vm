@@ -12,6 +12,32 @@ fn running_indicator(is_running: bool) -> &'static str {
     }
 }
 
+/// Prints one tree row.
+///
+/// `prefix`    — characters printed before the connector (`│   ` or `    `)
+/// `connector` — `├── ` or `└── `
+/// `indicator` — running indicator (2 chars)
+/// `name`      — VM name
+/// `suffix`    — optional right-aligned columns (disk usage mode)
+fn print_row(prefix: &str, connector: &str, indicator: &str, name: &str, suffix: &str) {
+    if suffix.is_empty() {
+        println!("{}{}{}{}", prefix, connector, indicator, name);
+    } else {
+        // Name column is 50 chars wide minus the prefix/connector overhead so
+        // the right-hand columns stay aligned regardless of nesting depth.
+        let name_width = 50usize.saturating_sub(prefix.len() + connector.len());
+        println!(
+            "{}{}{}{:<width$}{}",
+            prefix,
+            connector,
+            indicator,
+            name,
+            suffix,
+            width = name_width
+        );
+    }
+}
+
 pub fn execute(project: Option<&Project>, unused: bool, disk_usage: bool) -> Result<()> {
     // Fetch all VMs once — used for both status look-ups and session discovery.
     let all_vms = template::list_all_vms()?;
@@ -54,46 +80,69 @@ pub fn execute(project: Option<&Project>, unused: bool, disk_usage: bool) -> Res
 
     if disk_usage {
         println!(
-            "{:<52} {:>10} {:>15}",
+            "{:<50} {:>10} {:>15}",
             "TEMPLATE / SESSION", "SIZE", "LAST USED"
         );
-        println!("{}", "-".repeat(79));
+        println!("{}", "-".repeat(77));
     }
 
-    for template_name in &template_names {
+    let tpl_last = template_names.len().saturating_sub(1);
+
+    for (ti, template_name) in template_names.iter().enumerate() {
+        let is_last_tpl = ti == tpl_last;
+        let tpl_connector = if is_last_tpl {
+            "└── "
+        } else {
+            "├── "
+        };
+
         let is_running = all_vms
             .iter()
             .find(|vm| vm.name == *template_name)
             .map(|vm| vm.status == "Running")
             .unwrap_or(false);
 
-        let indicator = running_indicator(is_running);
-
-        if disk_usage {
+        let suffix = if disk_usage {
             let size = template::get_disk_usage(template_name);
             let last_used = template::format_last_used(template_name);
-            println!(
-                "{}{:<50} {:>10} {:>15}",
-                indicator, template_name, size, last_used
-            );
+            format!(" {:>10} {:>15}", size, last_used)
         } else {
-            println!("{}{}", indicator, template_name);
-        }
+            String::new()
+        };
 
-        // Session VMs belonging to this template, indented one level.
+        print_row(
+            "",
+            tpl_connector,
+            running_indicator(is_running),
+            template_name,
+            &suffix,
+        );
+
+        // Session VMs — vertical bar continues only if this template is not last.
+        let session_prefix = if is_last_tpl { "    " } else { "│   " };
         let sessions = template::list_sessions_for(template_name, &all_vms);
-        for session in &sessions {
-            let session_indicator = running_indicator(session.status == "Running");
-            if disk_usage {
+        let ses_last = sessions.len().saturating_sub(1);
+
+        for (si, session) in sessions.iter().enumerate() {
+            let ses_connector = if si == ses_last {
+                "└── "
+            } else {
+                "├── "
+            };
+            let ses_suffix = if disk_usage {
                 let size = template::get_disk_usage(&session.name);
                 let last_used = template::format_last_used(&session.name);
-                println!(
-                    "  {}{:<48} {:>10} {:>15}",
-                    session_indicator, session.name, size, last_used
-                );
+                format!(" {:>10} {:>15}", size, last_used)
             } else {
-                println!("  {}{}", session_indicator, session.name);
-            }
+                String::new()
+            };
+            print_row(
+                session_prefix,
+                ses_connector,
+                running_indicator(session.status == "Running"),
+                &session.name,
+                &ses_suffix,
+            );
         }
     }
 
@@ -113,6 +162,19 @@ mod tests {
     fn test_running_indicator() {
         assert_eq!(running_indicator(true), "\x1b[32m•\x1b[0m ");
         assert_eq!(running_indicator(false), "  ");
+    }
+
+    #[test]
+    fn test_print_row_no_suffix() {
+        // smoke-test: just ensure it doesn't panic
+        print_row("│   ", "├── ", "  ", "claude-tpl_proj_abc1234", "");
+        print_row(
+            "    ",
+            "└── ",
+            "\x1b[32m•\x1b[0m ",
+            "claude-tpl_proj_abc1234",
+            "",
+        );
     }
 
     #[test]
