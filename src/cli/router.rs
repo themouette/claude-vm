@@ -19,6 +19,7 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
     "net", // Alias for network
     "worktree",
     "w", // Alias for worktree
+    "prune",
 ];
 
 /// Route CLI arguments to the appropriate command.

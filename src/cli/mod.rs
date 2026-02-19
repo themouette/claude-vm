@@ -219,6 +219,13 @@ pub enum Commands {
         #[command(subcommand)]
         command: WorktreeCommands,
     },
+
+    /// Remove orphaned session VMs from killed processes
+    Prune {
+        /// Skip confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 }
 
 #[derive(Parser, Debug)]

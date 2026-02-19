@@ -108,6 +108,10 @@ fn main() -> Result<()> {
             commands::clean_all::execute(*yes)?;
             return Ok(());
         }
+        Some(Commands::Prune { yes }) => {
+            commands::prune::execute(*yes)?;
+            return Ok(());
+        }
         _ => {}
     }
 
