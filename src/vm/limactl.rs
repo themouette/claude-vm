@@ -30,6 +30,15 @@ fn mounts_set_expr(mounts: &[Mount]) -> String {
     }
 }
 
+/// Run `cmd`, silencing stdout and stderr unless `verbose` is true.
+fn run_silent(cmd: &mut Command, verbose: bool) -> std::io::Result<std::process::ExitStatus> {
+    if verbose {
+        cmd.status()
+    } else {
+        cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
+    }
+}
+
 pub struct LimaCtl;
 
 /// VM configuration based on the host operating system
@@ -141,13 +150,7 @@ impl LimaCtl {
             }
         }
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to create VM: {}", e)))?;
 
         if !status.success() {
@@ -165,13 +168,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(["start", name]);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to start VM: {}", e)))?;
 
         if !status.success() {
@@ -189,13 +186,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(["stop", name]);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to stop VM: {}", e)))?;
 
         if !status.success() {
@@ -219,13 +210,7 @@ impl LimaCtl {
         let mut cmd = Command::new("limactl");
         cmd.args(&args);
 
-        let result = if verbose {
-            cmd.status()
-        } else {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null()).status()
-        };
-
-        let status = result
+        let status = run_silent(&mut cmd, verbose)
             .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to delete VM: {}", e)))?;
 
         if !status.success() {
