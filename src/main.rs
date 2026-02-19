@@ -49,16 +49,7 @@ fn run() -> Result<()> {
     let project_result = Project::detect();
 
     // For commands that must have a project, fail if not found
-    let requires_project = matches!(
-        &cli.command,
-        Some(Commands::Agent(..))
-            | Some(Commands::Setup(..))
-            | Some(Commands::Shell(..))
-            | Some(Commands::Info)
-            | Some(Commands::Clean { .. })
-            | Some(Commands::Network { .. })
-            | Some(Commands::Worktree { .. })
-    );
+    let requires_project = cli.command.as_ref().is_some_and(Commands::needs_project);
 
     let (project, config) = if requires_project {
         // Must have project
