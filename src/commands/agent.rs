@@ -17,6 +17,9 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, &config)?;
 
+    // Clean up any orphaned stopped session VMs from previous killed sessions
+    helpers::auto_prune_stopped_sessions(config.verbose);
+
     // Check resource allocation before creating VM
     crate::resources::check_before_vm_creation(&config.vm, cmd.force_resources, config.verbose)?;
 
@@ -38,6 +41,10 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         &config.mounts,
     )?;
     let _cleanup = session.ensure_cleanup_with_config(&config, "agent");
+    // Best-effort: warn but don't abort if signal handler registration fails
+    if let Err(e) = _cleanup.register_signal_handler() {
+        eprintln!("⚠  Could not register signal handler: {}", e);
+    }
 
     // Execute before_runtime host phases
     if !config.phase.before_runtime.is_empty() {

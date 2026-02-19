@@ -96,6 +96,33 @@ pub fn resolve_worktree(
     Ok(result.path().clone())
 }
 
+/// Find and delete stopped orphaned session VMs, printing a notice.
+///
+/// Only handles **stopped** orphans — it's safe and fast.
+/// Running orphans (dead PID but VM still Running) require the explicit `prune` command.
+pub fn auto_prune_stopped_sessions(verbose: bool) {
+    let Ok(vms) = crate::vm::limactl::LimaCtl::list() else {
+        return;
+    };
+    let orphans: Vec<_> = vms
+        .iter()
+        .filter(|vm| crate::vm::session::is_session_vm(&vm.name))
+        .filter(|vm| vm.status.eq_ignore_ascii_case("stopped"))
+        .collect();
+
+    if orphans.is_empty() {
+        return;
+    }
+
+    eprintln!(
+        "🧹 Cleaning up {} orphaned stopped session VM(s)...",
+        orphans.len()
+    );
+    for vm in &orphans {
+        let _ = crate::vm::limactl::LimaCtl::delete(&vm.name, true, verbose);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
