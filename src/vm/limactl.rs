@@ -238,18 +238,25 @@ impl LimaCtl {
         Ok(())
     }
 
-    /// Clone a Lima VM with additional mounts
+    /// Clone a Lima VM with additional mounts.
+    ///
+    /// Tries `limactl clone` first (older Lima ≤ 0.16) and falls back to
+    /// `limactl copy` (Lima ≥ 0.17) **only** when the first attempt fails
+    /// because the sub-command is not recognised.  Any other failure
+    /// (disk full, invalid VM name, …) is returned immediately so that the
+    /// caller sees the real error instead of a confusing `copy` error.
     pub fn clone(source: &str, dest: &str, mounts: &[Mount], verbose: bool) -> Result<()> {
-        // Try "clone" first (older Lima), then "copy" (newer Lima)
-        // This ensures compatibility across Lima versions
-        let result = Self::try_clone_command("clone", source, dest, mounts, verbose);
-
-        if result.is_ok() {
-            return result;
+        match Self::try_clone_command("clone", source, dest, mounts, verbose) {
+            Ok(()) => Ok(()),
+            Err(ClaudeVmError::LimaExecution(ref msg))
+                if msg.contains("unknown command") || msg.contains("unknown subcommand") =>
+            {
+                // "clone" is not a recognised sub-command in this Lima version;
+                // fall back to the newer "copy" command.
+                Self::try_clone_command("copy", source, dest, mounts, verbose)
+            }
+            Err(e) => Err(e),
         }
-
-        // If clone failed, try copy (Lima >= 0.17)
-        Self::try_clone_command("copy", source, dest, mounts, verbose)
     }
 
     fn try_clone_command(
@@ -267,19 +274,33 @@ impl LimaCtl {
             cmd.arg("--set").arg(mounts_set_expr(mounts));
         }
 
-        // Suppress output unless in verbose mode
-        if !verbose {
-            cmd.stdout(Stdio::null()).stderr(Stdio::null());
+        // Always capture stderr so we can inspect it for "unknown command"
+        // messages; print it only in verbose mode.
+        let output = cmd
+            .stdout(if verbose {
+                Stdio::inherit()
+            } else {
+                Stdio::null()
+            })
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| {
+                ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e))
+            })?;
+
+        if verbose {
+            // Forward captured stderr to the terminal
+            let _ = std::io::Write::write_all(&mut std::io::stderr(), &output.stderr);
         }
 
-        let status = cmd.status().map_err(|e| {
-            ClaudeVmError::LimaExecution(format!("Failed to {} VM: {}", command, e))
-        })?;
-
-        if !status.success() {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ClaudeVmError::LimaExecution(format!(
-                "Failed to {} VM from {} to {}",
-                command, source, dest
+                "Failed to {} VM from {} to {}: {}",
+                command,
+                source,
+                dest,
+                stderr.trim()
             )));
         }
 
