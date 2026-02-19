@@ -168,6 +168,10 @@ pub enum Commands {
         /// Show disk usage information
         #[arg(long)]
         disk_usage: bool,
+
+        /// List all projects' templates, even when inside a project
+        #[arg(long, short = 'a')]
+        all: bool,
     },
 
     /// Clean the template for this project
