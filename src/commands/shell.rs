@@ -48,6 +48,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
         &config.mounts,
     )?;
     let _cleanup = session.ensure_cleanup_with_config(&config, "shell");
+    let child_pid_slot = _cleanup.child_pid_slot();
     // Best-effort: warn but don't abort if signal handler registration fails
     if let Err(e) = _cleanup.register_signal_handler() {
         eprintln!("⚠  Could not register signal handler: {}", e);
@@ -96,6 +97,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
             &["-l"],
             &env_vars,
             "shell",
+            child_pid_slot,
         )?;
     } else {
         // Command execution mode
@@ -112,6 +114,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
             &["-c", &cmd_str],
             &env_vars,
             "shell",
+            child_pid_slot,
         ) {
             Ok(()) => {}
             Err(ClaudeVmError::CommandExitCode(code)) => {

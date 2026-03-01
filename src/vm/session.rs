@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::project::Project;
 use crate::scripts::host_executor;
 use crate::vm::{limactl::LimaCtl, mount};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Returns true if the VM name is an ephemeral session clone.
@@ -133,6 +133,7 @@ impl VmSession {
             config: Some(config.clone()),
             command: Some(command.to_string()),
             cleaned_up: Arc::clone(&self.cleaned_up),
+            child_pid: Arc::new(AtomicU32::new(0)),
             verbose: self.verbose,
         }
     }
@@ -146,6 +147,7 @@ impl VmSession {
             config: None,
             command: None,
             cleaned_up: Arc::clone(&self.cleaned_up),
+            child_pid: Arc::new(AtomicU32::new(0)),
             verbose: self.verbose,
         }
     }
@@ -158,18 +160,42 @@ pub struct CleanupGuard {
     config: Option<Config>,
     command: Option<String>,
     cleaned_up: Arc<AtomicBool>,
+    /// PID of the active `limactl shell` child process, or 0 if none.
+    child_pid: Arc<AtomicU32>,
     verbose: bool,
 }
 
 impl CleanupGuard {
+    /// Return a shared handle to the child-PID slot so the runner can store
+    /// the `limactl shell` child PID while it is alive.
+    pub fn child_pid_slot(&self) -> Arc<AtomicU32> {
+        Arc::clone(&self.child_pid)
+    }
+
+    /// Send SIGTERM to the process identified by `pid` (no-op when `pid == 0`).
+    fn kill_child_process(pid: u32) {
+        if pid == 0 {
+            return;
+        }
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    }
+
     /// Install SIGINT/SIGTERM handler that explicitly cleans up the VM before exit.
     /// Without this, Ctrl+C kills the process without running Drop.
     pub fn register_signal_handler(&self) -> crate::error::Result<()> {
         let cleaned_up = Arc::clone(&self.cleaned_up);
         let vm_name = self.vm_name.clone();
         let verbose = self.verbose;
+        let child_pid = Arc::clone(&self.child_pid);
 
         ctrlc::set_handler(move || {
+            // Kill the child limactl shell process first so the VM is idle
+            // before we attempt to stop it.
+            let pid = child_pid.load(Ordering::SeqCst);
+            CleanupGuard::kill_child_process(pid);
+
             if !cleaned_up.swap(true, Ordering::SeqCst) {
                 eprintln!("\nInterrupted — cleaning up VM {}...", vm_name);
                 let _ = LimaCtl::stop(&vm_name, verbose);
@@ -190,6 +216,11 @@ impl Drop for CleanupGuard {
     fn drop(&mut self) {
         // Only cleanup if not already done
         if !self.cleaned_up.swap(true, Ordering::SeqCst) {
+            // Kill the child limactl shell process first so the VM is idle
+            // before we attempt to stop it.
+            let pid = self.child_pid.load(Ordering::SeqCst);
+            Self::kill_child_process(pid);
+
             if let Some(config) = &self.config {
                 // 1. Execute VM-based after-runtime phases INSIDE VM (before host after_runtime)
                 if !config.phase.after_runtime.is_empty() {
@@ -333,6 +364,7 @@ mod tests {
                 config: None,
                 command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
+                child_pid: Arc::new(AtomicU32::new(0)),
                 verbose: false,
             };
             assert!(!cleaned_up.load(Ordering::SeqCst));
@@ -356,6 +388,7 @@ mod tests {
                 config: None,
                 command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
+                child_pid: Arc::new(AtomicU32::new(0)),
                 verbose: false,
             };
             // Simulate failure

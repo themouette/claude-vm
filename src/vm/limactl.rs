@@ -336,6 +336,40 @@ impl LimaCtl {
         Ok(())
     }
 
+    /// Spawn a shell command in a Lima VM, returning a `Child` handle.
+    ///
+    /// Same argument setup as [`shell()`] but uses `.spawn()` instead of `.status()`,
+    /// giving the caller control over the child's lifetime (kill, wait, etc.).
+    pub fn spawn_shell(
+        name: &str,
+        workdir: Option<&Path>,
+        cmd: &str,
+        args: &[&str],
+        forward_ssh_agent: bool,
+    ) -> Result<std::process::Child> {
+        let mut command = Command::new("limactl");
+        command.arg("shell");
+
+        if let Some(wd) = workdir {
+            command.args(["--workdir", &wd.to_string_lossy()]);
+        }
+
+        if forward_ssh_agent {
+            command.arg("-A");
+        }
+
+        command.arg(name);
+        command.arg(cmd);
+        command.args(args);
+
+        command
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to spawn shell: {}", e)))
+    }
+
     /// Copy a file into a Lima VM
     pub fn copy(src: &Path, vm_name: &str, dest: &str) -> Result<()> {
         let dest_path = format!("{}:{}", vm_name, dest);

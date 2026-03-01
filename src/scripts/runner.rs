@@ -8,6 +8,8 @@ use crate::vm::limactl::LimaCtl;
 use crate::vm::{mount, session::VmSession};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 
 /// Type alias for runtime script metadata: (name, content, env_vars, source, when_condition, continue_on_error)
 type RuntimeScriptInfo = (
@@ -303,6 +305,7 @@ pub fn execute_command_with_runtime_scripts(
     args: &[&str],
     env_vars: &HashMap<String, String>,
     command: &str,
+    child_pid_slot: Arc<AtomicU32>,
 ) -> Result<()> {
     // Collect all runtime scripts as (name, content, env_vars, source, when_condition, continue_on_error) tuples
     let mut script_contents: Vec<RuntimeScriptInfo> = Vec::new();
@@ -577,13 +580,27 @@ pub fn execute_command_with_runtime_scripts(
     shell_args.push(cmd);
     shell_args.extend(args);
 
-    LimaCtl::shell(
+    let mut child = LimaCtl::spawn_shell(
         vm_name,
         workdir,
         "bash",
         &shell_args,
         config.forward_ssh_agent,
-    )
+    )?;
+    child_pid_slot.store(child.id(), Ordering::SeqCst);
+    let status = child
+        .wait()
+        .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to wait for shell: {}", e)))?;
+    child_pid_slot.store(0, Ordering::SeqCst);
+
+    if !status.success() {
+        return Err(match status.code() {
+            Some(code) => ClaudeVmError::CommandExitCode(code),
+            None => ClaudeVmError::LimaExecution("Command terminated by signal".to_string()),
+        });
+    }
+
+    Ok(())
 }
 
 /// Execute a single script inside the VM (used for after_runtime phases)
