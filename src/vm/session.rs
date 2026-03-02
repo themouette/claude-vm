@@ -172,7 +172,8 @@ impl CleanupGuard {
         Arc::clone(&self.child_pid)
     }
 
-    /// Send SIGTERM to the process identified by `pid` (no-op when `pid == 0`).
+    /// Send SIGTERM to the process identified by `pid` and restore the terminal
+    /// (no-op when `pid == 0`).
     fn kill_child_process(pid: u32) {
         if pid == 0 {
             return;
@@ -180,6 +181,8 @@ impl CleanupGuard {
         let _ = std::process::Command::new("kill")
             .args(["-TERM", &pid.to_string()])
             .status();
+        // Restore terminal modes left in a raw state by the SSH/PTY session.
+        let _ = std::process::Command::new("stty").arg("sane").status();
     }
 
     /// Install SIGINT/SIGTERM handler that explicitly cleans up the VM before exit.
