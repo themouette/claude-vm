@@ -189,20 +189,24 @@ impl CleanupGuard {
     /// Without this, Ctrl+C kills the process without running Drop.
     pub fn register_signal_handler(&self) -> crate::error::Result<()> {
         let cleaned_up = Arc::clone(&self.cleaned_up);
-        let vm_name = self.vm_name.clone();
-        let verbose = self.verbose;
         let child_pid = Arc::clone(&self.child_pid);
+        let vm_name = self.vm_name.clone();
+        let project = self.project.clone();
+        let config = self.config.clone();
+        let command = self.command.clone();
+        let verbose = self.verbose;
 
         ctrlc::set_handler(move || {
-            // Kill the child limactl shell process first so the VM is idle
-            // before we attempt to stop it.
-            let pid = child_pid.load(Ordering::SeqCst);
-            CleanupGuard::kill_child_process(pid);
-
             if !cleaned_up.swap(true, Ordering::SeqCst) {
                 eprintln!("\nInterrupted — cleaning up VM {}...", vm_name);
-                let _ = LimaCtl::stop(&vm_name, verbose);
-                let _ = LimaCtl::delete(&vm_name, true, verbose);
+                perform_cleanup(
+                    &vm_name,
+                    &project,
+                    &config,
+                    &command,
+                    child_pid.load(Ordering::SeqCst),
+                    verbose,
+                );
             }
             std::process::exit(130); // conventional SIGINT exit code
         })
@@ -215,58 +219,63 @@ impl CleanupGuard {
     }
 }
 
-impl Drop for CleanupGuard {
-    fn drop(&mut self) {
-        // Only cleanup if not already done
-        if !self.cleaned_up.swap(true, Ordering::SeqCst) {
-            // Kill the child limactl shell process first so the VM is idle
-            // before we attempt to stop it.
-            let pid = self.child_pid.load(Ordering::SeqCst);
-            Self::kill_child_process(pid);
+/// Runs the full cleanup sequence: kill child, after-runtime phases, host teardown, stop/delete VM.
+///
+/// Called from both `Drop::drop()` and the signal handler so both paths execute identical logic.
+fn perform_cleanup(
+    vm_name: &str,
+    project: &Project,
+    config: &Option<Config>,
+    command: &Option<String>,
+    child_pid_val: u32,
+    verbose: bool,
+) {
+    // Step 1: Kill child process + restore terminal
+    CleanupGuard::kill_child_process(child_pid_val);
 
-            if let Some(config) = &self.config {
-                // 1. Execute VM-based after-runtime phases INSIDE VM (before host after_runtime)
-                if !config.phase.after_runtime.is_empty() {
-                    if let Some(command) = &self.command {
-                        // Use project root as workdir (same as runtime phases)
-                        let workdir = Some(self.project.root());
-                        if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
-                            &self.vm_name,
-                            &self.project,
-                            config,
-                            command,
-                            workdir,
-                        ) {
-                            eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
-                            // Continue with teardown anyway
-                        }
-                    }
-                }
-
-                // 2. Execute host-based teardown phases
-                if !config.phase.host.teardown.is_empty() {
-                    if let Err(e) = host_executor::execute_host_phases(
-                        &config.phase.host.teardown,
-                        &self.project,
-                        &self.vm_name,
-                        &host_executor::build_host_env(
-                            &self.project,
-                            "teardown",
-                            self.command.as_deref(),
-                        ),
-                    ) {
-                        eprintln!("⚠ Warning: Teardown phases failed: {}", e);
-                        // Continue with VM cleanup anyway
-                    }
+    if let Some(cfg) = config {
+        // Step 2: Execute VM-based after-runtime phases INSIDE VM (before host teardown)
+        if !cfg.phase.after_runtime.is_empty() {
+            if let Some(cmd) = command {
+                let workdir = Some(project.root());
+                if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
+                    vm_name, project, cfg, cmd, workdir,
+                ) {
+                    eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
                 }
             }
+        }
 
-            // 3. Stop and delete VM
-            eprintln!("Cleaning up VM: {}", self.vm_name);
+        // Step 3: Execute host-based teardown phases
+        if !cfg.phase.host.teardown.is_empty() {
+            if let Err(e) = host_executor::execute_host_phases(
+                &cfg.phase.host.teardown,
+                project,
+                vm_name,
+                &host_executor::build_host_env(project, "teardown", command.as_deref()),
+            ) {
+                eprintln!("⚠ Warning: Teardown phases failed: {}", e);
+            }
+        }
+    }
 
-            // Best effort cleanup - ignore errors
-            let _ = LimaCtl::stop(&self.vm_name, self.verbose);
-            let _ = LimaCtl::delete(&self.vm_name, true, self.verbose);
+    // Step 4: Stop and delete VM
+    eprintln!("Cleaning up VM: {}", vm_name);
+    let _ = LimaCtl::stop(vm_name, verbose);
+    let _ = LimaCtl::delete(vm_name, true, verbose);
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        if !self.cleaned_up.swap(true, Ordering::SeqCst) {
+            perform_cleanup(
+                &self.vm_name,
+                &self.project,
+                &self.config,
+                &self.command,
+                self.child_pid.load(Ordering::SeqCst),
+                self.verbose,
+            );
         }
     }
 }
