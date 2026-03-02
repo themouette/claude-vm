@@ -181,8 +181,22 @@ impl CleanupGuard {
         let _ = std::process::Command::new("kill")
             .args(["-TERM", &pid.to_string()])
             .status();
+        // Wait for the child to fully exit (and be reaped by the main thread's
+        // child.wait()) before restoring the terminal.  The SSH client may still
+        // be manipulating the TTY settings during its exit handling; running
+        // `stty sane` too early would be overridden.  Cap the wait at 2 s.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline && is_pid_running(pid) {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         // Restore terminal modes left in a raw state by the SSH/PTY session.
         let _ = std::process::Command::new("stty").arg("sane").status();
+    }
+
+    /// Returns a shared handle to the `cleaned_up` flag so callers can detect
+    /// when the signal handler has taken ownership of cleanup.
+    pub fn cleanup_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cleaned_up)
     }
 
     /// Install SIGINT/SIGTERM handler that explicitly cleans up the VM before exit.
