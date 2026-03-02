@@ -2366,6 +2366,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_worktree_with_missing_configs() {
         use std::io::Write;
 

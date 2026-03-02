@@ -3,7 +3,7 @@ use crate::error::Result;
 use crate::project::Project;
 use crate::scripts::host_executor;
 use crate::vm::{limactl::LimaCtl, mount};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 /// Returns true if the VM name is an ephemeral session clone.
@@ -133,6 +133,7 @@ impl VmSession {
             config: Some(config.clone()),
             command: Some(command.to_string()),
             cleaned_up: Arc::clone(&self.cleaned_up),
+            child_pid: Arc::new(AtomicU32::new(0)),
             verbose: self.verbose,
         }
     }
@@ -146,6 +147,7 @@ impl VmSession {
             config: None,
             command: None,
             cleaned_up: Arc::clone(&self.cleaned_up),
+            child_pid: Arc::new(AtomicU32::new(0)),
             verbose: self.verbose,
         }
     }
@@ -158,22 +160,67 @@ pub struct CleanupGuard {
     config: Option<Config>,
     command: Option<String>,
     cleaned_up: Arc<AtomicBool>,
+    /// PID of the active `limactl shell` child process, or 0 if none.
+    child_pid: Arc<AtomicU32>,
     verbose: bool,
 }
 
 impl CleanupGuard {
+    /// Return a shared handle to the child-PID slot so the runner can store
+    /// the `limactl shell` child PID while it is alive.
+    pub fn child_pid_slot(&self) -> Arc<AtomicU32> {
+        Arc::clone(&self.child_pid)
+    }
+
+    /// Send SIGTERM to the process identified by `pid` and restore the terminal
+    /// (no-op when `pid == 0`).
+    fn kill_child_process(pid: u32) {
+        if pid == 0 {
+            return;
+        }
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+        // Wait for the child to fully exit (and be reaped by the main thread's
+        // child.wait()) before restoring the terminal.  The SSH client may still
+        // be manipulating the TTY settings during its exit handling; running
+        // `stty sane` too early would be overridden.  Cap the wait at 2 s.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline && is_pid_running(pid) {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        // Restore terminal modes left in a raw state by the SSH/PTY session.
+        let _ = std::process::Command::new("stty").arg("sane").status();
+    }
+
+    /// Returns a shared handle to the `cleaned_up` flag so callers can detect
+    /// when the signal handler has taken ownership of cleanup.
+    pub fn cleanup_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.cleaned_up)
+    }
+
     /// Install SIGINT/SIGTERM handler that explicitly cleans up the VM before exit.
     /// Without this, Ctrl+C kills the process without running Drop.
     pub fn register_signal_handler(&self) -> crate::error::Result<()> {
         let cleaned_up = Arc::clone(&self.cleaned_up);
+        let child_pid = Arc::clone(&self.child_pid);
         let vm_name = self.vm_name.clone();
+        let project = self.project.clone();
+        let config = self.config.clone();
+        let command = self.command.clone();
         let verbose = self.verbose;
 
         ctrlc::set_handler(move || {
             if !cleaned_up.swap(true, Ordering::SeqCst) {
                 eprintln!("\nInterrupted — cleaning up VM {}...", vm_name);
-                let _ = LimaCtl::stop(&vm_name, verbose);
-                let _ = LimaCtl::delete(&vm_name, true, verbose);
+                perform_cleanup(
+                    &vm_name,
+                    &project,
+                    &config,
+                    &command,
+                    child_pid.load(Ordering::SeqCst),
+                    verbose,
+                );
             }
             std::process::exit(130); // conventional SIGINT exit code
         })
@@ -186,53 +233,63 @@ impl CleanupGuard {
     }
 }
 
-impl Drop for CleanupGuard {
-    fn drop(&mut self) {
-        // Only cleanup if not already done
-        if !self.cleaned_up.swap(true, Ordering::SeqCst) {
-            if let Some(config) = &self.config {
-                // 1. Execute VM-based after-runtime phases INSIDE VM (before host after_runtime)
-                if !config.phase.after_runtime.is_empty() {
-                    if let Some(command) = &self.command {
-                        // Use project root as workdir (same as runtime phases)
-                        let workdir = Some(self.project.root());
-                        if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
-                            &self.vm_name,
-                            &self.project,
-                            config,
-                            command,
-                            workdir,
-                        ) {
-                            eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
-                            // Continue with teardown anyway
-                        }
-                    }
-                }
+/// Runs the full cleanup sequence: kill child, after-runtime phases, host teardown, stop/delete VM.
+///
+/// Called from both `Drop::drop()` and the signal handler so both paths execute identical logic.
+fn perform_cleanup(
+    vm_name: &str,
+    project: &Project,
+    config: &Option<Config>,
+    command: &Option<String>,
+    child_pid_val: u32,
+    verbose: bool,
+) {
+    // Step 1: Kill child process + restore terminal
+    CleanupGuard::kill_child_process(child_pid_val);
 
-                // 2. Execute host-based teardown phases
-                if !config.phase.host.teardown.is_empty() {
-                    if let Err(e) = host_executor::execute_host_phases(
-                        &config.phase.host.teardown,
-                        &self.project,
-                        &self.vm_name,
-                        &host_executor::build_host_env(
-                            &self.project,
-                            "teardown",
-                            self.command.as_deref(),
-                        ),
-                    ) {
-                        eprintln!("⚠ Warning: Teardown phases failed: {}", e);
-                        // Continue with VM cleanup anyway
-                    }
+    if let Some(cfg) = config {
+        // Step 2: Execute VM-based after-runtime phases INSIDE VM (before host teardown)
+        if !cfg.phase.after_runtime.is_empty() {
+            if let Some(cmd) = command {
+                let workdir = Some(project.root());
+                if let Err(e) = crate::scripts::runner::execute_after_runtime_phases(
+                    vm_name, project, cfg, cmd, workdir,
+                ) {
+                    eprintln!("⚠ Warning: After-runtime phases failed: {}", e);
                 }
             }
+        }
 
-            // 3. Stop and delete VM
-            eprintln!("Cleaning up VM: {}", self.vm_name);
+        // Step 3: Execute host-based teardown phases
+        if !cfg.phase.host.teardown.is_empty() {
+            if let Err(e) = host_executor::execute_host_phases(
+                &cfg.phase.host.teardown,
+                project,
+                vm_name,
+                &host_executor::build_host_env(project, "teardown", command.as_deref()),
+            ) {
+                eprintln!("⚠ Warning: Teardown phases failed: {}", e);
+            }
+        }
+    }
 
-            // Best effort cleanup - ignore errors
-            let _ = LimaCtl::stop(&self.vm_name, self.verbose);
-            let _ = LimaCtl::delete(&self.vm_name, true, self.verbose);
+    // Step 4: Stop and delete VM
+    eprintln!("Cleaning up VM: {}", vm_name);
+    let _ = LimaCtl::stop(vm_name, verbose);
+    let _ = LimaCtl::delete(vm_name, true, verbose);
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        if !self.cleaned_up.swap(true, Ordering::SeqCst) {
+            perform_cleanup(
+                &self.vm_name,
+                &self.project,
+                &self.config,
+                &self.command,
+                self.child_pid.load(Ordering::SeqCst),
+                self.verbose,
+            );
         }
     }
 }
@@ -333,6 +390,7 @@ mod tests {
                 config: None,
                 command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
+                child_pid: Arc::new(AtomicU32::new(0)),
                 verbose: false,
             };
             assert!(!cleaned_up.load(Ordering::SeqCst));
@@ -356,6 +414,7 @@ mod tests {
                 config: None,
                 command: None,
                 cleaned_up: Arc::clone(&cleaned_up),
+                child_pid: Arc::new(AtomicU32::new(0)),
                 verbose: false,
             };
             // Simulate failure

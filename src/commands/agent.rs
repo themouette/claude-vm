@@ -41,6 +41,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         &config.mounts,
     )?;
     let _cleanup = session.ensure_cleanup_with_config(&config, "agent");
+    let child_pid_slot = _cleanup.child_pid_slot();
     // Best-effort: warn but don't abort if signal handler registration fails
     if let Err(e) = _cleanup.register_signal_handler() {
         eprintln!("⚠  Could not register signal handler: {}", e);
@@ -115,6 +116,8 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         &args,
         &env_vars,
         "agent",
+        child_pid_slot,
+        _cleanup.cleanup_flag(),
     )?;
 
     // Execute host-side after_runtime phases

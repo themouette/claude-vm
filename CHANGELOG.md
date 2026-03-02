@@ -4,6 +4,17 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **SIGTERM leaving `limactl shell` process orphaned**: When `claude-vm agent` or `shell` is
+  killed via SIGTERM/SIGINT, the child `limactl shell` process is now explicitly sent SIGTERM
+  before the VM is stopped. Previously, `process::exit()` did not signal child processes, leaving
+  the shell attached to the terminal and the VM potentially still running.
+  The fix stores the child PID in a shared `AtomicU32` slot on `CleanupGuard`; both the ctrlc
+  signal handler and the `Drop` implementation read the slot and call `kill -TERM <pid>` before
+  stopping the VM. The `ctrlc` dependency now enables the `termination` feature so that SIGTERM
+  (not just SIGINT/Ctrl+C) is intercepted by the handler.
+
 ## [0.9.0] - 2026-02-19
 
 ### Added
