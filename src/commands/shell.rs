@@ -98,6 +98,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
             &env_vars,
             "shell",
             child_pid_slot,
+            _cleanup.cleanup_flag(),
         )?;
     } else {
         // Command execution mode
@@ -115,6 +116,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &ShellCmd) -> Result<()>
             &env_vars,
             "shell",
             child_pid_slot,
+            _cleanup.cleanup_flag(),
         ) {
             Ok(()) => {}
             Err(ClaudeVmError::CommandExitCode(code)) => {

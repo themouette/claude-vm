@@ -117,6 +117,7 @@ pub fn execute(project: &Project, config: &Config, cmd: &AgentCmd) -> Result<()>
         &env_vars,
         "agent",
         child_pid_slot,
+        _cleanup.cleanup_flag(),
     )?;
 
     // Execute host-side after_runtime phases
