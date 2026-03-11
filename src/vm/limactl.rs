@@ -442,6 +442,24 @@ impl LimaCtl {
         let vms = Self::list()?;
         Ok(vms.iter().any(|vm| vm.name == name))
     }
+
+    /// Get SSH config block for a VM via `limactl show-ssh --format=config`.
+    pub fn show_ssh_config(name: &str) -> Result<String> {
+        let output = Command::new("limactl")
+            .args(["show-ssh", "--format=config", name])
+            .output()
+            .map_err(|e| ClaudeVmError::LimaExecution(format!("Failed to get SSH config: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(ClaudeVmError::LimaExecution(format!(
+                "limactl show-ssh failed: {}",
+                stderr.trim()
+            )));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
 }
 
 /// Parse Lima memory format (e.g., "8GiB", "8G", "2048MiB", or raw bytes) to GB
