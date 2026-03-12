@@ -16,6 +16,29 @@ pub fn execute(project: &Project, config: &Config, cmd: &VscodeCmd) -> Result<()
     helpers::auto_prune_stopped_sessions(config.verbose);
     crate::resources::check_before_vm_creation(&config.vm, cmd.force_resources, config.verbose)?;
 
+    // Mount persistent vscode-server dir so extensions/settings/auth survive across sessions
+    let home = std::env::var("HOME")
+        .map_err(|_| ClaudeVmError::CommandFailed("HOME not set".into()))?;
+    let user = std::env::var("USER")
+        .map_err(|_| ClaudeVmError::CommandFailed("USER not set".into()))?;
+    let server_dir_name = if config.vscode_binary.as_deref() == Some("code-insiders") {
+        ".vscode-server-insiders"
+    } else {
+        ".vscode-server"
+    };
+    // Lima always creates homedir as /home/{USER}.linux
+    let vm_homedir = format!("/home/{}.linux", user);
+    let persist_path = std::path::PathBuf::from(&home)
+        .join(".claude-vm")
+        .join("vscode-server")
+        .join(project.template_name());
+    std::fs::create_dir_all(&persist_path)?;
+    config.mounts.push(crate::config::MountEntry {
+        location: persist_path.to_string_lossy().to_string(),
+        writable: true,
+        mount_point: Some(format!("{}/{}", vm_homedir, server_dir_name)),
+    });
+
     // Resolve worktree if --worktree flag present
     if !cmd.runtime.worktree.is_empty() {
         let worktree_path = helpers::resolve_worktree(&cmd.runtime.worktree, &config, project)?;
