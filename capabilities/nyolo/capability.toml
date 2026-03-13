@@ -26,8 +26,8 @@ echo "✓ nyolo hook registered"
 
 [[phase.runtime]]
 name = "nyolo-environment"
+source = true
 script = """
-#!/bin/bash
 export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
 mkdir -p ~/.claude-vm/context

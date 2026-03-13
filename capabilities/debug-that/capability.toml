@@ -27,8 +27,8 @@ echo "✓ debug-that installed"
 
 [[phase.runtime]]
 name = "debug-that-environment"
+source = true
 script = """
-#!/bin/bash
 export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
 mkdir -p ~/.claude-vm/context
