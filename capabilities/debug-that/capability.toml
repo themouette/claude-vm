@@ -9,7 +9,8 @@ system = []
 setup_script = """
 #!/bin/bash
 set -e
-export PATH="$HOME/.local/bin:$PATH"
+# Include mise shims dir explicitly so newly installed tools are found immediately
+export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
 
 # Ensure bun is available
