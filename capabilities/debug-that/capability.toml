@@ -9,8 +9,8 @@ system = []
 setup_script = """
 #!/bin/bash
 set -e
-# Include mise shims dir explicitly so newly installed tools are found immediately
-export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
+# Include mise shims and bun global bin so newly installed tools are found immediately
+export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
 
 # Ensure bun is available
@@ -29,7 +29,7 @@ echo "✓ debug-that installed"
 name = "debug-that-environment"
 script = """
 #!/bin/bash
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/debug-that.txt <<EOF
