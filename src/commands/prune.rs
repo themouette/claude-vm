@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::session::store as session_store;
 use crate::vm::limactl::{LimaCtl, VmInfo};
 use crate::vm::session::{extract_session_pid, is_pid_running, is_session_vm};
 use std::io::{self, Write};
@@ -124,6 +125,17 @@ pub fn execute(yes: bool) -> Result<()> {
             String::new()
         }
     );
+
+    // Also clean up orphaned session records (records whose VM no longer exists)
+    match session_store::prune_orphaned_records() {
+        Ok(removed) if removed > 0 => {
+            println!("Removed {} orphaned session record(s).", removed);
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Warning: Failed to prune orphaned session records: {}", e);
+        }
+    }
 
     Ok(())
 }
