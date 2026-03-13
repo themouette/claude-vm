@@ -7,6 +7,7 @@ pub mod info;
 pub mod list;
 pub mod network;
 pub mod prune;
+pub mod session;
 pub mod setup;
 pub mod shell;
 pub mod update;

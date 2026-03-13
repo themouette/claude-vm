@@ -9,6 +9,7 @@ pub mod phase_executor;
 pub mod project;
 pub mod resources;
 pub mod scripts;
+pub mod session;
 pub mod update_check;
 pub mod utils;
 pub mod version;

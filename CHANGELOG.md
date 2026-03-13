@@ -4,6 +4,8 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-03-13
+
 ### Added
 
 - **`mise` capability**: Polyglot tool manager for Node.js, Bun, Python, and more
@@ -556,7 +558,8 @@ All notable changes to claude-vm will be documented in this file.
 - **VM lifecycle management**: Basic commands for creating, starting, stopping, and destroying VMs
 - **Lima integration**: Leverages Lima (Linux virtual machines) for macOS to provide lightweight, fast VM creation
 
-[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/themouette/claude-vm/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/themouette/claude-vm/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/themouette/claude-vm/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/themouette/claude-vm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/themouette/claude-vm/compare/v0.6.0...v0.7.0

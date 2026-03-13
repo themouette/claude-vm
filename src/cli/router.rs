@@ -20,6 +20,8 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
     "worktree",
     "w", // Alias for worktree
     "prune",
+    "session",
+    "sess", // Alias for session
 ];
 
 /// Route CLI arguments to the appropriate command.

@@ -185,6 +185,11 @@ pub(crate) fn get_embedded_script(capability_id: &str, script_name: &str) -> Res
             include_str!("../../capabilities/network-isolation/vm_runtime.sh")
         }
 
+        // vscode
+        ("vscode", "host_runtime.sh") => {
+            include_str!("../../capabilities/vscode/host_runtime.sh")
+        }
+
         _ => {
             return Err(ClaudeVmError::InvalidConfig(format!(
                 "Embedded script '{}' not found for capability '{}'",

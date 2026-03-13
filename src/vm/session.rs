@@ -6,6 +6,60 @@ use crate::vm::{limactl::LimaCtl, mount};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
+/// Returns true if the VM name is a persistent session VM.
+///
+/// Persistent session VMs end with `-s{6 hex chars}`, e.g.
+/// `claude-tpl_project_abcd1234-sa3f7c2`.
+pub fn is_persistent_session_vm(name: &str) -> bool {
+    name.rsplit('_')
+        .next()
+        .and_then(|hash_part| {
+            if hash_part.contains('-') {
+                hash_part.rsplit('-').next()
+            } else {
+                None
+            }
+        })
+        .map(|suffix| {
+            suffix.len() >= 2
+                && suffix.starts_with('s')
+                && suffix[1..].chars().all(|c| c.is_ascii_hexdigit())
+        })
+        .unwrap_or(false)
+}
+
+/// Extracts the session ID (the `s{hex}` suffix) from a persistent session VM name.
+pub fn extract_persistent_session_id(name: &str) -> Option<&str> {
+    let hash_part = name.rsplit('_').next()?;
+    let suffix = hash_part.rsplit('-').next()?;
+    if suffix.len() >= 2
+        && suffix.starts_with('s')
+        && suffix[1..].chars().all(|c| c.is_ascii_hexdigit())
+    {
+        Some(suffix)
+    } else {
+        None
+    }
+}
+
+/// Generate a persistent session VM name for the given template.
+///
+/// Format: `{template_name}-s{random_hex_6}`
+pub fn generate_persistent_vm_name(template_name: &str) -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    // Simple pseudo-random 6-char hex using time + pid
+    let hash_val = (nanos as u64)
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(pid as u64);
+    let hex_id: String = format!("{:016x}", hash_val).chars().take(6).collect();
+    format!("{}-s{}", template_name, hex_id)
+}
+
 /// Returns true if the VM name is an ephemeral session clone.
 ///
 /// Works for both release (`…_hash-PID`) and debug (`…_hash-dev-PID`) builds.
@@ -114,6 +168,20 @@ impl VmSession {
             cleaned_up: Arc::new(AtomicBool::new(false)),
             verbose,
         })
+    }
+
+    /// Wrap an already-running VM without creating or starting a new one.
+    ///
+    /// Used when `--session <id>` is provided: the VM was started by
+    /// `session start` and its lifetime is managed externally, so no
+    /// `CleanupGuard` should be created.
+    pub fn from_existing(vm_name: &str, project: &Project, verbose: bool) -> Self {
+        Self {
+            name: vm_name.to_string(),
+            project: project.clone(),
+            cleaned_up: Arc::new(AtomicBool::new(false)),
+            verbose,
+        }
     }
 
     /// Get the VM name
@@ -267,6 +335,7 @@ fn perform_cleanup(
                 project,
                 vm_name,
                 &host_executor::build_host_env(project, "teardown", command.as_deref()),
+                None,
             ) {
                 eprintln!("⚠ Warning: Teardown phases failed: {}", e);
             }
@@ -397,6 +466,68 @@ mod tests {
         }
         // After drop, flag should be set
         assert!(cleaned_up.load(Ordering::SeqCst));
+    }
+
+    // Tests for is_persistent_session_vm()
+
+    #[test]
+    fn test_is_persistent_session_vm_positive() {
+        // Valid: ends with -s{6 hex chars}
+        assert!(is_persistent_session_vm(
+            "claude-tpl_project_abcd1234-sa3f7c2"
+        ));
+    }
+
+    #[test]
+    fn test_is_persistent_session_vm_negative_pid_suffix() {
+        // Ephemeral session (PID suffix) should NOT be persistent
+        assert!(!is_persistent_session_vm(
+            "claude-tpl_project_abcd1234-68951"
+        ));
+    }
+
+    #[test]
+    fn test_is_persistent_session_vm_negative_template() {
+        // Plain template: no dash in hash_part
+        assert!(!is_persistent_session_vm("claude-tpl_project_abcd1234"));
+    }
+
+    #[test]
+    fn test_is_persistent_session_vm_negative_dev_suffix() {
+        // Debug template: ends with -dev, not -s{hex}
+        assert!(!is_persistent_session_vm("claude-tpl_project_abcd1234-dev"));
+    }
+
+    // Tests for extract_persistent_session_id()
+
+    #[test]
+    fn test_extract_persistent_session_id_valid() {
+        assert_eq!(
+            extract_persistent_session_id("claude-tpl_project_abcd1234-sa3f7c2"),
+            Some("sa3f7c2")
+        );
+    }
+
+    #[test]
+    fn test_extract_persistent_session_id_not_persistent() {
+        // PID suffix does not start with 's'
+        assert_eq!(
+            extract_persistent_session_id("claude-tpl_project_abcd1234-68951"),
+            None
+        );
+    }
+
+    // Tests for generate_persistent_vm_name()
+
+    #[test]
+    fn test_generate_persistent_vm_name_format() {
+        let name = generate_persistent_vm_name("claude-tpl_project_abcd1234");
+        // Should start with template name
+        assert!(name.starts_with("claude-tpl_project_abcd1234-s"));
+        // Should pass is_persistent_session_vm check
+        assert!(is_persistent_session_vm(&name));
+        // Should NOT be detected as ephemeral session
+        assert!(!is_session_vm(&name));
     }
 
     #[test]

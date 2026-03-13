@@ -206,6 +206,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub nyolo: bool,
+
+    #[serde(default)]
+    pub vscode: bool,
 }
 
 /// RTK configuration supporting both simple boolean and detailed config
@@ -337,6 +340,7 @@ impl ToolsConfig {
             "mise" => self.mise.as_ref().is_some_and(|c| c.is_enabled()),
             "debug-that" => self.debug_that,
             "nyolo" => self.nyolo,
+            "vscode" => self.vscode,
             _ => false,
         }
     }
@@ -357,6 +361,7 @@ impl ToolsConfig {
             "mise" => self.mise = Some(MiseConfig::Simple(true)),
             "debug-that" => self.debug_that = true,
             "nyolo" => self.nyolo = true,
+            "vscode" => self.vscode = true,
             _ => {}
         }
     }

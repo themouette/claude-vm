@@ -304,7 +304,7 @@ fn test_capability_phases_run_before_user_phases() {
     config.tools.gh = true;
 
     // Merge capability phases
-    merge_capability_phases(&mut config).expect("Failed to merge capability phases");
+    merge_capability_phases(&mut config, None).expect("Failed to merge capability phases");
 
     // Verify setup phases: capability phases should come first
     assert!(!config.phase.setup.is_empty(), "Should have setup phases");
@@ -532,7 +532,7 @@ fn test_capability_after_runtime_phases_are_merged() {
     config.tools.rtk = Some(RtkConfig::Simple(true));
 
     // Merge capability phases
-    merge_capability_phases(&mut config).expect("Failed to merge capability phases");
+    merge_capability_phases(&mut config, None).expect("Failed to merge capability phases");
 
     // Verify after-runtime phases exist
     assert!(

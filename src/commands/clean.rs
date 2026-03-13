@@ -1,5 +1,6 @@
 use crate::error::Result;
 use crate::project::Project;
+use crate::session::store as session_store;
 use crate::vm::template;
 use std::io::{self, Write};
 
@@ -30,6 +31,14 @@ pub fn execute(project: &Project, yes: bool) -> Result<()> {
 
     println!("Cleaning template: {}", project.template_name());
     template::delete(project.template_name())?;
+
+    // Remove session records associated with this template
+    if let Ok(removed) = session_store::prune_records_for_template(project.template_name()) {
+        if removed > 0 {
+            println!("Removed {} session record(s) for this template.", removed);
+        }
+    }
+
     println!("Template cleaned successfully: {}", project.template_name());
 
     Ok(())

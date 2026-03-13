@@ -7,6 +7,7 @@ This guide covers all Claude VM commands with detailed examples.
 - [Setup](#setup)
 - [Run Claude](#run-claude)
 - [Shell Access](#shell-access)
+- [Persistent Sessions](#persistent-sessions)
 - [Project Information](#project-information)
 - [Configuration Management](#configuration-management)
 - [Worktree Management](#worktree-management)
@@ -172,6 +173,18 @@ claude-vm -A "git push to remote"
 claude-vm --forward-ssh-agent
 ```
 
+### Reuse a Persistent Session
+
+Run inside an already-running session VM (no VM creation/teardown):
+
+```bash
+SESSION=$(claude-vm session start)
+claude-vm agent --session "$SESSION" "implement the feature"
+claude-vm session stop "$SESSION"
+```
+
+See [Persistent Sessions](#persistent-sessions) for details.
+
 ### Other Options
 
 ```bash
@@ -241,6 +254,57 @@ claude-vm --mount ~/datasets:/data shell python process.py
 # Multiple mounts
 claude-vm --mount /data1 --mount /data2:ro shell ./analyze.sh
 ```
+
+## Persistent Sessions
+
+Start a VM once and reuse it across multiple commands. This is useful when an external tool (VSCode, a script, an orchestrator) needs to control VM lifetime.
+
+Also available as `claude-vm sess`.
+
+### Start a Session
+
+```bash
+# Start a session and capture the ID
+SESSION=$(claude-vm session start)
+echo $SESSION   # e.g. "a3f7c2"
+```
+
+### List Sessions
+
+```bash
+claude-vm session list
+```
+
+### Stop a Session
+
+```bash
+claude-vm session stop "$SESSION"
+```
+
+### Use a Session
+
+Pass `--session <id>` to `agent` or `shell` to reuse the running VM:
+
+```bash
+claude-vm agent --session "$SESSION" "add unit tests"
+claude-vm shell --session "$SESSION" npm test
+```
+
+### Complete Example
+
+```bash
+SESSION=$(claude-vm session start)
+
+claude-vm agent --session "$SESSION" "implement the feature"
+claude-vm shell --session "$SESSION" npm test
+claude-vm shell --session "$SESSION" git diff
+
+claude-vm session stop "$SESSION"
+```
+
+For VSCode Remote-SSH, see the [VSCode guide](features/vscode.md).
+
+See [Persistent Sessions](features/sessions.md) for the full reference.
 
 ## Project Information
 
@@ -734,6 +798,8 @@ claude-vm -A "implement feature and push to remote"
 
 ## Next Steps
 
+- **[Persistent Sessions](features/sessions.md)** - Start a VM once, reuse it many times
+- **[VSCode Remote-SSH](features/vscode.md)** - Edit your project in VSCode inside the VM
 - **[Configuration](configuration.md)** - Configure VM settings, tools, and scripts
 - **[Runtime Scripts](features/runtime-scripts.md)** - Automate environment setup
 - **[Agent Forwarding](agent-forwarding.md)** - Configure GPG, SSH, and Git

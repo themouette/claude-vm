@@ -230,6 +230,32 @@ pub enum Commands {
         #[arg(short = 'y', long)]
         yes: bool,
     },
+
+    /// Manage persistent VM sessions
+    #[command(alias = "sess")]
+    Session(SessionCmd),
+}
+
+#[derive(Parser, Debug)]
+pub struct SessionCmd {
+    #[command(subcommand)]
+    pub subcommand: SessionSubcommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SessionSubcommand {
+    /// Start a new persistent VM session
+    Start,
+
+    /// Stop and delete a persistent VM session
+    Stop {
+        /// Session ID to stop
+        id: String,
+    },
+
+    /// List all persistent VM sessions
+    #[command(alias = "ls")]
+    List,
 }
 
 impl Commands {
@@ -238,16 +264,20 @@ impl Commands {
     /// Commands that return `true` will cause `main` to abort with an error when
     /// invoked outside a recognised project directory.
     pub fn needs_project(&self) -> bool {
-        matches!(
-            self,
+        match self {
+            Commands::Session(cmd) => {
+                // Only `session start` requires a project; stop/list do not
+                matches!(cmd.subcommand, SessionSubcommand::Start)
+            }
             Commands::Agent(..)
-                | Commands::Setup(..)
-                | Commands::Shell(..)
-                | Commands::Info
-                | Commands::Clean { .. }
-                | Commands::Network { .. }
-                | Commands::Worktree { .. }
-        )
+            | Commands::Setup(..)
+            | Commands::Shell(..)
+            | Commands::Info
+            | Commands::Clean { .. }
+            | Commands::Network { .. }
+            | Commands::Worktree { .. } => true,
+            _ => false,
+        }
     }
 }
 
@@ -265,6 +295,10 @@ pub struct AgentCmd {
     #[arg(long = "force-resources")]
     pub force_resources: bool,
 
+    /// Reuse an existing persistent session VM (skips VM creation)
+    #[arg(long = "session")]
+    pub session: Option<String>,
+
     /// Arguments to pass to Claude
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub claude_args: Vec<String>,
@@ -279,6 +313,10 @@ pub struct ShellCmd {
     /// Bypass resource overprovisioning checks
     #[arg(long = "force-resources")]
     pub force_resources: bool,
+
+    /// Reuse an existing persistent session VM (skips VM creation)
+    #[arg(long = "session")]
+    pub session: Option<String>,
 
     /// Command to execute (optional, opens interactive shell if not provided)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]

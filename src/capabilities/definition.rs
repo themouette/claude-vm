@@ -5,6 +5,27 @@
 use crate::config::PhaseConfig;
 use serde::Deserialize;
 
+/// A mount specified by a capability.
+///
+/// The `location` and `mount_point` fields support variable substitution:
+/// - `{home}` → `$HOME` on the host
+/// - `{template_name}` → the project's template name
+/// - `{vm_home}` → `/home/{USER}.linux` inside the VM
+#[derive(Debug, Clone, Deserialize)]
+pub struct MountSpec {
+    /// Host-side path to mount. Supports `{home}` and `{template_name}`.
+    pub location: String,
+    /// VM-side mount point. Supports `{vm_home}`.
+    pub mount_point: String,
+    /// Whether the mount is writable from the VM.
+    #[serde(default = "default_mount_writable")]
+    pub writable: bool,
+}
+
+fn default_mount_writable() -> bool {
+    true
+}
+
 /// A capability definition loaded from a TOML file.
 ///
 /// Capabilities define optional lifecycle hooks, MCP servers, and port forwards.
@@ -28,6 +49,10 @@ pub struct Capability {
     /// Port forwards to configure
     #[serde(default)]
     pub forwards: Vec<ForwardConfig>,
+
+    /// Additional mounts to add to the VM when this capability is enabled.
+    #[serde(default)]
+    pub mounts: Vec<MountSpec>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

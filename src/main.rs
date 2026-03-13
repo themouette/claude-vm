@@ -2,7 +2,7 @@
 
 use clap::Parser;
 
-use claude_vm::cli::{router, Cli, Commands, NetworkCommands, WorktreeCommands};
+use claude_vm::cli::{router, Cli, Commands, NetworkCommands, SessionSubcommand, WorktreeCommands};
 use claude_vm::commands;
 use claude_vm::config::Config;
 use claude_vm::error::{ClaudeVmError, Result};
@@ -70,6 +70,11 @@ fn run() -> Result<()> {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
                     .with_setup_overrides(cmd, cli.verbose)
             }
+            Some(Commands::Session(cmd)) if matches!(cmd.subcommand, SessionSubcommand::Start) => {
+                let mut cfg = Config::load_with_main_repo(proj.root(), proj.main_repo_root())?;
+                cfg.verbose = cli.verbose;
+                cfg
+            }
             _ => {
                 let mut cfg = Config::load_with_main_repo(proj.root(), proj.main_repo_root())?;
                 cfg.verbose = cli.verbose;
@@ -115,6 +120,19 @@ fn run() -> Result<()> {
             commands::prune::execute(*yes)?;
             return Ok(());
         }
+        Some(Commands::Session(cmd)) => match &cmd.subcommand {
+            SessionSubcommand::Stop { id } => {
+                commands::session::execute_stop(id)?;
+                return Ok(());
+            }
+            SessionSubcommand::List => {
+                commands::session::execute_list()?;
+                return Ok(());
+            }
+            SessionSubcommand::Start => {
+                // Handled below (needs project)
+            }
+        },
         _ => {}
     }
 
@@ -149,6 +167,10 @@ fn run() -> Result<()> {
         }
         Some(Commands::Info) => {
             commands::info::execute()?;
+        }
+        Some(Commands::Session(cmd)) => {
+            // Only Start reaches here (Stop/List handled above)
+            commands::session::execute(&project, &config, cmd)?;
         }
         Some(Commands::Clean { yes }) => {
             commands::clean::execute(&project, *yes)?;

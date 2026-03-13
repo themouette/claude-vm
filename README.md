@@ -44,6 +44,7 @@ Both forms work identically. The explicit `agent` command makes the default beha
 ```bash
 claude-vm agent [flags] [args]     # Run Claude (also the default)
 claude-vm shell [flags] [args]     # Interactive shell or run commands (alias: sh)
+claude-vm session <subcommand>     # Persistent VM sessions (alias: sess)
 claude-vm setup [flags] <name>     # Create a template VM
 claude-vm worktree <subcommand>    # Worktree management (alias: w)
 claude-vm info                     # Show project information (alias: i)
@@ -54,6 +55,11 @@ claude-vm clean-all [flags]        # Remove all templates
 claude-vm update [flags]           # Update claude-vm (alias: up)
 claude-vm network <subcommand>     # Network isolation management (alias: net)
 ```
+
+**Session subcommands:**
+- `session start` — start a persistent VM and print its session ID
+- `session stop <id>` — stop and remove a session
+- `session list` — list all active sessions
 
 **Worktree subcommands:**
 - `worktree create` (alias: `new`) - Create a new worktree
@@ -80,6 +86,8 @@ Think of it as Docker for AI coding assistants - isolated, reproducible, and saf
 ## Key Features
 
 - **Template VMs per Repository** - Create once per project, clone for fast startup
+- **Persistent Sessions** - Start a VM once and reuse it with `--session` across multiple agent/shell commands
+- **VSCode Remote-SSH** - Use the Claude Code extension inside the VM for inline diffs and editor integration
 - **Git Worktree Management** - Dedicated commands for creating, listing, deleting, and cleaning worktrees with seamless `--worktree` flag integration
 - **Runtime Scripts** - Automatically run setup scripts before each session
 - **Configuration File Support** - Define VM resources, tools, and settings in `.claude-vm.toml`
@@ -155,6 +163,39 @@ claude-vm shell
 claude-vm shell npm test
 ```
 
+### Persistent Sessions
+
+Keep a VM alive across multiple commands:
+
+```bash
+# Start a session
+SESSION=$(claude-vm session start)
+
+# Run multiple commands in the same VM
+claude-vm agent --session "$SESSION" "add unit tests"
+claude-vm shell --session "$SESSION" npm test
+
+# Stop when done
+claude-vm session stop "$SESSION"
+```
+
+### VSCode Remote-SSH
+
+Edit your project inside the VM with VSCode ([full guide](docs/features/vscode.md)):
+
+```bash
+# 1. Enable vscode in .claude-vm.toml:  vscode = true  (under [tools])
+# 2. Start a session
+SESSION=$(claude-vm session start)
+
+# 3. Open VSCode in the VM
+ALIAS=$(grep '^Host ' ~/.claude-vm/ssh/config | awk '{print $2}')
+code --folder-uri "vscode-remote://ssh-remote+${ALIAS}/$(pwd)"
+
+# 4. Stop when done
+claude-vm session stop "$SESSION"
+```
+
 ### Management Commands
 
 ```bash
@@ -179,6 +220,8 @@ claude-vm clean
 
 ### Features
 
+- **[Sessions](docs/features/sessions.md)** - Persistent VM sessions: start once, reuse many times
+- **[VSCode Remote-SSH](docs/features/vscode.md)** - Run the Claude Code extension inside the VM with VSCode's UI
 - **[Templates](docs/features/templates.md)** - How template VMs work
 - **[Runtime Scripts](docs/features/runtime-scripts.md)** - Runtime scripts and context contribution
 - **[Custom Mounts](docs/features/custom-mounts.md)** - Mount additional directories

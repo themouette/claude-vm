@@ -158,6 +158,19 @@ pub(crate) fn get_claude_conversation_folder(project_path: &Path) -> Option<Path
     }
 }
 
+/// Ensure all mount source directories exist on the host, creating them if needed.
+///
+/// Lima validates that mount source paths exist before cloning. Session-scoped and
+/// template-scoped subdirectory mounts require their host paths to exist in advance.
+pub fn ensure_mount_sources_exist(mounts: &[Mount]) -> crate::error::Result<()> {
+    for mount in mounts {
+        if !mount.location.exists() {
+            std::fs::create_dir_all(&mount.location)?;
+        }
+    }
+    Ok(())
+}
+
 /// Add `mount` to `mounts`, enforcing uniqueness and conflict rules:
 /// - Silently skips if the host location is already mounted.
 /// - Returns an error if the VM mount point is already in use.

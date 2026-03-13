@@ -30,6 +30,7 @@ pub fn execute_host_phases(
     project: &Project,
     vm_name: &str,
     env_vars: &HashMap<String, String>,
+    session_id: Option<&str>,
 ) -> Result<()> {
     for phase in phases {
         println!("\n━━━ Host Phase: {} ━━━", phase.name);
@@ -49,6 +50,10 @@ pub fn execute_host_phases(
         // Add VM name to environment
         phase_env.insert("VM_NAME".to_string(), vm_name.to_string());
         phase_env.insert("LIMA_INSTANCE".to_string(), vm_name.to_string());
+        phase_env.insert(
+            "SESSION_ID".to_string(),
+            session_id.unwrap_or("").to_string(),
+        );
 
         // Get scripts (inline + files) with error context
         let scripts = phase.get_scripts(project.root()).map_err(|e| {
@@ -302,7 +307,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = execute_host_phases(&[phase], &project, "test-vm", &HashMap::new());
+        let result = execute_host_phases(&[phase], &project, "test-vm", &HashMap::new(), None);
 
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
@@ -328,7 +333,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let project = Project::new_for_test(temp_dir.path().to_path_buf());
 
-        let result = execute_host_phases(&[phase1, phase2], &project, "test-vm", &HashMap::new());
+        let result = execute_host_phases(
+            &[phase1, phase2],
+            &project,
+            "test-vm",
+            &HashMap::new(),
+            None,
+        );
 
         // Should succeed because first phase has continue_on_error
         assert!(result.is_ok());
@@ -350,7 +361,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let project = Project::new_for_test(temp_dir.path().to_path_buf());
 
-        let result = execute_host_phases(&[phase_with_condition], &project, "test-vm", &env);
+        let result = execute_host_phases(&[phase_with_condition], &project, "test-vm", &env, None);
 
         assert!(result.is_ok());
     }
