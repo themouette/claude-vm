@@ -7,7 +7,7 @@ use crate::scripts::host_executor;
 use crate::session::{store, SessionRecord};
 use crate::vm::limactl::LimaCtl;
 use crate::vm::mount;
-use crate::vm::session::generate_persistent_vm_name;
+use crate::vm::session::{extract_persistent_session_id, generate_persistent_vm_name};
 use chrono::Utc;
 use std::io::{self, Write};
 
@@ -32,9 +32,18 @@ pub fn execute_list() -> Result<()> {
 
 /// Start a persistent session: clone + start VM, persist record, print session ID.
 fn start(project: &Project, config: &Config) -> Result<()> {
+    // Generate a persistent VM name early so we can extract the session_id for
+    // capability mount variable substitution.
+    let vm_name = generate_persistent_vm_name(project.template_name());
+    let session_id = extract_persistent_session_id(&vm_name).ok_or_else(|| {
+        crate::error::ClaudeVmError::InvalidConfig(
+            "failed to extract session id from vm name".to_string(),
+        )
+    })?;
+
     // Merge capability phases into a local config copy (this is the frozen snapshot)
     let mut config = config.clone();
-    crate::capabilities::merge_capability_phases(&mut config)?;
+    crate::capabilities::merge_capability_phases(&mut config, Some(session_id))?;
 
     // Ensure template exists
     helpers::ensure_template_exists(project, &config)?;
@@ -45,11 +54,9 @@ fn start(project: &Project, config: &Config) -> Result<()> {
     // Check resource allocation
     crate::resources::check_before_vm_creation(&config.vm, false, config.verbose)?;
 
-    // Generate a persistent VM name
-    let vm_name = generate_persistent_vm_name(project.template_name());
-
     // Compute mounts
     let mounts = mount::compute_mounts(config.mount_conversations, &config.mounts)?;
+    mount::ensure_mount_sources_exist(&mounts)?;
 
     eprintln!("Starting persistent VM session...");
 
@@ -71,15 +78,13 @@ fn start(project: &Project, config: &Config) -> Result<()> {
             project,
             &vm_name,
             &host_executor::build_host_env(project, "runtime", Some("session")),
+            Some(session_id),
         )?;
     }
 
-    // Derive the session ID from the VM name suffix (the "s{hex}" part)
-    let session_id = vm_name.rsplit('-').next().unwrap_or("unknown").to_string();
-
     // Persist the session record
     let record = SessionRecord {
-        id: session_id.clone(),
+        id: session_id.to_string(),
         vm_name: vm_name.clone(),
         template_name: project.template_name().to_string(),
         project_root: project.root().to_path_buf(),
@@ -127,6 +132,7 @@ fn stop(id: &str) -> Result<()> {
             &project,
             &record.vm_name,
             &host_executor::build_host_env(&project, "teardown", Some("session")),
+            Some(&record.id),
         ) {
             eprintln!("Warning: Teardown phases failed: {}", e);
         }

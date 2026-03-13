@@ -70,6 +70,7 @@ fn execute_with_session(
             project,
             session.name(),
             &host_executor::build_host_env(project, "runtime", Some("shell")),
+            Some(session_id),
         )?;
     }
 
@@ -82,7 +83,7 @@ fn execute_ephemeral(project: &Project, config: &Config, cmd: &ShellCmd) -> Resu
     let mut config = config.clone();
 
     // Merge capability-defined phases with user-defined phases
-    crate::capabilities::merge_capability_phases(&mut config)?;
+    crate::capabilities::merge_capability_phases(&mut config, None)?;
 
     // Ensure template exists (create if missing and user confirms)
     helpers::ensure_template_exists(project, &config)?;
@@ -130,6 +131,7 @@ fn execute_ephemeral(project: &Project, config: &Config, cmd: &ShellCmd) -> Resu
             project,
             session.name(),
             &host_executor::build_host_env(project, "runtime", Some("shell")),
+            None,
         )?;
     }
 
@@ -199,6 +201,7 @@ fn execute_ephemeral(project: &Project, config: &Config, cmd: &ShellCmd) -> Resu
             project,
             session.name(),
             &host_executor::build_host_env(project, "runtime", Some("shell")),
+            None,
         )?;
     }
 
@@ -279,6 +282,7 @@ fn run_shell_in_vm(
             project,
             session.name(),
             &host_executor::build_host_env(project, "runtime", Some("shell")),
+            None,
         )?;
     }
 

@@ -16,7 +16,7 @@ pub fn execute(project: &Project, config: &Config, no_agent_install: bool) -> Re
     let mut config = config.clone();
 
     // Merge capability-defined phases with user-defined phases
-    capabilities::merge_capability_phases(&mut config)?;
+    capabilities::merge_capability_phases(&mut config, None)?;
 
     println!(
         "Setting up template for project: {}",
@@ -73,6 +73,7 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
             project,
             project.template_name(),
             &host_executor::build_host_env(project, "setup", None),
+            None,
         )?;
     }
 
@@ -119,6 +120,7 @@ fn run_setup_process(project: &Project, config: &Config, no_agent_install: bool)
             project,
             project.template_name(),
             &host_executor::build_host_env(project, "setup", None),
+            None,
         )?;
     }
 
