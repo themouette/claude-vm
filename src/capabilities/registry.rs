@@ -114,6 +114,10 @@ impl CapabilityRegistry {
                 "nyolo",
                 include_str!("../../capabilities/nyolo/capability.toml"),
             ),
+            (
+                "vscode",
+                include_str!("../../capabilities/vscode/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {

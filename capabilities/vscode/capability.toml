@@ -1,0 +1,17 @@
+[capability]
+id = "vscode"
+name = "VSCode Remote-SSH"
+description = "Persist VSCode server data and configure SSH for Remote-SSH"
+
+[[mounts]]
+location = "{home}/.claude-vm/vscode-server/{template_name}"
+mount_point = "{vm_home}/.vscode-server"
+writable = true
+
+[[phase.host.before_runtime]]
+name = "vscode-ssh-config"
+script_files = ["host_runtime.sh"]
+
+[[phase.host.teardown]]
+name = "vscode-ssh-cleanup"
+script = "printf '' > \"$HOME/.claude-vm/ssh/config\""
