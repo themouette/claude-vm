@@ -27,6 +27,7 @@ Claude VM supports installing various development tools during template creation
 | `mise`     | Polyglot tool manager (Bun, Node, Python) | Install and manage runtimes    |
 | `debug-that` | Universal debugger CLI for AI agents    | Debug Node, Bun, Python, C/C++ |
 | `nyolo`    | PreToolUse hook for permission enforcement | Restrict Claude Code tool access |
+| `vscode`   | VSCode Remote-SSH support                 | Run Claude Code extension in VM  |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -1161,9 +1162,49 @@ claude-vm clean
 claude-vm setup --docker
 ```
 
+### VSCode Remote-SSH
+
+**Mounts:** `~/.claude-vm/vscode-server/{template_name}` → `~/.vscode-server` (persistent VSCode server data)
+
+**Configuration:**
+
+```toml
+[tools]
+vscode = true
+```
+
+**CLI:**
+
+```bash
+claude-vm setup --vscode
+```
+
+**What it does:**
+
+1. Mounts the VSCode server directory from the host into the VM, so server data persists between sessions
+2. Writes Lima's SSH config to `~/.claude-vm/ssh/config` on session start and ensures `~/.ssh/config` includes it
+3. Clears the SSH config on session stop
+
+**Usage:**
+
+```bash
+# Enable in .claude-vm.toml, then:
+SESSION=$(claude-vm session start)
+ALIAS=$(grep '^Host ' ~/.claude-vm/ssh/config | awk '{print $2}')
+code --folder-uri "vscode-remote://ssh-remote+${ALIAS}/$(pwd)"
+# When done:
+claude-vm session stop "$SESSION"
+```
+
+See the [VSCode Remote-SSH guide](vscode.md) for the full walkthrough.
+
+**Note:** The `vscode` capability requires a [persistent session](sessions.md) — it is not useful with ephemeral `agent` or `shell` invocations.
+
 ## Next Steps
 
 - **[Templates](templates.md)** - Understand template creation
+- **[Sessions](sessions.md)** - Persistent VM sessions
+- **[VSCode Remote-SSH](vscode.md)** - Connect VSCode to a session
 - **[Configuration](../configuration.md)** - Configure tools in TOML
 - **[Custom Packages](../advanced/custom-packages.md)** - Install additional packages
 - **[Agent Forwarding](../agent-forwarding.md)** - Configure GPG, SSH, Git
