@@ -17,6 +17,10 @@ All notable changes to claude-vm will be documented in this file.
   - Automatically installs Bun via mise if not present
   - Installs `debug-that` globally via `bun install --global debug-that`
   - Supports Node.js (CDP), Bun (CDP), LLDB (DAP), and Python/debugpy (DAP)
+- **`nyolo` capability**: `PreToolUse` hook for Claude Code permission enforcement
+  - Requires `mise` capability (uses npx/Bun as runner)
+  - Registers the nyolo hook via `npx nyolo install`
+  - Configurable via `./nyolo.config.js` (project) or `~/.claude/nyolo.config.js` (global)
 
 ### Fixed
 

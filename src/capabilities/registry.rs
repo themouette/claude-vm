@@ -110,6 +110,10 @@ impl CapabilityRegistry {
                 "debug-that",
                 include_str!("../../capabilities/debug-that/capability.toml"),
             ),
+            (
+                "nyolo",
+                include_str!("../../capabilities/nyolo/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {

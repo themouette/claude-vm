@@ -26,6 +26,7 @@ Claude VM supports installing various development tools during template creation
 | `rtk`      | Token compression for LLM command outputs | Reduce token costs by 60-90%   |
 | `mise`     | Polyglot tool manager (Bun, Node, Python) | Install and manage runtimes    |
 | `debug-that` | Universal debugger CLI for AI agents    | Debug Node, Bun, Python, C/C++ |
+| `nyolo`    | PreToolUse hook for permission enforcement | Restrict Claude Code tool access |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -721,6 +722,59 @@ $ dbg install lldb                # Install LLDB adapter
 **Network isolation note:**
 
 Users with network isolation enabled may need to add npm registry domains to `allowed_domains` since `bun install --global` fetches from the npm registry.
+
+### Nyolo
+
+**Installs:**
+
+- Nyolo `PreToolUse` hook for Claude Code via `npx nyolo install`
+- Bun runtime (via mise) if not already available
+
+**Requires:** `mise` capability
+
+**Configuration:**
+
+```toml
+[tools]
+mise = true
+nyolo = true
+```
+
+**What it does:**
+
+1. Ensures Bun is available (installs via `mise use --global bun@latest` if needed)
+2. Registers the nyolo `PreToolUse` hook via `npx nyolo install`
+
+**Context provided:**
+
+```markdown
+Nyolo: PreToolUse hook for Claude Code permission enforcement
+Status: (active rules summary)
+Config: ./nyolo.config.js (project) or ~/.claude/nyolo.config.js (global)
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+# Create a project config
+$ cat > nyolo.config.js << 'EOF'
+module.exports = {
+  rules: [
+    { tool: "Bash", deny: ["rm -rf /"] },
+  ],
+};
+EOF
+
+# Or create a global config
+$ cat > ~/.claude/nyolo.config.js << 'EOF'
+module.exports = {
+  rules: [/* your rules */],
+};
+EOF
+```
+
+**Note:** The nyolo hook writes to `~/.claude/settings.json` inside the VM, which is separate from your host configuration.
 
 ### Network Isolation
 

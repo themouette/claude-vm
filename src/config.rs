@@ -203,6 +203,9 @@ pub struct ToolsConfig {
 
     #[serde(default, rename = "debug-that")]
     pub debug_that: bool,
+
+    #[serde(default)]
+    pub nyolo: bool,
 }
 
 /// RTK configuration supporting both simple boolean and detailed config
@@ -333,6 +336,7 @@ impl ToolsConfig {
             "rtk" => self.rtk.as_ref().is_some_and(|cfg| cfg.is_enabled()),
             "mise" => self.mise.as_ref().is_some_and(|c| c.is_enabled()),
             "debug-that" => self.debug_that,
+            "nyolo" => self.nyolo,
             _ => false,
         }
     }
@@ -352,6 +356,7 @@ impl ToolsConfig {
             "rtk" => self.rtk = Some(RtkConfig::Simple(true)),
             "mise" => self.mise = Some(MiseConfig::Simple(true)),
             "debug-that" => self.debug_that = true,
+            "nyolo" => self.nyolo = true,
             _ => {}
         }
     }
@@ -1025,6 +1030,7 @@ impl Config {
         }
 
         self.tools.debug_that = self.tools.debug_that || other.tools.debug_that;
+        self.tools.nyolo = self.tools.nyolo || other.tools.nyolo;
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);
