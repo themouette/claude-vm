@@ -335,6 +335,7 @@ fn perform_cleanup(
                 project,
                 vm_name,
                 &host_executor::build_host_env(project, "teardown", command.as_deref()),
+                None,
             ) {
                 eprintln!("⚠ Warning: Teardown phases failed: {}", e);
             }
