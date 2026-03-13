@@ -200,6 +200,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub mise: Option<MiseConfig>,
+
+    #[serde(default, rename = "debug-that")]
+    pub debug_that: bool,
 }
 
 /// RTK configuration supporting both simple boolean and detailed config
@@ -329,6 +332,7 @@ impl ToolsConfig {
             "network-isolation" => self.network_isolation,
             "rtk" => self.rtk.as_ref().is_some_and(|cfg| cfg.is_enabled()),
             "mise" => self.mise.as_ref().is_some_and(|c| c.is_enabled()),
+            "debug-that" => self.debug_that,
             _ => false,
         }
     }
@@ -347,6 +351,7 @@ impl ToolsConfig {
             "network-isolation" => self.network_isolation = true,
             "rtk" => self.rtk = Some(RtkConfig::Simple(true)),
             "mise" => self.mise = Some(MiseConfig::Simple(true)),
+            "debug-that" => self.debug_that = true,
             _ => {}
         }
     }
@@ -1018,6 +1023,8 @@ impl Config {
         if other.tools.mise.is_some() {
             self.tools.mise = other.tools.mise;
         }
+
+        self.tools.debug_that = self.tools.debug_that || other.tools.debug_that;
 
         // Packages (extend/append)
         self.packages.system.extend(other.packages.system);

@@ -12,6 +12,11 @@ All notable changes to claude-vm will be documented in this file.
   - Simple syntax: `mise = true` or advanced: `[tools.mise]` with `install = ["bun@latest"]`
   - Runtime PATH activation via `mise activate bash`
   - Network isolation users must add `mise.jdx.dev` to `allowed_domains`
+- **`debug-that` capability**: Universal debugger CLI for AI agents (Node, Bun, LLDB, Python)
+  - Requires `mise` capability (uses Bun as installer)
+  - Automatically installs Bun via mise if not present
+  - Installs `debug-that` globally via `bun install --global debug-that`
+  - Supports Node.js (CDP), Bun (CDP), LLDB (DAP), and Python/debugpy (DAP)
 
 ### Fixed
 

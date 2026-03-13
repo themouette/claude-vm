@@ -25,6 +25,7 @@ Claude VM supports installing various development tools during template creation
 | `gh`       | GitHub CLI, authentication                | GitHub operations              |
 | `rtk`      | Token compression for LLM command outputs | Reduce token costs by 60-90%   |
 | `mise`     | Polyglot tool manager (Bun, Node, Python) | Install and manage runtimes    |
+| `debug-that` | Universal debugger CLI for AI agents    | Debug Node, Bun, Python, C/C++ |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -675,6 +676,51 @@ $ mise ls --current              # Show active tool versions
 **Network isolation note:**
 
 Users with network isolation enabled must add `mise.jdx.dev` to `allowed_domains`.
+
+### debug-that
+
+**Installs:**
+
+- debug-that CLI via Bun global install
+- Bun runtime (via mise) if not already available
+
+**Requires:** `mise` capability
+
+**Configuration:**
+
+```toml
+[tools]
+mise = true
+debug-that = true
+```
+
+**What it does:**
+
+1. Ensures Bun is available (installs via `mise use --global bun@latest` if needed)
+2. Installs `debug-that` globally via `bun install --global debug-that`
+
+**Context provided:**
+
+```markdown
+debug-that version: 1.x.x
+Supported runtimes: Node.js (CDP), Bun (CDP), LLDB (DAP), Python/debugpy (DAP)
+Commands: dbg launch, dbg attach, dbg break, dbg step, dbg vars, dbg eval, ...
+Install adapters: dbg install <adapter>
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+$ dbg launch node app.js          # Launch Node.js debugger
+$ dbg launch bun server.ts        # Launch Bun debugger
+$ dbg attach --pid 1234           # Attach to running process
+$ dbg install lldb                # Install LLDB adapter
+```
+
+**Network isolation note:**
+
+Users with network isolation enabled may need to add npm registry domains to `allowed_domains` since `bun install --global` fetches from the npm registry.
 
 ### Network Isolation
 
