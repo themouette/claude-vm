@@ -170,6 +170,20 @@ impl VmSession {
         })
     }
 
+    /// Wrap an already-running VM without creating or starting a new one.
+    ///
+    /// Used when `--session <id>` is provided: the VM was started by
+    /// `session start` and its lifetime is managed externally, so no
+    /// `CleanupGuard` should be created.
+    pub fn from_existing(vm_name: &str, project: &Project, verbose: bool) -> Self {
+        Self {
+            name: vm_name.to_string(),
+            project: project.clone(),
+            cleaned_up: Arc::new(AtomicBool::new(false)),
+            verbose,
+        }
+    }
+
     /// Get the VM name
     pub fn name(&self) -> &str {
         &self.name

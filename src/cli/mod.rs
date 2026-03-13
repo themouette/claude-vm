@@ -295,6 +295,10 @@ pub struct AgentCmd {
     #[arg(long = "force-resources")]
     pub force_resources: bool,
 
+    /// Reuse an existing persistent session VM (skips VM creation)
+    #[arg(long = "session")]
+    pub session: Option<String>,
+
     /// Arguments to pass to Claude
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub claude_args: Vec<String>,
@@ -309,6 +313,10 @@ pub struct ShellCmd {
     /// Bypass resource overprovisioning checks
     #[arg(long = "force-resources")]
     pub force_resources: bool,
+
+    /// Reuse an existing persistent session VM (skips VM creation)
+    #[arg(long = "session")]
+    pub session: Option<String>,
 
     /// Command to execute (optional, opens interactive shell if not provided)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
