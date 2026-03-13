@@ -29,8 +29,8 @@ echo "✓ debug-that installed"
 name = "debug-that-environment"
 source = true
 script = """
-export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
-eval "$(mise activate bash)" 2>/dev/null || true
+# mise activate already ran (mise is a dependency); just add bun's global bin
+export PATH="$HOME/.bun/bin:$PATH"
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/debug-that.txt <<EOF
 debug-that version: $(dbg --version 2>/dev/null || echo "not available")

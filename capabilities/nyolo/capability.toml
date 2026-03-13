@@ -28,8 +28,8 @@ echo "✓ nyolo hook registered"
 name = "nyolo-environment"
 source = true
 script = """
-export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
-eval "$(mise activate bash)" 2>/dev/null || true
+# mise activate already ran (mise is a dependency); just add bun's global bin
+export PATH="$HOME/.bun/bin:$PATH"
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/nyolo.txt <<EOF
 Nyolo: PreToolUse hook for Claude Code permission enforcement
