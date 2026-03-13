@@ -44,6 +44,10 @@ pub struct Config {
     #[serde(default)]
     pub worktree: crate::worktree::config::WorktreeConfig,
 
+    /// VSCode binary to use (default: "code"). Supports code-insiders, codium, etc.
+    #[serde(default)]
+    pub vscode_binary: Option<String>,
+
     /// Automatically create template if missing (default: false)
     #[serde(default)]
     pub auto_setup: bool,
@@ -1041,6 +1045,11 @@ impl Config {
             .network
             .bypass_domains
             .extend(other.security.network.bypass_domains);
+
+        // VSCode binary (other takes precedence if present)
+        if other.vscode_binary.is_some() {
+            self.vscode_binary = other.vscode_binary;
+        }
 
         // Update check settings (other takes precedence)
         self.update_check = other.update_check;

@@ -66,6 +66,10 @@ fn run() -> Result<()> {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
                     .with_runtime_overrides(&cmd.runtime, cli.verbose)
             }
+            Some(Commands::Vscode(cmd)) => {
+                Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
+                    .with_runtime_overrides(&cmd.runtime, cli.verbose)
+            }
             Some(Commands::Setup(cmd)) => {
                 Config::load_with_main_repo(proj.root(), proj.main_repo_root())?
                     .with_setup_overrides(cmd, cli.verbose)
@@ -138,6 +142,9 @@ fn run() -> Result<()> {
         }
         Some(Commands::Shell(cmd)) => {
             commands::shell::execute(&project, &config, cmd)?;
+        }
+        Some(Commands::Vscode(cmd)) => {
+            commands::vscode::execute(&project, &config, cmd)?;
         }
         Some(Commands::Setup(_cmd)) => {
             #[cfg(debug_assertions)]

@@ -10,5 +10,6 @@ pub mod prune;
 pub mod setup;
 pub mod shell;
 pub mod update;
+pub mod vscode;
 pub mod version;
 pub mod worktree;

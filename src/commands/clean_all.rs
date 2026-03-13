@@ -38,6 +38,14 @@ pub fn execute(yes: bool) -> Result<()> {
         template::delete(&template_name)?;
     }
 
+    // Clean up all persistent vscode-server data
+    if let Ok(home) = std::env::var("HOME") {
+        let vscode_persist = std::path::PathBuf::from(home)
+            .join(".claude-vm")
+            .join("vscode-server");
+        let _ = std::fs::remove_dir_all(vscode_persist);
+    }
+
     println!("All templates cleaned successfully.");
     Ok(())
 }

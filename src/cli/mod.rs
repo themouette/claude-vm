@@ -146,6 +146,15 @@ pub enum Commands {
     )]
     Shell(ShellCmd),
 
+    /// Open VSCode connected to an ephemeral VM via Remote-SSH
+    #[command(
+        alias = "code",
+        long_about = "Open VSCode connected to an ephemeral VM via Remote-SSH.\n\n\
+        Creates a fresh VM, configures SSH access for VSCode Remote-SSH,\n\
+        launches VSCode, and keeps the VM alive until you press Ctrl+C."
+    )]
+    Vscode(VscodeCmd),
+
     /// Set up a new template VM for this project
     Setup(SetupCmd),
 
@@ -243,6 +252,7 @@ impl Commands {
             Commands::Agent(..)
                 | Commands::Setup(..)
                 | Commands::Shell(..)
+                | Commands::Vscode(..)
                 | Commands::Info
                 | Commands::Clean { .. }
                 | Commands::Network { .. }
@@ -283,6 +293,17 @@ pub struct ShellCmd {
     /// Command to execute (optional, opens interactive shell if not provided)
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub command: Vec<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct VscodeCmd {
+    /// Runtime configuration flags
+    #[command(flatten)]
+    pub runtime: RuntimeFlags,
+
+    /// Bypass resource overprovisioning checks
+    #[arg(long = "force-resources")]
+    pub force_resources: bool,
 }
 
 #[derive(Parser, Debug)]

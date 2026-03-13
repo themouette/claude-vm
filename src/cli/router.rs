@@ -6,6 +6,8 @@ const KNOWN_SUBCOMMANDS: &[&str] = &[
     "agent",
     "shell",
     "sh", // Alias for shell
+    "vscode",
+    "code", // Alias for vscode
     "setup",
     "info",
     "config",
