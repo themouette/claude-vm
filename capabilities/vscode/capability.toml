@@ -3,15 +3,23 @@ id = "vscode"
 name = "VSCode Remote-SSH"
 description = "Persist VSCode server data and configure SSH for Remote-SSH"
 
+# Template-scoped: shared safely across concurrent sessions
 [[mounts]]
-location = "{home}/.claude-vm/vscode-server/{template_name}"
-mount_point = "{vm_home}/.vscode-server"
+location = "{home}/.claude-vm/vscode-server/{template_name}/bin"
+mount_point = "{vm_home}/.vscode-server/bin"
+writable = true
+
+[[mounts]]
+location = "{home}/.claude-vm/vscode-server/{template_name}/extensions"
+mount_point = "{vm_home}/.vscode-server/extensions"
+writable = true
+
+# Session-scoped: isolated per session, no conflicts between concurrent sessions
+[[mounts]]
+location = "{home}/.claude-vm/sessions/{session_id}/vscode-data"
+mount_point = "{vm_home}/.vscode-server/data"
 writable = true
 
 [[phase.host.before_runtime]]
 name = "vscode-ssh-config"
 script_files = ["host_runtime.sh"]
-
-[[phase.host.teardown]]
-name = "vscode-ssh-cleanup"
-script = "printf '' > \"$HOME/.claude-vm/ssh/config\""

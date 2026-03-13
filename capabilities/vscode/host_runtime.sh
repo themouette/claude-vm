@@ -1,15 +1,17 @@
 #!/bin/bash
 # VSCode Remote-SSH configuration
-# Writes a Lima SSH config and ensures ~/.ssh/config includes it.
+# Writes a per-session Lima SSH config and ensures ~/.ssh/config includes a
+# glob Include that covers all active sessions.
 set -e
 
-SSH_DIR="$HOME/.claude-vm/ssh"
-SSH_CONFIG="$SSH_DIR/config"
-INCLUDE_LINE="Include $SSH_CONFIG"
+# SESSION_ID is injected by the host executor
+SESSION_DIR="$HOME/.claude-vm/sessions/$SESSION_ID"
+SSH_CONFIG="$SESSION_DIR/ssh/config"
+INCLUDE_LINE="Include $HOME/.claude-vm/sessions/*/ssh/config"
 HOST_SSH_CONFIG="$HOME/.ssh/config"
 
-# Ensure the claude-vm ssh directory exists
-mkdir -p "$SSH_DIR"
+# Ensure the per-session ssh directory exists
+mkdir -p "$SESSION_DIR/ssh"
 
 # Create an empty SSH config if it does not exist
 if [ ! -f "$SSH_CONFIG" ]; then
@@ -24,7 +26,7 @@ if [ ! -f "$HOST_SSH_CONFIG" ]; then
     chmod 600 "$HOST_SSH_CONFIG"
 fi
 
-# Idempotently prepend the Include line to ~/.ssh/config
+# Idempotently prepend the glob Include line to ~/.ssh/config
 if ! grep -qF "$INCLUDE_LINE" "$HOST_SSH_CONFIG" 2>/dev/null; then
     # Prepend the Include line (must come before any Host blocks)
     TMPFILE=$(mktemp)
