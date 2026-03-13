@@ -11,11 +11,16 @@ pub fn sessions_dir() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".claude-vm").join("sessions"))
 }
 
+/// Returns the directory for a specific session: `~/.claude-vm/sessions/{id}/`
+pub fn session_dir(id: &str) -> Result<PathBuf> {
+    Ok(sessions_dir()?.join(id))
+}
+
 /// Persist a session record to disk.
 pub fn create(record: &SessionRecord) -> Result<()> {
-    let dir = sessions_dir()?;
+    let dir = session_dir(&record.id)?;
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("{}.json", record.id));
+    let path = dir.join("record.json");
     let json = serde_json::to_string_pretty(record).map_err(|e| {
         ClaudeVmError::InvalidConfig(format!("Failed to serialize session record: {}", e))
     })?;
@@ -25,7 +30,7 @@ pub fn create(record: &SessionRecord) -> Result<()> {
 
 /// Load a session record by ID.
 pub fn get(id: &str) -> Result<SessionRecord> {
-    let path = sessions_dir()?.join(format!("{}.json", id));
+    let path = session_dir(id)?.join("record.json");
     let json = std::fs::read_to_string(&path)
         .map_err(|_| ClaudeVmError::InvalidConfig(format!("Session '{}' not found", id)))?;
     serde_json::from_str(&json).map_err(|e| {
@@ -49,10 +54,11 @@ pub fn list() -> Result<Vec<(SessionRecord, String)>> {
     for entry in std::fs::read_dir(&dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+        if !path.is_dir() {
             continue;
         }
-        let json = match std::fs::read_to_string(&path) {
+        let record_path = path.join("record.json");
+        let json = match std::fs::read_to_string(&record_path) {
             Ok(j) => j,
             Err(_) => continue,
         };
@@ -76,11 +82,11 @@ pub fn list() -> Result<Vec<(SessionRecord, String)>> {
     Ok(records)
 }
 
-/// Delete a session record from disk.
+/// Delete a session record (and its directory) from disk.
 pub fn delete(id: &str) -> Result<()> {
-    let path = sessions_dir()?.join(format!("{}.json", id));
-    if path.exists() {
-        std::fs::remove_file(path)?;
+    let dir = session_dir(id)?;
+    if dir.exists() {
+        std::fs::remove_dir_all(dir)?;
     }
     Ok(())
 }
@@ -102,10 +108,11 @@ pub fn prune_orphaned_records() -> Result<usize> {
     for entry in std::fs::read_dir(&dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+        if !path.is_dir() {
             continue;
         }
-        let json = match std::fs::read_to_string(&path) {
+        let record_path = path.join("record.json");
+        let json = match std::fs::read_to_string(&record_path) {
             Ok(j) => j,
             Err(_) => continue,
         };
@@ -113,7 +120,7 @@ pub fn prune_orphaned_records() -> Result<usize> {
             Ok(r) => r,
             Err(_) => continue,
         };
-        if !existing_vm_names.contains(&record.vm_name) && std::fs::remove_file(&path).is_ok() {
+        if !existing_vm_names.contains(&record.vm_name) && std::fs::remove_dir_all(&path).is_ok() {
             removed += 1;
         }
     }
@@ -134,10 +141,11 @@ pub fn prune_records_for_template(template_name: &str) -> Result<usize> {
     for entry in std::fs::read_dir(&dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+        if !path.is_dir() {
             continue;
         }
-        let json = match std::fs::read_to_string(&path) {
+        let record_path = path.join("record.json");
+        let json = match std::fs::read_to_string(&record_path) {
             Ok(j) => j,
             Err(_) => continue,
         };
@@ -145,7 +153,7 @@ pub fn prune_records_for_template(template_name: &str) -> Result<usize> {
             Ok(r) => r,
             Err(_) => continue,
         };
-        if record.template_name == template_name && std::fs::remove_file(&path).is_ok() {
+        if record.template_name == template_name && std::fs::remove_dir_all(&path).is_ok() {
             removed += 1;
         }
     }
