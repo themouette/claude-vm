@@ -24,6 +24,7 @@ Claude VM supports installing various development tools during template creation
 | `gpg`      | GPG agent forwarding, key sync            | Signed commits, encryption     |
 | `gh`       | GitHub CLI, authentication                | GitHub operations              |
 | `rtk`      | Token compression for LLM command outputs | Reduce token costs by 60-90%   |
+| `mise`     | Polyglot tool manager (Bun, Node, Python) | Install and manage runtimes    |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -624,6 +625,56 @@ hook_mode = false  # Require explicit 'rtk' prefix
 - Original command outputs are preserved in RTK's cache
 - Analytics are stored locally in `~/.rtk/analytics.json`
 - Hook-first mode can be toggled at any time
+
+### Mise
+
+**Installs:**
+
+- Mise polyglot tool manager via official installer
+- Optional pre-installed tools (Bun, Node.js, Python, etc.)
+
+**Configuration:**
+
+Simple syntax (install mise without pre-installing tools):
+```toml
+[tools]
+mise = true
+```
+
+Advanced syntax (pre-install tools during template creation):
+```toml
+[tools.mise]
+install = ["bun@latest", "node@lts", "python@3.12"]
+```
+
+**What it does:**
+
+1. Installs Mise via official install script (`curl https://mise.jdx.dev/install.sh | sh`)
+2. Pre-installs any tools listed in `install` during template creation
+3. Activates Mise environment at runtime (`mise activate bash`) so tools are on PATH
+
+**Context provided:**
+
+```markdown
+Mise version: mise 2024.x.x
+Installed tools: bun@1.1.0, node@20.11.0
+
+Use 'mise use --global <tool>@<version>' to install tools.
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+$ mise use --global bun@latest   # Install Bun
+$ mise use --global node@lts     # Install Node.js LTS
+$ mise ls                        # List installed tools
+$ mise ls --current              # Show active tool versions
+```
+
+**Network isolation note:**
+
+Users with network isolation enabled must add `mise.jdx.dev` to `allowed_domains`.
 
 ### Network Isolation
 

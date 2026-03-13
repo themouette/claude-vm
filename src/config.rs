@@ -197,6 +197,9 @@ pub struct ToolsConfig {
 
     #[serde(default)]
     pub rtk: Option<RtkConfig>,
+
+    #[serde(default)]
+    pub mise: Option<MiseConfig>,
 }
 
 /// RTK configuration supporting both simple boolean and detailed config
@@ -260,6 +263,57 @@ impl RtkConfig {
     }
 }
 
+/// Mise configuration supporting both simple boolean and detailed config
+///
+/// # Examples
+///
+/// Simple syntax:
+/// ```toml
+/// [tools]
+/// mise = true
+/// ```
+///
+/// Advanced syntax with configuration:
+/// ```toml
+/// [tools.mise]
+/// install = ["bun@latest", "node@lts"]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MiseConfig {
+    /// Simple boolean: mise = true
+    Simple(bool),
+    /// Detailed configuration: [tools.mise]
+    Detailed(MiseToolConfig),
+}
+
+/// Mise-specific configuration options
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MiseToolConfig {
+    /// Tools to pre-install globally during VM template creation.
+    /// Example: ["bun@latest", "node@lts", "python@3.12"]
+    #[serde(default)]
+    pub install: Vec<String>,
+}
+
+impl MiseConfig {
+    /// Check if Mise is enabled
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            MiseConfig::Simple(enabled) => *enabled,
+            MiseConfig::Detailed(_) => true, // Presence of config = enabled
+        }
+    }
+
+    /// Get the Mise configuration with defaults
+    pub fn get_config(&self) -> MiseToolConfig {
+        match self {
+            MiseConfig::Simple(_) => MiseToolConfig::default(),
+            MiseConfig::Detailed(config) => config.clone(),
+        }
+    }
+}
+
 impl ToolsConfig {
     /// Check if a capability is enabled by ID
     pub fn is_enabled(&self, id: &str) -> bool {
@@ -274,6 +328,7 @@ impl ToolsConfig {
             "git" => self.git,
             "network-isolation" => self.network_isolation,
             "rtk" => self.rtk.as_ref().is_some_and(|cfg| cfg.is_enabled()),
+            "mise" => self.mise.as_ref().is_some_and(|c| c.is_enabled()),
             _ => false,
         }
     }
@@ -291,6 +346,7 @@ impl ToolsConfig {
             "git" => self.git = true,
             "network-isolation" => self.network_isolation = true,
             "rtk" => self.rtk = Some(RtkConfig::Simple(true)),
+            "mise" => self.mise = Some(MiseConfig::Simple(true)),
             _ => {}
         }
     }
@@ -956,6 +1012,11 @@ impl Config {
         // RTK: other takes precedence if present
         if other.tools.rtk.is_some() {
             self.tools.rtk = other.tools.rtk;
+        }
+
+        // Mise: other takes precedence if present
+        if other.tools.mise.is_some() {
+            self.tools.mise = other.tools.mise;
         }
 
         // Packages (extend/append)

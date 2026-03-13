@@ -148,6 +148,7 @@ fn inject_capability_env_vars(
 
     // RTK-specific: inject RTK_HOOK_MODE for rtk capability
     if let Some(capability_id) = env.get("CAPABILITY_ID") {
+        let capability_id = capability_id.clone();
         if capability_id == "rtk" {
             if let Some(cfg) = config {
                 let hook_mode = cfg
@@ -157,6 +158,19 @@ fn inject_capability_env_vars(
                     .map(|rtk| rtk.get_config().hook_mode)
                     .unwrap_or(true); // Default to true (opt-out)
                 env.insert("RTK_HOOK_MODE".to_string(), hook_mode.to_string());
+            }
+        }
+
+        // Mise-specific: inject MISE_INSTALL_TOOLS for mise capability
+        if capability_id == "mise" {
+            if let Some(cfg) = config {
+                let tools = cfg
+                    .tools
+                    .mise
+                    .as_ref()
+                    .map(|mise| mise.get_config().install.join(" "))
+                    .unwrap_or_default();
+                env.insert("MISE_INSTALL_TOOLS".to_string(), tools);
             }
         }
     }

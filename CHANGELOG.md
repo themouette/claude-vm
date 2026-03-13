@@ -4,6 +4,15 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`mise` capability**: Polyglot tool manager for Node.js, Bun, Python, and more
+  - Installs mise via official script (`curl https://mise.jdx.dev/install.sh | sh`)
+  - Optional `install` list to pre-install tools during template creation
+  - Simple syntax: `mise = true` or advanced: `[tools.mise]` with `install = ["bun@latest"]`
+  - Runtime PATH activation via `mise activate bash`
+  - Network isolation users must add `mise.jdx.dev` to `allowed_domains`
+
 ### Fixed
 
 - **SIGTERM leaving `limactl shell` process orphaned**: When `claude-vm agent` or `shell` is
