@@ -27,10 +27,8 @@ echo "✓ debug-that installed"
 
 [[phase.runtime]]
 name = "debug-that-environment"
-source = true
 script = """
-# mise activate already ran (mise is a dependency); just add bun's global bin
-export PATH="$HOME/.bun/bin:$PATH"
+#!/bin/bash
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/debug-that.txt <<EOF
 debug-that version: $(dbg --version 2>/dev/null || echo "not available")

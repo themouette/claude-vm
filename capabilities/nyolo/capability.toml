@@ -26,10 +26,8 @@ echo "✓ nyolo hook registered"
 
 [[phase.runtime]]
 name = "nyolo-environment"
-source = true
 script = """
-# mise activate already ran (mise is a dependency); just add bun's global bin
-export PATH="$HOME/.bun/bin:$PATH"
+#!/bin/bash
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/nyolo.txt <<EOF
 Nyolo: PreToolUse hook for Claude Code permission enforcement

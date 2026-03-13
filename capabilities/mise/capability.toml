@@ -38,9 +38,10 @@ fi
 [[phase.runtime]]
 name = "mise-environment"
 script = """
-#!/bin/bash
 export PATH="$HOME/.local/bin:$PATH"
 eval "$(mise activate bash)" 2>/dev/null || true
+# Add bun global bin if present (for tools installed via bun install --global)
+[[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/mise.txt <<EOF
 Mise version: $(mise --version 2>/dev/null || echo "not available")
