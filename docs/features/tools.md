@@ -727,7 +727,7 @@ Users with network isolation enabled may need to add npm registry domains to `al
 
 **Installs:**
 
-- Nyolo `PreToolUse` hook for Claude Code via `npx nyolo install`
+- Nyolo `PreToolUse` hook for Claude Code via `bunx nyolo install`
 - Bun runtime (via mise) if not already available
 
 **Requires:** `mise` capability
@@ -743,7 +743,7 @@ nyolo = true
 **What it does:**
 
 1. Ensures Bun is available (installs via `mise use --global bun@latest` if needed)
-2. Registers the nyolo `PreToolUse` hook via `npx nyolo install`
+2. Registers the nyolo `PreToolUse` hook via `bunx nyolo install`
 
 **Context provided:**
 

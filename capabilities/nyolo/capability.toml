@@ -20,7 +20,7 @@ if ! command -v bun &>/dev/null; then
 fi
 
 echo "Installing nyolo hook..."
-npx nyolo install
+bunx nyolo install
 echo "✓ nyolo hook registered"
 """
 
@@ -33,7 +33,7 @@ eval "$(mise activate bash)" 2>/dev/null || true
 mkdir -p ~/.claude-vm/context
 cat > ~/.claude-vm/context/nyolo.txt <<EOF
 Nyolo: PreToolUse hook for Claude Code permission enforcement
-Status: $(npx nyolo rules 2>/dev/null | head -5 || echo "hook registered")
+Status: $(bunx nyolo rules 2>/dev/null | head -5 || echo "hook registered")
 Config: ./nyolo.config.js (project) or ~/.claude/nyolo.config.js (global)
 EOF
 """
