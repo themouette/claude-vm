@@ -1,0 +1,53 @@
+[capability]
+id = "mise"
+name = "Mise"
+description = "Polyglot tool manager for Node.js, Bun, Python, and more"
+
+[packages]
+system = []
+setup_script = """
+#!/bin/bash
+set -e
+if [ -x "$HOME/.local/bin/mise" ]; then
+    echo "Mise already installed"
+else
+    echo "Installing Mise..."
+    curl https://mise.jdx.dev/install.sh | sh
+    echo "✓ Mise installed"
+fi
+export PATH="$HOME/.local/bin:$PATH"
+mise --version
+"""
+
+[[phase.setup]]
+name = "mise-tools-install"
+script = """
+#!/bin/bash
+export PATH="$HOME/.local/bin:$PATH"
+if [ -n "${MISE_INSTALL_TOOLS:-}" ]; then
+    echo "Installing tools via mise: $MISE_INSTALL_TOOLS"
+    for tool in $MISE_INSTALL_TOOLS; do
+        mise use --global "$tool"
+        echo "✓ $tool installed"
+    done
+else
+    echo "No tools configured for pre-installation (add install = [...] to [tools.mise])"
+fi
+"""
+
+[[phase.runtime]]
+name = "mise-environment"
+script = """
+export PATH="$HOME/.local/bin:$PATH"
+eval "$(mise activate bash)" 2>/dev/null || true
+# Add bun global bin if present (for tools installed via bun install --global)
+[[ -d "$HOME/.bun/bin" ]] && export PATH="$HOME/.bun/bin:$PATH"
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/mise.txt <<EOF
+Mise version: $(mise --version 2>/dev/null || echo "not available")
+Installed tools: $(mise ls --current 2>/dev/null || echo "none")
+
+Use 'mise use --global <tool>@<version>' to install tools.
+EOF
+"""
+source = true

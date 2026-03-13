@@ -1,0 +1,39 @@
+[capability]
+id = "debug-that"
+name = "debug-that"
+description = "Universal debugger CLI for AI agents (Node, Bun, LLDB, Python)"
+requires = ["mise"]
+
+[packages]
+system = []
+setup_script = """
+#!/bin/bash
+set -e
+# Include mise shims and bun global bin so newly installed tools are found immediately
+export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
+eval "$(mise activate bash)" 2>/dev/null || true
+
+# Ensure bun is available
+if ! command -v bun &>/dev/null; then
+    echo "Installing bun via mise..."
+    mise use --global bun@latest
+fi
+
+echo "Installing debug-that..."
+bun install --global debug-that
+dbg --version
+echo "✓ debug-that installed"
+"""
+
+[[phase.runtime]]
+name = "debug-that-environment"
+script = """
+#!/bin/bash
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/debug-that.txt <<EOF
+debug-that version: $(dbg --version 2>/dev/null || echo "not available")
+Supported runtimes: Node.js (CDP), Bun (CDP), LLDB (DAP), Python/debugpy (DAP)
+Commands: dbg launch, dbg attach, dbg break, dbg step, dbg vars, dbg eval, ...
+Install adapters: dbg install <adapter>
+EOF
+"""

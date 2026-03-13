@@ -24,6 +24,9 @@ Claude VM supports installing various development tools during template creation
 | `gpg`      | GPG agent forwarding, key sync            | Signed commits, encryption     |
 | `gh`       | GitHub CLI, authentication                | GitHub operations              |
 | `rtk`      | Token compression for LLM command outputs | Reduce token costs by 60-90%   |
+| `mise`     | Polyglot tool manager (Bun, Node, Python) | Install and manage runtimes    |
+| `debug-that` | Universal debugger CLI for AI agents    | Debug Node, Bun, Python, C/C++ |
+| `nyolo`    | PreToolUse hook for permission enforcement | Restrict Claude Code tool access |
 
 **Note:** Network isolation is configured separately via `[security.network]` - see [Network Isolation](#network-isolation) below.
 
@@ -624,6 +627,154 @@ hook_mode = false  # Require explicit 'rtk' prefix
 - Original command outputs are preserved in RTK's cache
 - Analytics are stored locally in `~/.rtk/analytics.json`
 - Hook-first mode can be toggled at any time
+
+### Mise
+
+**Installs:**
+
+- Mise polyglot tool manager via official installer
+- Optional pre-installed tools (Bun, Node.js, Python, etc.)
+
+**Configuration:**
+
+Simple syntax (install mise without pre-installing tools):
+```toml
+[tools]
+mise = true
+```
+
+Advanced syntax (pre-install tools during template creation):
+```toml
+[tools.mise]
+install = ["bun@latest", "node@lts", "python@3.12"]
+```
+
+**What it does:**
+
+1. Installs Mise via official install script (`curl https://mise.jdx.dev/install.sh | sh`)
+2. Pre-installs any tools listed in `install` during template creation
+3. Activates Mise environment at runtime (`mise activate bash`) so tools are on PATH
+
+**Context provided:**
+
+```markdown
+Mise version: mise 2024.x.x
+Installed tools: bun@1.1.0, node@20.11.0
+
+Use 'mise use --global <tool>@<version>' to install tools.
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+$ mise use --global bun@latest   # Install Bun
+$ mise use --global node@lts     # Install Node.js LTS
+$ mise ls                        # List installed tools
+$ mise ls --current              # Show active tool versions
+```
+
+**Network isolation note:**
+
+Users with network isolation enabled must add `mise.jdx.dev` to `allowed_domains`.
+
+### debug-that
+
+**Installs:**
+
+- debug-that CLI via Bun global install
+- Bun runtime (via mise) if not already available
+
+**Requires:** `mise` capability
+
+**Configuration:**
+
+```toml
+[tools]
+mise = true
+debug-that = true
+```
+
+**What it does:**
+
+1. Ensures Bun is available (installs via `mise use --global bun@latest` if needed)
+2. Installs `debug-that` globally via `bun install --global debug-that`
+
+**Context provided:**
+
+```markdown
+debug-that version: 1.x.x
+Supported runtimes: Node.js (CDP), Bun (CDP), LLDB (DAP), Python/debugpy (DAP)
+Commands: dbg launch, dbg attach, dbg break, dbg step, dbg vars, dbg eval, ...
+Install adapters: dbg install <adapter>
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+$ dbg launch node app.js          # Launch Node.js debugger
+$ dbg launch bun server.ts        # Launch Bun debugger
+$ dbg attach --pid 1234           # Attach to running process
+$ dbg install lldb                # Install LLDB adapter
+```
+
+**Network isolation note:**
+
+Users with network isolation enabled may need to add npm registry domains to `allowed_domains` since `bun install --global` fetches from the npm registry.
+
+### Nyolo
+
+**Installs:**
+
+- Nyolo `PreToolUse` hook for Claude Code via `bunx nyolo install`
+- Bun runtime (via mise) if not already available
+
+**Requires:** `mise` capability
+
+**Configuration:**
+
+```toml
+[tools]
+mise = true
+nyolo = true
+```
+
+**What it does:**
+
+1. Ensures Bun is available (installs via `mise use --global bun@latest` if needed)
+2. Registers the nyolo `PreToolUse` hook via `bunx nyolo install`
+
+**Context provided:**
+
+```markdown
+Nyolo: PreToolUse hook for Claude Code permission enforcement
+Status: (active rules summary)
+Config: ./nyolo.config.js (project) or ~/.claude/nyolo.config.js (global)
+```
+
+**Usage:**
+
+```bash
+claude-vm shell
+# Create a project config
+$ cat > nyolo.config.js << 'EOF'
+module.exports = {
+  rules: [
+    { tool: "Bash", deny: ["rm -rf /"] },
+  ],
+};
+EOF
+
+# Or create a global config
+$ cat > ~/.claude/nyolo.config.js << 'EOF'
+module.exports = {
+  rules: [/* your rules */],
+};
+EOF
+```
+
+**Note:** The nyolo hook writes to `~/.claude/settings.json` inside the VM, which is separate from your host configuration.
 
 ### Network Isolation
 

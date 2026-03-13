@@ -1,0 +1,37 @@
+[capability]
+id = "nyolo"
+name = "Nyolo"
+description = "PreToolUse hook enforcing permission rules for Claude Code"
+requires = ["mise"]
+
+[packages]
+system = []
+setup_script = """
+#!/bin/bash
+set -e
+# Include mise shims and bun global bin so newly installed tools are found immediately
+export PATH="$HOME/.bun/bin:$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
+eval "$(mise activate bash)" 2>/dev/null || true
+
+# Ensure bun is available
+if ! command -v bun &>/dev/null; then
+    echo "Installing bun via mise..."
+    mise use --global bun@latest
+fi
+
+echo "Installing nyolo hook..."
+bunx nyolo install
+echo "✓ nyolo hook registered"
+"""
+
+[[phase.runtime]]
+name = "nyolo-environment"
+script = """
+#!/bin/bash
+mkdir -p ~/.claude-vm/context
+cat > ~/.claude-vm/context/nyolo.txt <<EOF
+Nyolo: PreToolUse hook for Claude Code permission enforcement
+Status: $(bunx nyolo rules 2>/dev/null | head -5 || echo "hook registered")
+Config: ./nyolo.config.js (project) or ~/.claude/nyolo.config.js (global)
+EOF
+"""

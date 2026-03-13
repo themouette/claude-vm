@@ -102,6 +102,18 @@ impl CapabilityRegistry {
                 "rtk",
                 include_str!("../../capabilities/rtk/capability.toml"),
             ),
+            (
+                "mise",
+                include_str!("../../capabilities/mise/capability.toml"),
+            ),
+            (
+                "debug-that",
+                include_str!("../../capabilities/debug-that/capability.toml"),
+            ),
+            (
+                "nyolo",
+                include_str!("../../capabilities/nyolo/capability.toml"),
+            ),
         ];
 
         for (id, content) in CAPABILITY_FILES {

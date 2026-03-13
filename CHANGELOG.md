@@ -4,6 +4,24 @@ All notable changes to claude-vm will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`mise` capability**: Polyglot tool manager for Node.js, Bun, Python, and more
+  - Installs mise via official script (`curl https://mise.jdx.dev/install.sh | sh`)
+  - Optional `install` list to pre-install tools during template creation
+  - Simple syntax: `mise = true` or advanced: `[tools.mise]` with `install = ["bun@latest"]`
+  - Runtime PATH activation via `mise activate bash`
+  - Network isolation users must add `mise.jdx.dev` to `allowed_domains`
+- **`debug-that` capability**: Universal debugger CLI for AI agents (Node, Bun, LLDB, Python)
+  - Requires `mise` capability (uses Bun as installer)
+  - Automatically installs Bun via mise if not present
+  - Installs `debug-that` globally via `bun install --global debug-that`
+  - Supports Node.js (CDP), Bun (CDP), LLDB (DAP), and Python/debugpy (DAP)
+- **`nyolo` capability**: `PreToolUse` hook for Claude Code permission enforcement
+  - Requires `mise` capability (uses npx/Bun as runner)
+  - Registers the nyolo hook via `npx nyolo install`
+  - Configurable via `./nyolo.config.js` (project) or `~/.claude/nyolo.config.js` (global)
+
 ### Fixed
 
 - **SIGTERM leaving `limactl shell` process orphaned**: When `claude-vm agent` or `shell` is
