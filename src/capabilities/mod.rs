@@ -40,7 +40,7 @@ pub mod definition;
 pub mod executor;
 pub mod registry;
 
-use crate::config::Config;
+use crate::config::{Config, MountEntry};
 use crate::error::Result;
 use crate::project::Project;
 use crate::vm::port_forward::PortForward;
@@ -213,6 +213,22 @@ fn convert_capability_phases(
 /// //        user defines setup phase "configure-project"
 /// // Result: "install-tools" runs, then "configure-project"
 /// ```
+/// Substitute variables in a capability mount spec field.
+///
+/// Supported variables:
+/// - `{home}` → `$HOME`
+/// - `{template_name}` → the project template name
+/// - `{vm_home}` → `/home/{USER}.linux`
+fn substitute_mount_vars(s: &str, template_name: &str) -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let user = std::env::var("USER").unwrap_or_else(|_| "lima.linux".to_string());
+    let vm_home = format!("/home/{}.linux", user);
+
+    s.replace("{home}", &home)
+        .replace("{template_name}", template_name)
+        .replace("{vm_home}", &vm_home)
+}
+
 pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
     let registry = registry::CapabilityRegistry::load()?;
     let enabled = registry.get_enabled_capabilities(config)?;
@@ -291,6 +307,49 @@ pub fn merge_capability_phases(config: &mut Config) -> Result<()> {
         &mut config.phase.after_runtime,
         capability_after_runtime_phases,
     );
+
+    // Merge capability mounts into config.mounts (capability mounts prepended)
+    // Re-load enabled capabilities to access mounts (they were consumed above)
+    let registry = registry::CapabilityRegistry::load()?;
+    let enabled = registry.get_enabled_capabilities(config)?;
+
+    // Derive template name from existing mounts or fall back to empty string.
+    // In practice the caller always has a project, but this function doesn't
+    // receive one — we use $TEMPLATE_NAME env var if set, else empty string.
+    let template_name = std::env::var("TEMPLATE_NAME").unwrap_or_default();
+
+    let mut capability_mounts: Vec<MountEntry> = Vec::new();
+    for capability in enabled {
+        for mount_spec in &capability.mounts {
+            let location = substitute_mount_vars(&mount_spec.location, &template_name);
+            let mount_point = substitute_mount_vars(&mount_spec.mount_point, &template_name);
+            // Skip if already in config.mounts (dedup by location)
+            if config
+                .mounts
+                .iter()
+                .any(|m| substitute_mount_vars(&m.location, &template_name) == location)
+            {
+                continue;
+            }
+            if capability_mounts
+                .iter()
+                .any(|m| substitute_mount_vars(&m.location, &template_name) == location)
+            {
+                continue;
+            }
+            capability_mounts.push(MountEntry {
+                location,
+                writable: mount_spec.writable,
+                mount_point: Some(mount_point),
+            });
+        }
+    }
+
+    if !capability_mounts.is_empty() {
+        let user_mounts = std::mem::take(&mut config.mounts);
+        config.mounts = capability_mounts;
+        config.mounts.extend(user_mounts);
+    }
 
     Ok(())
 }
