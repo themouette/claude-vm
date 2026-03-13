@@ -23,10 +23,6 @@ echo "Installing debug-that..."
 bun install --global debug-that
 dbg --version
 echo "✓ debug-that installed"
-
-echo "Installing debug-that Claude Code skill..."
-bunx skills add theodo-group/debug-that
-echo "✓ debug-that skill installed"
 """
 
 [[phase.runtime]]
