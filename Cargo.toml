@@ -23,7 +23,7 @@ wait-timeout = "0.2"
 ctrlc = { version = "3", features = ["termination"] }
 
 [dev-dependencies]
-assert_cmd = "2.0"
+assert_cmd = "2.2"
 predicates = "3.1"
 tempfile = "3.25"
 serial_test = "3.4"
